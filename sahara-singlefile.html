@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="https://cdn.jsdelivr.net/gh/freebuisness/html@main/">
+
+    <script>
+        window.addEventListener('beforeunload', function (event) {
+            event.preventDefault();
+            event.returnValue = '';
+            return 'Are you sure you want to leave?';
+        });
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sahara - Unblocked Games</title>
+    <meta name="title" content="Sahara - Unblocked Games">
+    <meta name="description" content="Play unblocked games on Sahara. Fast, free, no downloads.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-dark:      #1a1408;
+            --bg-card:      #2a1f0e;
+            --bg-card2:     #231a0c;
+            --accent:       #c8832a;
+            --accent-dark:  #a0621a;
+            --accent-hot:   #e09a3a;
+            --text:         #e8d5a0;
+            --text-muted:   #8a7050;
+            --nav-bg:       #0f0c05;
+            --topbar-bg:    #c8832a;
+            --tag-bg:       #3a2a10;
+            --border:       #3a2a10;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ── TOP BAR ── */
+        .topbar {
+            background: var(--topbar-bg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            height: 42px;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--bg-dark);
+            text-transform: uppercase;
+        }
+
+        .logo span { color: #fff8e0; }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.25);
+            border-radius: 20px;
+            padding: 4px 14px;
+            gap: 8px;
+            flex: 0 0 280px;
+        }
+
+        .search-bar input {
+            background: none;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: 13px;
+            width: 220px;
+        }
+
+        .search-bar input::placeholder { color: rgba(255,255,255,0.55); }
+
+        .search-bar svg { color: rgba(255,255,255,0.6); flex-shrink: 0; }
+
+        .topbar-icons { display: flex; gap: 10px; }
+
+        .topbar-icons button {
+            background: rgba(0,0,0,0.25);
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            width: 28px; height: 28px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
+        }
+
+        /* ── NAV ── */
+        nav {
+            background: var(--nav-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        nav::-webkit-scrollbar { display: none; }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 10px 14px;
+            white-space: nowrap;
+            transition: color .2s;
+        }
+
+        nav a:hover, nav a.active { color: var(--accent-hot); }
+        nav a.active { border-bottom: 2px solid var(--accent); margin-bottom: -2px; }
+
+        /* ── HERO ── */
+        .hero {
+            position: relative;
+            background: linear-gradient(135deg, #1a1408 0%, #2e1f08 50%, #1a1408 100%);
+            min-height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 30px 20px;
+        }
+
+        .hero-slide {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            max-width: 700px;
+        }
+
+        .hero-thumb {
+            width: 280px;
+            height: 180px;
+            background: linear-gradient(135deg, #3a2a10, #5a3a18);
+            border-radius: 10px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            border: 2px solid var(--border);
+            overflow: hidden;
+        }
+
+        .hero-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+
+        .hero-info { flex: 1; }
+
+        .hero-info h2 {
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .hero-info p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .btn-play {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 28px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background .2s, transform .1s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-play:hover { background: var(--accent-hot); transform: scale(1.03); }
+
+        .hero-arrow {
+            position: absolute;
+            top: 50%; transform: translateY(-50%);
+            background: rgba(200,131,42,0.25);
+            border: 2px solid var(--accent);
+            color: var(--accent);
+            border-radius: 50%;
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background .2s;
+            z-index: 2;
+        }
+
+        .hero-arrow:hover { background: rgba(200,131,42,0.5); }
+        .hero-arrow.left  { left: 14px; }
+        .hero-arrow.right { right: 14px; }
+
+        .hero-dots {
+            position: absolute;
+            bottom: 10px;
+            left: 50%; transform: translateX(-50%);
+            display: flex; gap: 6px;
+        }
+
+        .hero-dots span {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .hero-dots span.active { background: var(--accent); }
+
+        /* ── VIEW ALL BUTTON ── */
+        .view-all-wrap {
+            display: flex;
+            justify-content: center;
+            padding: 18px 0 6px;
+        }
+
+        .btn-view-all {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 30px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background .2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-view-all:hover { background: var(--accent-hot); }
+
+        /* ── SECTIONS ── */
+        .section { padding: 20px 24px 8px; }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 900;
+            color: var(--text);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 4px; height: 16px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .section-title a {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        /* ── GAME GRID ── */
+        .game-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            padding-bottom: 16px;
+        }
+
+        .game-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform .15s, border-color .15s, box-shadow .15s;
+            position: relative;
+        }
+
+        .game-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+            box-shadow: 0 6px 20px rgba(200,131,42,0.18);
+        }
+
+        .game-card-thumb {
+            width: 100%;
+            height: 140px;
+            background: linear-gradient(135deg, #3a2a10, #5a3a18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 52px;
+            overflow: hidden;
+        }
+
+        .game-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+        .game-card-info { padding: 10px 10px 12px; }
+
+        .game-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .game-card-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .game-card-meta::before {
+            content: '▶';
+            font-size: 8px;
+            color: var(--accent);
+        }
+
+        .game-card-new {
+            position: absolute;
+            top: 8px; left: 8px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 7px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── LEADERBOARD ── */
+        .lb-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            padding-bottom: 16px;
+        }
+
+        .lb-card {
+            background: var(--bg-card2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .lb-card-header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .lb-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(58,42,16,0.45);
+            gap: 10px;
+        }
+        .lb-row:last-child { border-bottom: none; }
+
+        .lb-medal { font-size: 18px; flex-shrink: 0; line-height: 1; }
+
+        .lb-label {
+            flex: 1;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .lb-score {
+            font-size: 15px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-muted);
+        }
+
+        .lb-rank1 .lb-score { color: #f0d060; }
+        .lb-rank2 .lb-score { color: #c8c8c8; }
+        .lb-rank3 .lb-score { color: #c08050; }
+
+        .lb-refresh {
+            margin-left: auto;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 5px;
+            padding: 2px 10px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            transition: border-color .15s, color .15s;
+        }
+        .lb-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── SIDEBAR LAYOUT ── */
+        .layout { display: flex; }
+
+        .sidebar {
+            width: 36px;
+            background: var(--nav-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 14px 0;
+            gap: 18px;
+            flex-shrink: 0;
+        }
+
+        .sidebar button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            transition: color .2s;
+        }
+
+        .sidebar button:hover { color: var(--accent); }
+
+        .main-content { flex: 1; overflow: hidden; }
+
+        /* ── FOOTER ── */
+        footer {
+            background: var(--nav-bg);
+            border-top: 1px solid var(--border);
+            text-align: center;
+            padding: 18px;
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-top: 30px;
+        }
+
+        footer a { color: var(--accent); text-decoration: none; }
+
+        /* ── ALL GAMES OVERLAY ── */
+        .ag-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.82);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .ag-overlay.open { display: flex; }
+
+        .ag-modal {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            width: 92vw; max-width: 1100px;
+            height: 86vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .ag-header {
+            background: var(--nav-bg);
+            border-bottom: 2px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .ag-header-title {
+            color: var(--accent);
+            font-weight: 900;
+            font-size: 15px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            flex: 0 0 auto;
+        }
+
+        .ag-search-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,.07);
+            border-radius: 20px;
+            padding: 5px 14px;
+            gap: 8px;
+        }
+
+        .ag-search-wrap svg { color: var(--text-muted); flex-shrink: 0; }
+
+        .ag-search {
+            background: none;
+            border: none;
+            outline: none;
+            color: var(--text);
+            font-size: 13px;
+            width: 100%;
+            font-family: inherit;
+        }
+
+        .ag-search::placeholder { color: var(--text-muted); }
+
+        .ag-close {
+            background: rgba(200,131,42,.15);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            color: var(--accent);
+            width: 32px; height: 32px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: background .15s;
+        }
+
+        .ag-close:hover { background: var(--accent); color: var(--bg-dark); }
+
+        .ag-count {
+            color: var(--text-muted);
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .ag-grid {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 8px;
+            align-content: start;
+        }
+
+        .ag-grid::-webkit-scrollbar { width: 6px; }
+        .ag-grid::-webkit-scrollbar-track { background: var(--bg-dark); }
+        .ag-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .ag-btn {
+            background: var(--bg-card2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 10px 10px 10px;
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: center;
+            transition: border-color .15s, background .15s, transform .1s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            min-height: 72px;
+            justify-content: center;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .ag-btn:hover {
+            border-color: var(--accent);
+            background: #3a2810;
+            transform: translateY(-1px);
+        }
+
+        .ag-btn .ag-emoji { font-size: 22px; line-height: 1; }
+        .ag-btn .ag-name { font-weight: 600; }
+
+        .ag-no-results {
+            grid-column: 1/-1;
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="logo">sa<span>h</span>ara</div>
+    <div class="search-bar">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" placeholder="Search for games..." />
+    </div>
+    <div class="topbar-icons">
+        <button title="Favorites">★</button>
+        <button title="Settings">⚙</button>
+    </div>
+</div>
+
+<!-- NAV -->
+<nav>
+    <a href="#" class="active">All Games</a>
+    <a href="#">Favorites</a>
+    <a href="#">2048</a>
+    <a href="#">Emulator</a>
+    <a href="#">Flash</a>
+    <a href="#">FNF</a>
+    <a href="#">Idea</a>
+    <a href="#">Idea A</a>
+    <a href="#">Hub</a>
+    <a href="#">Web</a>
+    <a href="#">Port</a>
+    <a href="#">PKS</a>
+    <a href="#">Tools</a>
+</nav>
+
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <button title="Home">⌂</button>
+        <button title="Star">☆</button>
+        <button title="Settings">⚙</button>
+        <button title="Info">ℹ</button>
+        <button title="Chat">✉</button>
+        <button title="Profile">◎</button>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main-content">
+
+        <!-- HERO -->
+        <div class="hero">
+            <button class="hero-arrow left">&#8249;</button>
+
+            <div class="hero-slide">
+                <div class="hero-thumb">🏜️</div>
+                <div class="hero-info">
+                    <h2>Desert Dash</h2>
+                    <p>by Sahara Studios</p>
+                    <button class="btn-play">&#9654; Play Now</button>
+                </div>
+            </div>
+
+            <button class="hero-arrow right">&#8250;</button>
+
+            <div class="hero-dots">
+                <span class="active"></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+
+        <!-- VIEW ALL -->
+        <div class="view-all-wrap">
+            <button class="btn-view-all">View All Games &#8594;</button>
+        </div>
+
+        <!-- TRENDING -->
+        <div class="section">
+            <div class="section-title">Trending This Week <a href="#">See all →</a></div>
+            <div class="game-row">
+                <div class="game-card" data-game-id="minecraft-1122" data-game-url="182.html" data-game-title="Minecraft 1.12.2" data-game-emoji="⛏️">
+                    <div class="game-card-thumb">⛏️</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Minecraft 1.12.2</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="brainlolz">
+                    <span class="game-card-new">NEW</span>
+                    <div class="game-card-thumb">🤠</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Brainlolz</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="baseball-bros" data-game-url="Baseball Bros.html" data-game-title="Baseball Bros" data-game-emoji="⚾">
+                    <div class="game-card-thumb">⚾</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Baseball Bros</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="bitlife" data-game-url="70.html" data-game-title="BitLife" data-game-emoji="🧬">
+                    <div class="game-card-thumb">🧬</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">BitLife</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="basket-random" data-game-url="66.html" data-game-title="Basket Random" data-game-emoji="💣">
+                    <div class="game-card-thumb">💣</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Basket Random</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="minecraft-188" data-game-url="181.html" data-game-title="Minecraft 1.8.8" data-game-emoji="🟫">
+                    <div class="game-card-thumb">🟫</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Minecraft 1.8.8</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="bow-master" data-game-url="0.html" data-game-title="Bowmasters" data-game-emoji="🏹">
+                    <div class="game-card-thumb">🏹</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Bow Master</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="drift-boss" data-game-url="276.html" data-game-title="Drift Boss" data-game-emoji="🚗">
+                    <div class="game-card-thumb">🚗</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Drift Boss</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEATURED -->
+        <div class="section">
+            <div class="section-title">Featured Games <a href="#">See all →</a></div>
+            <div class="game-row">
+                <div class="game-card" data-game-id="biggest-game">
+                    <div class="game-card-thumb">👾</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">[1] Biggest Game</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="bad-parenting" data-game-url="166.html" data-game-title="Bad Parenting 1" data-game-emoji="🐰">
+                    <span class="game-card-new">HOT</span>
+                    <div class="game-card-thumb">🐰</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Bad Parenting 1</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="soundboard" data-game-url="179.html" data-game-title="Soundboard" data-game-emoji="🎵">
+                    <div class="game-card-thumb">🎵</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Soundboard</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="minecraft-1122b" data-game-url="182.html" data-game-title="Minecraft 1.12.2" data-game-emoji="⛏️">
+                    <div class="game-card-thumb">⛏️</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Minecraft 1.12.2</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="fnaf" data-game-url="38.html" data-game-title="Five Nights at Freddy's" data-game-emoji="🐻">
+                    <div class="game-card-thumb">🐻</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Five Nights at Freddy's</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="fnaf-sister-location" data-game-url="185.html" data-game-title="FNAF: Sister Location" data-game-emoji="🟡">
+                    <div class="game-card-thumb">🟡</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">FNAF: Sister Location</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="sniper-games">
+                    <div class="game-card-thumb">🎯</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Sniper Games</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="run-3" data-game-url="177.html" data-game-title="Run 3" data-game-emoji="🏃">
+                    <div class="game-card-thumb">🏃</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Run 3</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTION -->
+        <div class="section">
+            <div class="section-title">Action Games <a href="#">See all →</a></div>
+            <div class="game-row">
+                <div class="game-card" data-game-id="sword-fight">
+                    <div class="game-card-thumb">🗡️</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Sword Fight</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="1v1lol" data-game-url="58.html" data-game-title="1v1.LoL" data-game-emoji="🔫">
+                    <span class="game-card-new">NEW</span>
+                    <div class="game-card-thumb">🔫</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">1v1 Lol</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="boxing-random" data-game-url="77.html" data-game-title="Boxing Random" data-game-emoji="🥊">
+                    <div class="game-card-thumb">🥊</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Boxing Random</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="getting-over-it">
+                    <div class="game-card-thumb">🏔️</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Getting Over It</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="snake-io">
+                    <div class="game-card-thumb">🐍</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Snake.io</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="shell-shockers">
+                    <div class="game-card-thumb">🛡️</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Shell Shockers</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="bloons-td6">
+                    <div class="game-card-thumb">⚡</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Bloons TD 6</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+                <div class="game-card" data-game-id="volcano-escape">
+                    <div class="game-card-thumb">🌋</div>
+                    <div class="game-card-info">
+                        <div class="game-card-title">Volcano Escape</div>
+                        <div class="game-card-meta">0 Plays</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEADERBOARDS -->
+        <div class="section">
+            <div class="section-title">
+                🏆 Leaderboards
+                <button class="lb-refresh" id="lbRefresh">↺ Refresh</button>
+            </div>
+            <div class="lb-grid" id="leaderboard"></div>
+        </div>
+
+    </div>
+</div>
+
+<footer>
+    &copy; 2026 <a href="#">Sahara Unblocked</a> &mdash; Play anywhere, anytime. &nbsp;|&nbsp;
+    <a href="#">Privacy</a> &nbsp;|&nbsp; <a href="#">Contact</a>
+</footer>
+
+<!-- ALL GAMES OVERLAY -->
+<div id="agOverlay" class="ag-overlay">
+    <div class="ag-modal">
+        <div class="ag-header">
+            <span class="ag-header-title">🎮 All Games</span>
+            <div class="ag-search-wrap">
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input id="agSearch" class="ag-search" placeholder="Search games..." autocomplete="off" />
+            </div>
+            <span class="ag-count" id="agCount"></span>
+            <button class="ag-close" id="agClose">✕</button>
+        </div>
+        <div class="ag-grid" id="agGrid"></div>
+    </div>
+</div>
+
+<script>
+    // ── BASE URL ────────────────────────────────────────────────────────────
+    // The <base href> tag above makes all relative URLs resolve to jsDelivr.
+    // This means "182.html" becomes "https://cdn.jsdelivr.net/gh/freebuisness/html@main/182.html"
+    const GN_BASE = document.querySelector('base').href;
+
+    // ── Play count tracking ─────────────────────────────────────────────────
+    const STORAGE_KEY = 'sahara_plays';
+
+    function loadPlays() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+        catch { return {}; }
+    }
+
+    function savePlays(plays) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(plays));
+    }
+
+    function formatPlays(n) {
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+        if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+        return n.toString();
+    }
+
+    function refreshPlayCounts() {
+        const plays = loadPlays();
+        document.querySelectorAll('.game-card[data-game-id]').forEach(card => {
+            const id   = card.dataset.gameId;
+            const meta = card.querySelector('.game-card-meta');
+            if (meta) meta.textContent = formatPlays(plays[id] || 0) + ' Plays';
+        });
+    }
+
+    // ── Game launcher (fetches HTML from CDN and writes into new tab) ───────
+    function openGameCDN(relUrl, title, emoji) {
+        const url = new URL(relUrl, GN_BASE).href;
+
+        const bar = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1408;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif}
+.bar{background:#0f0c05;border-bottom:2px solid #3a2a10;height:42px;display:flex;align-items:center;padding:0 14px;gap:8px;flex-shrink:0}
+.bar-title{color:#e8d5a0;font-weight:700;font-size:13px;letter-spacing:.5px;flex:1}
+.bar-btn{background:#2a1f0e;border:1px solid #3a2a10;color:#e8d5a0;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;transition:all .15s}
+.bar-btn:hover{background:#3a2a10;border-color:#c8832a;color:#c8832a}
+#gf{flex:1;width:100%;border:none;display:block}
+.loading{flex:1;display:flex;align-items:center;justify-content:center;color:#8a7050;font-size:14px;letter-spacing:1px}
+</style></head><body>
+<div class="bar">
+  <span class="bar-title">${emoji} ${title}</span>
+  <button class="bar-btn" onclick="document.getElementById('gf').requestFullscreen()">&#x26F6; Fullscreen</button>
+  <button class="bar-btn" onclick="openBlank()">&#x2197; Blank Tab</button>
+</div>
+<div class="loading" id="ld">Loading...</div>
+<iframe id="gf" allowfullscreen style="display:none;flex:1;width:100%;border:none"></iframe>
+<script>
+const GAME_URL = ${JSON.stringify(url)};
+const frame = document.getElementById('gf');
+const ld = document.getElementById('ld');
+fetch(GAME_URL + '?t=' + Date.now())
+  .then(r => r.text())
+  .then(h => {
+    frame.style.display = 'block';
+    ld.style.display = 'none';
+    frame.contentDocument.open();
+    frame.contentDocument.write(h);
+    frame.contentDocument.close();
+  })
+  .catch(() => { ld.textContent = 'Failed to load game.'; });
+function openBlank() {
+  const w = window.open('about:blank','_blank');
+  w.document.write('<html><head><style>*{margin:0;padding:0}body{overflow:hidden}</style></head><body></body></html>');
+  w.document.close();
+  const f = w.document.createElement('iframe');
+  f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none';
+  f.allowFullscreen = true;
+  w.document.body.appendChild(f);
+  fetch(GAME_URL + '?t=' + Date.now())
+    .then(r => r.text())
+    .then(h => { f.contentDocument.open(); f.contentDocument.write(h); f.contentDocument.close(); });
+}
+<\/script></body></html>`;
+
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(bar); w.document.close(); }
+    }
+
+    // Card click → increment plays + launch game via CDN fetch
+    document.querySelectorAll('.game-card[data-game-id]').forEach(card => {
+        card.addEventListener('click', () => {
+            const plays = loadPlays();
+            const id = card.dataset.gameId;
+            plays[id] = (plays[id] || 0) + 1;
+            savePlays(plays);
+            refreshPlayCounts();
+
+            if (card.dataset.gameUrl) {
+                openGameCDN(card.dataset.gameUrl, card.dataset.gameTitle || id, card.dataset.gameEmoji || '🎮');
+            }
+        });
+    });
+
+    refreshPlayCounts();
+
+    // ── Hero carousel ───────────────────────────────────────────────────────
+    const slides = [
+        { emoji: '🏜️', title: 'Desert Dash',  author: 'by Sahara Studios' },
+        { emoji: '🐫', title: 'Camel Run',    author: 'by Dune Devs'      },
+        { emoji: '🌵', title: 'Cactus Wars',  author: 'by Oasis Games'    },
+    ];
+    let current = 0;
+
+    function updateHero() {
+        const thumb  = document.querySelector('.hero-thumb');
+        const title  = document.querySelector('.hero-info h2');
+        const author = document.querySelector('.hero-info p');
+        const dots   = document.querySelectorAll('.hero-dots span');
+        thumb.textContent  = slides[current].emoji;
+        title.textContent  = slides[current].title;
+        author.textContent = slides[current].author;
+        dots.forEach((d, i) => d.classList.toggle('active', i === current));
+    }
+
+    document.querySelector('.hero-arrow.right').addEventListener('click', () => {
+        current = (current + 1) % slides.length; updateHero();
+    });
+    document.querySelector('.hero-arrow.left').addEventListener('click', () => {
+        current = (current - 1 + slides.length) % slides.length; updateHero();
+    });
+    document.querySelectorAll('.hero-dots span').forEach((dot, i) => {
+        dot.addEventListener('click', () => { current = i; updateHero(); });
+    });
+    setInterval(() => { current = (current + 1) % slides.length; updateHero(); }, 4000);
+
+    // ── Nav active ──────────────────────────────────────────────────────────
+    document.querySelectorAll('nav a').forEach(a => {
+        a.addEventListener('click', e => {
+            e.preventDefault();
+            document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
+            a.classList.add('active');
+        });
+    });
+
+    // ── Leaderboard ─────────────────────────────────────────────────────────
+    const LB_GAMES = [
+        { key: 'dd_scores', name: 'Desert Dash',  emoji: '🏜️' },
+        { key: 'cr_scores', name: 'Camel Run',    emoji: '🐫' },
+        { key: 'cw_scores', name: 'Cactus Wars',  emoji: '🌵' },
+    ];
+    const MEDALS = ['🥇', '🥈', '🥉'];
+    const LABELS = ['1st', '2nd', '3rd'];
+
+    function renderLeaderboard() {
+        document.getElementById('leaderboard').innerHTML = LB_GAMES.map(g => {
+            const raw = JSON.parse(localStorage.getItem(g.key) || '[]');
+            const entries = raw.map(x => typeof x === 'number' ? { name: '???', score: x } : x);
+            const rows = [0, 1, 2].map(i => {
+                const e = entries[i];
+                return `<div class="lb-row lb-rank${i + 1}">
+                    <span class="lb-medal">${MEDALS[i]}</span>
+                    <span class="lb-label">${e ? e.name : LABELS[i]}</span>
+                    <span class="lb-score">${e ? e.score.toLocaleString() : '—'}</span>
+                </div>`;
+            }).join('');
+            return `<div class="lb-card">
+                <div class="lb-card-header">${g.emoji} ${g.name}</div>
+                ${rows}
+            </div>`;
+        }).join('');
+    }
+
+    renderLeaderboard();
+    document.getElementById('lbRefresh').addEventListener('click', renderLeaderboard);
+    window.addEventListener('focus', renderLeaderboard);
+
+    // ── Search filter ───────────────────────────────────────────────────────
+    document.querySelector('.search-bar input').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase();
+        document.querySelectorAll('.game-card').forEach(card => {
+            const title = card.querySelector('.game-card-title').textContent.toLowerCase();
+            card.style.display = title.includes(q) ? '' : 'none';
+        });
+    });
+
+    // ── All Games Overlay ───────────────────────────────────────────────────
+    const ALL_GAMES = [
+        {n:'Bowmasters',e:'🏹',p:'0.html'},
+        {n:'OvO',e:'🏃',p:'1-a.html'},
+        {n:'OvO 2',e:'🏃',p:'2e.html'},
+        {n:'OvO 3 Dimensions',e:'🏃',p:'3.html'},
+        {n:'Gladihoppers',e:'⚔️',p:'4.html'},
+        {n:'Ice Dodo',e:'🐦',p:'5.html'},
+        {n:'Block Blast',e:'🟦',p:'6.html'},
+        {n:'Jetpack Joyride',e:'🚀',p:'7.html'},
+        {n:'Friday Night Funkin',e:'🎵',p:'8-wow.html'},
+        {n:'Sprunki',e:'🎶',p:'9.html'},
+        {n:'Temple Run 2',e:'🏛️',p:'10.html'},
+        {n:'Stickman Hook',e:'🪝',p:'11.html'},
+        {n:'Attack Hole',e:'🕳️',p:'13.html'},
+        {n:'Bridge Race',e:'🌉',p:'14.html'},
+        {n:'Color Water Sort 3D',e:'💧',p:'15.html'},
+        {n:'Hide N Seek',e:'👁️',p:'16.html'},
+        {n:'Magic Tiles 3',e:'🎹',p:'17.html'},
+        {n:'Stacky Dash',e:'📦',p:'18.html'},
+        {n:'Supreme Duelist',e:'⚔️',p:'19.html'},
+        {n:'Tall Man Run',e:'🏃',p:'20a.html'},
+        {n:'Turbo Stars',e:'⭐',p:'21.html'},
+        {n:'Mob Control HTML5',e:'👾',p:'22.html'},
+        {n:'Pou',e:'🐾',p:'23.html'},
+        {n:'Crossy Road',e:'🐔',p:'24.html'},
+        {n:'Basket Battle',e:'🏀',p:'25.html'},
+        {n:'Amaze',e:'🌀',p:'26.html'},
+        {n:'Geometry Dash Lite',e:'🔷',p:'27.html'},
+        {n:'Basketball Frvr',e:'🏀',p:'28.html'},
+        {n:'Bazooka Boy',e:'💣',p:'29.html'},
+        {n:'Color Match',e:'🎨',p:'31.html'},
+        {n:'Dig Deep',e:'⛏️',p:'32.html'},
+        {n:'Retro Bowl',e:'🏈',p:'33.html'},
+        {n:'Retro Bowl College',e:'🏈',p:'34.html'},
+        {n:'Monster Tracks',e:'🚗',p:'36.html'},
+        {n:'Gobble',e:'🦃',p:'37.html'},
+        {n:"Five Nights at Freddy's",e:'🐻',p:'38.html'},
+        {n:"Five Nights at Freddy's 2",e:'🐻',p:'39.html'},
+        {n:"Five Nights at Freddy's 3",e:'🐻',p:'40.html'},
+        {n:"Five Nights at Freddy's 4",e:'🐻',p:'41.html'},
+        {n:'Road of Fury',e:'💥',p:'42.html'},
+        {n:'Driven Wild',e:'🚗',p:'43.html'},
+        {n:'Ragdoll Hit',e:'🤸',p:'44.html'},
+        {n:'Vex 1',e:'🏃',p:'45.html'},
+        {n:'Vex 2',e:'🏃',p:'46.html'},
+        {n:'Vex 3',e:'🏃',p:'47.html'},
+        {n:'Vex 3 XMAS',e:'🎄',p:'48.html'},
+        {n:'Vex 4',e:'🏃',p:'49.html'},
+        {n:'Vex 5',e:'🏃',p:'50.html'},
+        {n:'Vex 6',e:'🏃',p:'51.html'},
+        {n:'Vex 7',e:'🏃',p:'52.html'},
+        {n:'Vex 8',e:'🏃',p:'53.html'},
+        {n:'Vex Challenges',e:'🏃',p:'54.html'},
+        {n:'Vex X3M',e:'🏍️',p:'55.html'},
+        {n:'Vex X3M 2',e:'🏍️',p:'56.html'},
+        {n:'1v1.LoL',e:'🔫',p:'58.html'},
+        {n:'A Dance of Fire and Ice',e:'🔥',p:'59.html'},
+        {n:'Achievement Unlocked',e:'🏆',p:'60.html'},
+        {n:'Achievement Unlocked 2',e:'🏆',p:'61.html'},
+        {n:'Achievement Unlocked 3',e:'🏆',p:'62.html'},
+        {n:'Angry Birds',e:'🐦',p:'63.html'},
+        {n:'Backrooms',e:'🚪',p:'64.html'},
+        {n:"Baldi's Basics",e:'📏',p:'65.html'},
+        {n:'Basket Random',e:'🏀',p:'66.html'},
+        {n:'Big Tower Tiny Square',e:'🟧',p:'67.html'},
+        {n:'Big NEON Tower Tiny Square',e:'💡',p:'68.html'},
+        {n:'Big ICE Tower Tiny Square',e:'🧊',p:'69.html'},
+        {n:'BitLife',e:'🧬',p:'70.html'},
+        {n:'Bloons TD',e:'🎈',p:'71.html'},
+        {n:'Bloons TD 2',e:'🎈',p:'72.html'},
+        {n:'Bloons TD 3',e:'🎈',p:'73.html'},
+        {n:'Bloons TD 4',e:'🎈',p:'74.html'},
+        {n:'Bloons TD 5',e:'🎈',p:'75.html'},
+        {n:'Bob The Robber 2',e:'🦹',p:'76.html'},
+        {n:'Boxing Random',e:'🥊',p:'77.html'},
+        {n:'Burrito Bison',e:'🌯',p:'78.html'},
+        {n:'Cannon Basketball',e:'🏀',p:'79.html'},
+        {n:'Cannon Basketball 2',e:'🏀',p:'80.html'},
+        {n:'Cluster Rush',e:'🚛',p:'81.html'},
+        {n:'Cookie Clicker',e:'🍪',p:'82-aa.html'},
+        {n:'Coreball',e:'🎯',p:'83.html'},
+        {n:'Cubefield',e:'🟫',p:'84.html'},
+        {n:'Cut the Rope',e:'🍭',p:'85.html'},
+        {n:'Draw Climber',e:'🖊️',p:'86.html'},
+        {n:'Emulator.JS',e:'🕹️',p:'87.html'},
+        {n:'Fireboy and Watergirl 2',e:'🔥',p:'88.html'},
+        {n:'Fireboy and Watergirl 3',e:'🔥',p:'89.html'},
+        {n:'Granny',e:'👵',p:'90.html'},
+        {n:'Gunspin',e:'🔫',p:'91.html'},
+        {n:'Highway Racer 2',e:'🚗',p:'92.html'},
+        {n:'Johnny Trigger',e:'🔫',p:'93.html'},
+        {n:'Journey Downhill',e:'🏔️',p:'94.html'},
+        {n:'Line Rider',e:'🛷',p:'95.html'},
+        {n:'Moto X3M',e:'🏍️',p:'96.html'},
+        {n:'Moto X3M 2',e:'🏍️',p:'97.html'},
+        {n:'Moto X3M 3',e:'🏍️',p:'98.html'},
+        {n:'Moto X3M Spooky',e:'🎃',p:'99.html'},
+        {n:'Moto X3M Winter',e:'❄️',p:'100-f.html'},
+        {n:'Ninja vs EvilCorp',e:'🥷',p:'101.html'},
+        {n:'Paper.io 2',e:'📄',p:'102.html'},
+        {n:"The World's Hardest Game",e:'🔴',p:'103.html'},
+        {n:"The World's Hardest Game 3",e:'🔴',p:'104.html'},
+        {n:"The World's Hardest Game 4",e:'🔴',p:'105.html'},
+        {n:'This Is The Only Level',e:'🐘',p:'106.html'},
+        {n:'This Is The Only Level 2',e:'🐘',p:'107.html'},
+        {n:'Tiny Fishing',e:'🎣',p:'108.html'},
+        {n:'Tomb Of The Mask',e:'💀',p:'109.html'},
+        {n:'Toss The Turtle',e:'🐢',p:'110-f.html'},
+        {n:'Tube Jumpers',e:'🎪',p:'111.html'},
+        {n:'Wordle',e:'📝',p:'112.html'},
+        {n:'Ruffle',e:'▶️',p:'113.html'},
+        {n:'2048',e:'🔢',p:'114-f.html'},
+        {n:'8 Ball Pool',e:'🎱',p:'115.html'},
+        {n:'Offroad Mountain Bike',e:'🚵',p:'116.html'},
+        {n:'Space Waves',e:'🌊',p:'117.html'},
+        {n:'Solar Smash',e:'🌍',p:'118.html'},
+        {n:'Snow Rider 3D',e:'🛷',p:'119.html'},
+        {n:'Fortzone Battle Royale',e:'🎯',p:'120.html'},
+        {n:'Brawl Guys.io',e:'👊',p:'121.html'},
+        {n:'Survival Race',e:'🏁',p:'122.html'},
+        {n:'Poly Track',e:'🏎️',p:'123-win.html'},
+        {n:'Moto X3M Pool Party',e:'🏊',p:'124.html'},
+        {n:'Granny 2',e:'👵',p:'125.html'},
+        {n:'Granny 3',e:'👵',p:'126.html'},
+        {n:'Fashion Battle',e:'👗',p:'127.html'},
+        {n:'Slice it All',e:'🔪',p:'128.html'},
+        {n:'Flappy Bird',e:'🐦',p:'129.html'},
+        {n:'osu!',e:'🎵',p:'130.html'},
+        {n:'8 Ball Classic',e:'🎱',p:'146.html'},
+        {n:'Angry Birds Showdown',e:'🐦',p:'147.html'},
+        {n:'Archery World Tour',e:'🏹',p:'148.html'},
+        {n:'Ball Blast',e:'💥',p:'149.html'},
+        {n:'Cannon Balls 3D',e:'💣',p:'150.html'},
+        {n:'Chess Classic',e:'♟️',p:'151.html'},
+        {n:'Draw the Line',e:'✏️',p:'152.html'},
+        {n:'Flappy Dunk',e:'🏀',p:'153.html'},
+        {n:'Fork n Sausage',e:'🌭',p:'154.html'},
+        {n:'Guess Their Answer',e:'❓',p:'155.html'},
+        {n:'Harvest.io',e:'🌾',p:'156.html'},
+        {n:'Hill Climb Racing Lite',e:'🚗',p:'157.html'},
+        {n:'Pac-Man Superfast',e:'👻',p:'158.html'},
+        {n:'Parking Rush',e:'🅿️',p:'159.html'},
+        {n:'Race Master 3D',e:'🏎️',p:'160.html'},
+        {n:'State.io',e:'🗺️',p:'161.html'},
+        {n:'Tower Crash 3D',e:'🏗️',p:'162.html'},
+        {n:'Trivia Crack',e:'🧠',p:'163.html'},
+        {n:'Crazy Cattle 3D',e:'🐄',p:'164-temp2.html'},
+        {n:'Cheese Chompers 3D',e:'🧀',p:'165.html'},
+        {n:'Bad Parenting 1',e:'🐰',p:'166.html'},
+        {n:'Blade Ball',e:'⚔️',p:'167.html'},
+        {n:'Blocky Snakes',e:'🐍',p:'168.html'},
+        {n:'Bloxorz',e:'📦',p:'169.html'},
+        {n:'Big Tower Tiny Square 2',e:'🟧',p:'170.html'},
+        {n:'Candy Crush',e:'🍬',p:'171.html'},
+        {n:'Melon Playground',e:'🍉',p:'172.html'},
+        {n:'Drift Hunters',e:'🚗',p:'173.html'},
+        {n:'World Box',e:'🌍',p:'174.html'},
+        {n:'Run 1',e:'🏃',p:'175.html'},
+        {n:'Run 2',e:'🏃',p:'176.html'},
+        {n:'Run 3',e:'🏃',p:'177.html'},
+        {n:'Swords and Souls',e:'⚔️',p:'178.html'},
+        {n:'Soundboard',e:'🔊',p:'179.html'},
+        {n:'n-gon',e:'🔷',p:'180.html'},
+        {n:'Minecraft 1.8.8',e:'⛏️',p:'181.html'},
+        {n:'Minecraft 1.12.2',e:'⛏️',p:'182.html'},
+        {n:'Minecraft 1.21.4',e:'⛏️',p:'183.html'},
+        {n:"Five Nights at Freddy's: Sister Location",e:'🐻',p:'185.html'},
+        {n:'Ragdoll Archers',e:'🏹',p:'186.html'},
+        {n:'Papers, Please',e:'📋',p:'187.html'},
+        {n:'Scrap Metal 3',e:'🔧',p:'188e.html'},
+        {n:"Five Nights at Freddy's: World",e:'🐻',p:'190.html'},
+        {n:"Five Nights at Freddy's: Pizza Simulator",e:'🍕',p:'191.html'},
+        {n:"Five Nights at Freddy's: Ultimate Custom Night",e:'🐻',p:'192.html'},
+        {n:'Do NOT Take This Cat Home',e:'🐱',p:'193.html'},
+        {n:'People Playground',e:'🧍',p:'194-a.html'},
+        {n:'R.E.P.O',e:'📦',p:'195.html'},
+        {n:'ULTRAKILL',e:'💀',p:'196-fixed.html'},
+        {n:'Elastic Man',e:'😮',p:'197.html'},
+        {n:'Slope',e:'🔵',p:'198.html'},
+        {n:'Time Shooter 1',e:'🕐',p:'199.html'},
+        {n:'Time Shooter 2',e:'🕐',p:'200.html'},
+        {n:'Time Shooter 3: SWAT',e:'🕐',p:'201.html'},
+        {n:'Carrom Clash',e:'🎯',p:'202.html'},
+        {n:'DOOM',e:'💀',p:'203-a.html'},
+        {n:"Five Nights at Winston's",e:'🐻',p:'204-a.html'},
+        {n:'Buckshot Roulette',e:'🎲',p:'205-f.html'},
+        {n:'Tunnel Rush',e:'🚇',p:'206.html'},
+        {n:'Snowbattle.io',e:'❄️',p:'207.html'},
+        {n:'Rolly Vortex',e:'🌀',p:'208.html'},
+        {n:'Draw the Hill',e:'✏️',p:'209.html'},
+        {n:'Dragon vs Bricks',e:'🐉',p:'210.html'},
+        {n:'Death Run 3D',e:'💀',p:'211.html'},
+        {n:'Cut the Rope: Time Travel',e:'🍭',p:'213.html'},
+        {n:'Cut the Rope: Holiday Gift',e:'🎁',p:'214.html'},
+        {n:'Bendy and the Ink Machine',e:'🖤',p:'215.html'},
+        {n:"That's Not My Neighbor",e:'👁️',p:'216.html'},
+        {n:'Hotline Miami',e:'🔫',p:'217-c.html'},
+        {n:"Papa's Bakeria",e:'🎂',p:'218.html'},
+        {n:"Papa's Burgeria",e:'🍔',p:'219.html'},
+        {n:"Papa's Cheeseria",e:'🧀',p:'220.html'},
+        {n:"Papa's Cupcakeria",e:'🧁',p:'221.html'},
+        {n:"Papa's Donuteria",e:'🍩',p:'222.html'},
+        {n:"Papa's Freezeria",e:'🍦',p:'223.html'},
+        {n:"Papa's Hot Doggeria",e:'🌭',p:'224.html'},
+        {n:"Papa's Pancakeria",e:'🥞',p:'225.html'},
+        {n:"Papa's Pastaria",e:'🍝',p:'226.html'},
+        {n:"Papa's Pizzeria",e:'🍕',p:'227.html'},
+        {n:"Papa's Scooperia",e:'🍨',p:'228.html'},
+        {n:"Papa's Sushiria",e:'🍣',p:'229.html'},
+        {n:"Papa's Taco Mia",e:'🌮',p:'230.html'},
+        {n:"Papa's Wingeria",e:'🍗',p:'231.html'},
+        {n:'Plants vs Zombies',e:'🌻',p:'232.html'},
+        {n:'Superhot',e:'🔴',p:'233.html'},
+        {n:'Duck Life',e:'🐤',p:'234.html'},
+        {n:'Duck Life 2',e:'🐤',p:'235.html'},
+        {n:'Duck Life 3',e:'🐤',p:'236.html'},
+        {n:'Duck Life 4',e:'🐤',p:'237.html'},
+        {n:'Duck Life 5',e:'🐤',p:'238.html'},
+        {n:'Red Ball',e:'🔴',p:'239.html'},
+        {n:'Red Ball 2',e:'🔴',p:'240.html'},
+        {n:'Red Ball 3',e:'🔴',p:'241.html'},
+        {n:'Red Ball 4',e:'🔴',p:'242.html'},
+        {n:'Red Ball 4 Vol. 2',e:'🔴',p:'243.html'},
+        {n:'Red Ball 4 Vol. 3',e:'🔴',p:'244.html'},
+        {n:'Wheely',e:'🚗',p:'245.html'},
+        {n:'Wheely 2',e:'🚗',p:'246.html'},
+        {n:'Wheely 3',e:'🚗',p:'247.html'},
+        {n:'Wheely 4',e:'🚗',p:'248.html'},
+        {n:'Wheely 5',e:'🚗',p:'249.html'},
+        {n:'Wheely 6',e:'🚗',p:'250.html'},
+        {n:'Wheely 7',e:'🚗',p:'251.html'},
+        {n:'Wheely 8',e:'🚗',p:'252.html'},
+        {n:'Chat Bot (A.I)',e:'🤖',p:'253.html'},
+        {n:'Crazy Chicken 3D',e:'🐔',p:'255.html'},
+        {n:'Crazy Kitty 3D',e:'🐱',p:'256.html'},
+        {n:'Google Baseball',e:'⚾',p:'257.html'},
+        {n:"A Bite at Freddy's",e:'🐻',p:'258.html'},
+        {n:"Class of '09",e:'🎓',p:'259.html'},
+        {n:'RE:RUN',e:'🏃',p:'260.html'},
+        {n:'Fruit Ninja',e:'🍉',p:'261.html'},
+        {n:'Half Life',e:'🔫',p:'262.html'},
+        {n:'Quake III Arena',e:'🔫',p:'263.html'},
+        {n:'Escape Road',e:'🚗',p:'264.html'},
+        {n:'Escape Road 2',e:'🚗',p:'265.html'},
+        {n:'Speed Stars',e:'⭐',p:'266-a.html'},
+        {n:'Pizza Tower',e:'🍕',p:'267.html'},
+        {n:'Bacon May Die',e:'🥓',p:'268.html'},
+        {n:'Bad Ice Cream',e:'🍦',p:'269.html'},
+        {n:'Bad Ice Cream 2',e:'🍦',p:'270.html'},
+        {n:'Bad Ice Cream 3',e:'🍦',p:'271.html'},
+        {n:'Basketball Stars',e:'🏀',p:'272.html'},
+        {n:'BlockPost',e:'🔫',p:'273.html'},
+        {n:'CircloO',e:'⭕',p:'274.html'},
+        {n:'CircloO 2',e:'⭕',p:'275.html'},
+        {n:'Drift Boss',e:'🚗',p:'276.html'},
+        {n:'Evil Glitch',e:'👾',p:'277.html'},
+        {n:'Madalin Stunt Cars 2',e:'🏎️',p:'278.html'},
+        {n:'Madalin Stunt Cars 3',e:'🏎️',p:'279.html'},
+        {n:'Papery Planes',e:'✈️',p:'280.html'},
+        {n:'Pixel Gun Survival',e:'🔫',p:'281.html'},
+        {n:'Protektor',e:'🛡️',p:'282.html'},
+        {n:'Rooftop Snipers',e:'🔫',p:'283.html'},
+        {n:'War The Knights',e:'⚔️',p:'284.html'},
+        {n:'Basket Bros',e:'🏀',p:'285.html'},
+        {n:'Endoparasitic',e:'🪲',p:'286.html'},
+        {n:'Riddle School',e:'🏫',p:'287.html'},
+        {n:'Riddle School 2',e:'🏫',p:'288.html'},
+        {n:'Riddle School 3',e:'🏫',p:'289.html'},
+        {n:'Riddle School 4',e:'🏫',p:'290.html'},
+        {n:'Riddle School 5',e:'🏫',p:'291.html'},
+        {n:'Riddle Transfer',e:'🏫',p:'292.html'},
+        {n:'Riddle Transfer 2',e:'🏫',p:'293.html'},
+        {n:'Idle Dice',e:'🎲',p:'294.html'},
+        {n:'12 Mini Battles',e:'🎮',p:'295.html'},
+        {n:'Play!.js',e:'▶️',p:'296.html'},
+        {n:'Minecraft 1.5.2',e:'⛏️',p:'297.html'},
+        {n:'Minecraft Alpha 1.2.6',e:'⛏️',p:'298.html'},
+        {n:'Minecraft Beta 1.3',e:'⛏️',p:'299.html'},
+        {n:'Minecraft Beta 1.7.3',e:'⛏️',p:'300.html'},
+        {n:'Minecraft Indev',e:'⛏️',p:'301.html'},
+        {n:'Little Runmo',e:'🏃',p:'302.html'},
+        {n:'Territorial.io',e:'🗺️',p:'303.html'},
+        {n:'Alien Hominid',e:'👽',p:'304.html'},
+        {n:'Tanuki Sunset',e:'🦝',p:'305.html'},
+        {n:'Shipo.io',e:'🚢',p:'306.html'},
+        {n:'Rainbow Obby',e:'🌈',p:'307.html'},
+        {n:'Nazi Zombies: Portable',e:'💀',p:'308.html'},
+        {n:'Sandboxels',e:'🏖️',p:'309.html'},
+        {n:'Dreadhead Parkour',e:'🏃',p:'310.html'},
+        {n:'Sandtris',e:'🏖️',p:'311.html'},
+        {n:'BlackJack',e:'🃏',p:'312.html'},
+        {n:'Minesweeper Mania',e:'💣',p:'313.html'},
+        {n:'Super Mario 63',e:'🍄',p:'314.html'},
+        {n:'Jelly Mario',e:'🍄',p:'315.html'},
+        {n:'Angry Birds Chrome',e:'🐦',p:'316.html'},
+        {n:'sandspiel',e:'🏖️',p:'317.html'},
+        {n:'Side Effects',e:'💊',p:'318.html'},
+        {n:'Build a Queen',e:'👑',p:'319.html'},
+        {n:'3D Bowling',e:'🎳',p:'320.html'},
+        {n:'Room Sort',e:'🛋️',p:'321.html'},
+        {n:'Sushi Roll',e:'🍣',p:'322.html'},
+        {n:'Find the Alien',e:'👽',p:'323.html'},
+        {n:'Maze Speedrun',e:'🌀',p:'324.html'},
+        {n:'Kitchen Bazar',e:'🍳',p:'325.html'},
+        {n:'Pokey Ball',e:'🔵',p:'326.html'},
+        {n:'Slime.io',e:'🟢',p:'327.html'},
+        {n:'Om Nom Run',e:'🟢',p:'328.html'},
+        {n:'TileTopia',e:'🎨',p:'329a.html'},
+        {n:'BitPlanes',e:'✈️',p:'330.html'},
+        {n:'Crazy Cars',e:'🚗',p:'331.html'},
+        {n:'Fancy Pants Adventure',e:'✏️',p:'333.html'},
+        {n:'Fancy Pants Adventure 2',e:'✏️',p:'334.html'},
+        {n:'Fancy Pants Adventure 3',e:'✏️',p:'335.html'},
+        {n:'Fancy Pants Adventure 4 Part 1',e:'✏️',p:'336.html'},
+        {n:'Fancy Pants Adventure 4 Part 2',e:'✏️',p:'337.html'},
+        {n:'Getaway Shootout',e:'🔫',p:'338.html'},
+        {n:'House of Hazards',e:'🏠',p:'339.html'},
+        {n:'Learn to Fly',e:'🐧',p:'340.html'},
+        {n:'Learn to Fly 2',e:'🐧',p:'341.html'},
+        {n:'Learn to Fly 3',e:'🐧',p:'342.html'},
+        {n:'Learn to Fly Idle',e:'🐧',p:'343.html'},
+        {n:'Raft Wars',e:'🚣',p:'344.html'},
+        {n:'Raft Wars 2',e:'🚣',p:'345.html'},
+        {n:'Sort the Court',e:'👑',p:'346.html'},
+        {n:'SpiderDoll',e:'🕷️',p:'347.html'},
+        {n:'They Are Coming',e:'🧟',p:'348.html'},
+        {n:'Spiral Roll',e:'🌀',p:'349.html'},
+        {n:"Binding of Isaac: Wrath of the Lamb",e:'💀',p:'350.html'},
+        {n:'Happy Sheepies',e:'🐑',p:'351.html'},
+        {n:"DON'T YOU LECTURE ME",e:'😤',p:'352.html'},
+        {n:'Blumgi Rocket',e:'🚀',p:'353.html'},
+        {n:'Adventure Capitalist',e:'💰',p:'354-a.html'},
+        {n:'Dadish 2',e:'🥕',p:'355.html'},
+        {n:'Dadish 3',e:'🥕',p:'356.html'},
+        {n:'Dadish',e:'🥕',p:'357.html'},
+        {n:'Dadish 3D',e:'🥕',p:'358.html'},
+        {n:'Daily Dadish',e:'🥕',p:'359.html'},
+        {n:'EvoWars.io',e:'⚔️',p:'360.html'},
+        {n:'Google Feud',e:'🔍',p:'361.html'},
+        {n:'Idle Breakout',e:'🧱',p:'362.html'},
+        {n:'Idle Lumber Inc',e:'🪵',p:'363.html'},
+        {n:'Idle Mining Empire',e:'⛏️',p:'364.html'},
+        {n:'JustFall.lol',e:'🏔️',p:'365.html'},
+        {n:'Merge Harvest',e:'🌾',p:'366.html'},
+        {n:'Parking Fury 3D',e:'🅿️',p:'367.html'},
+        {n:'Slope 2',e:'🔵',p:'368.html'},
+        {n:'Slowroads',e:'🛣️',p:'369.html'},
+        {n:'Smash Karts',e:'🏎️',p:'370-f.html'},
+        {n:'Stickman Fight Ragdoll',e:'🤸',p:'371e.html'},
+        {n:'Stickman Boost',e:'🏃',p:'372.html'},
+        {n:'Stickman Climb',e:'🧗',p:'373.html'},
+        {n:'Stickman Golf',e:'⛳',p:'374e.html'},
+        {n:'2048 Merge Run',e:'🔢',p:'375.html'},
+        {n:'Build a Big Army',e:'⚔️',p:'376.html'},
+        {n:'Build a Plane',e:'✈️',p:'377.html'},
+        {n:'Camouflage and Sniper',e:'🎯',p:'378.html'},
+        {n:'Car Survival 3D',e:'🚗',p:'379.html'},
+        {n:'City Defense',e:'🏙️',p:'380.html'},
+        {n:'Clothing Shop 3D',e:'👗',p:'381.html'},
+        {n:'Cool Cars Run 3D',e:'🚗',p:'382.html'},
+        {n:'Crush Cars 3D',e:'💥',p:'383.html'},
+        {n:'Destiny Run 3D',e:'🏃',p:'384.html'},
+        {n:'Destroy The Car 3D',e:'💥',p:'385.html'},
+        {n:'Diamond Seeker',e:'💎',p:'386.html'},
+        {n:'Draw Joust',e:'✏️',p:'387.html'},
+        {n:'Evolving Bombs 3D',e:'💣',p:'388.html'},
+        {n:'Fire and Frost Master',e:'🔥',p:'389.html'},
+        {n:'Fitness Empire',e:'💪',p:'390.html'},
+    ];
+
+    let agFiltered = [...ALL_GAMES];
+
+    function renderAgGrid(list) {
+        const grid = document.getElementById('agGrid');
+        document.getElementById('agCount').textContent = list.length + ' games';
+        if (list.length === 0) {
+            grid.innerHTML = '<div class="ag-no-results">No games found. Try a different search.</div>';
+            return;
+        }
+        grid.innerHTML = list.map(g => `
+            <button class="ag-btn" data-url="${g.p}" data-title="${g.n.replace(/"/g,'&quot;')}" data-emoji="${g.e}">
+                <span class="ag-emoji">${g.e}</span>
+                <span class="ag-name">${g.n}</span>
+            </button>`).join('');
+
+        grid.querySelectorAll('.ag-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                openGameCDN(btn.dataset.url, btn.dataset.title, btn.dataset.emoji);
+            });
+        });
+    }
+
+    function openAgOverlay() {
+        document.getElementById('agSearch').value = '';
+        agFiltered = [...ALL_GAMES];
+        renderAgGrid(agFiltered);
+        document.getElementById('agOverlay').classList.add('open');
+        setTimeout(() => document.getElementById('agSearch').focus(), 100);
+    }
+
+    document.getElementById('agClose').addEventListener('click', () => {
+        document.getElementById('agOverlay').classList.remove('open');
+    });
+
+    document.getElementById('agOverlay').addEventListener('click', e => {
+        if (e.target === document.getElementById('agOverlay')) {
+            document.getElementById('agOverlay').classList.remove('open');
+        }
+    });
+
+    document.getElementById('agSearch').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase().trim();
+        agFiltered = q ? ALL_GAMES.filter(g => g.n.toLowerCase().includes(q)) : [...ALL_GAMES];
+        renderAgGrid(agFiltered);
+    });
+
+    document.querySelector('.btn-view-all').addEventListener('click', openAgOverlay);
+</script>
+
+</body>
+</html>
