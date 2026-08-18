@@ -1,0 +1,11 @@
+rootProject.name = 'donut-flipper'
+
+// core  : pure Java analysis engine, zero Minecraft dependency
+// daemon: headless runner so price history keeps collecting while you're offline
+//
+// The Fabric client mod lives in mod/ and is built separately -- it needs the
+// Fabric Loom plugin and Minecraft artifacts, which pull from maven.fabricmc.net.
+// Keeping it out of this settings file means `./gradlew build` works for the
+// engine even on a machine that has never touched a Minecraft toolchain.
+include 'core'
+include 'daemon'

@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# API KEY SAFETY
+# The DonutSMP key is account-scoped. Never let one reach a commit.
+# Real config lives at ~/.donutflipper/config.json, outside the repo entirely,
+# but these patterns catch the case where someone drops one in the project dir.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+config.json
+!config.example.json
+*.key
+secrets/
+
+# Collected market data -- can reach hundreds of MB, and it is reproducible
+*.db
+*.db-wal
+*.db-shm
+/data/
+/probe-output/
+
+# Gradle / Java
+.gradle/
+build/
+out/
+*.class
+*.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# Fabric Loom
+.fabric/
+run/
+remappedSrc/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project

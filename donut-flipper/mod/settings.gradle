@@ -1,0 +1,15 @@
+pluginManagement {
+    repositories {
+        maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'donutflipper-mod'
+
+// The analysis engine is included from the sibling directory rather than
+// duplicated. One definition of the valuation logic, shared by the mod, the
+// daemon and the tests -- so what the UI shows is what the backtest measured.
+include 'core'
+project(':core').projectDir = file('../core')

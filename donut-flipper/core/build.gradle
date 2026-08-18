@@ -1,0 +1,46 @@
+// Self-contained on purpose: the Fabric mod build includes this project
+// directly, and that build never applies the root project's shared config.
+plugins {
+    id 'java'
+}
+
+group = 'dev.skullzz.donutflipper'
+version = '0.1.0'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        // Matches the Java that Minecraft 1.21.x runs on.
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    // Gson ships inside Minecraft, so the mod build excludes this copy rather
+    // than bundling a second one.
+    implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'org.xerial:sqlite-jdbc:3.53.2.1'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// HTTP comes from java.net.http.HttpClient (JDK built-in) -- no OkHttp, no Retrofit.
+// Keeping the dependency surface this small matters because everything here has
+// to survive being shaded into a Minecraft mod jar.
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:all' << '-Xlint:-serial'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}

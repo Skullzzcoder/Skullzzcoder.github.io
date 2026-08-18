@@ -1,0 +1,36 @@
+// Root build for the headless side (core + daemon). The Fabric mod has its own
+// build in mod/, because Fabric Loom needs Minecraft artifacts that a plain
+// engine build should not have to resolve.
+plugins {
+    id 'java'
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    group = 'dev.skullzz.donutflipper'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs << '-Xlint:all' << '-Xlint:-serial'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events 'passed', 'skipped', 'failed'
+            exceptionFormat 'full'
+        }
+    }
+}

@@ -1,0 +1,28 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'org.xerial:sqlite-jdbc:3.53.2.1'
+}
+
+application {
+    mainClass = 'dev.skullzz.donutflipper.daemon.DaemonMain'
+}
+
+// Fat jar so the collector is a single `java -jar` with no classpath fuss --
+// this thing is meant to run unattended in the background for days.
+tasks.register('fatJar', Jar) {
+    archiveClassifier = 'all'
+    manifest {
+        attributes 'Main-Class': 'dev.skullzz.donutflipper.daemon.DaemonMain'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
+}
