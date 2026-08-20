@@ -25,6 +25,8 @@ import java.util.logging.Logger;
  * Entry point for the headless collector.
  *
  * <pre>
+ *   java -jar daemon-all.jar set-key    store your API key and verify it works
+ *   java -jar daemon-all.jar where      print where the config file lives
  *   java -jar daemon-all.jar probe      inspect the API and lock the schema
  *   java -jar daemon-all.jar doctor     diagnose a live setup and say what to fix
  *   java -jar daemon-all.jar collect    run the collector (the normal mode)
@@ -47,6 +49,8 @@ public final class DaemonMain {
         String command = args.length > 0 ? args[0].toLowerCase() : "collect";
 
         switch (command) {
+            case "set-key", "setkey" -> SetKey.run(args);
+            case "where", "config" -> SetKey.where();
             case "probe" -> Probe.run();
             case "doctor" -> Doctor.run();
             case "collect" -> collect();
@@ -55,8 +59,8 @@ public final class DaemonMain {
             case "demo" -> Demo.run();
             default -> {
                 System.err.println("Unknown command: " + command);
-                System.err.println(
-                        "Use one of: probe, doctor, collect, scan, backtest, demo");
+                System.err.println("Use one of: set-key, where, probe, doctor, "
+                        + "collect, scan, backtest, demo");
                 System.exit(2);
             }
         }

@@ -89,32 +89,32 @@ and works.
 
 ## 4. Add your API key
 
-Run this once to create the config file:
-
 ```powershell
-java -jar daemon\build\libs\daemon-0.1.0-all.jar probe
+java -jar daemon\build\libs\daemon-0.1.0-all.jar set-key
 ```
 
-It will say it has no key, and tell you where the config file is. Open it:
+It asks you to paste your key, saves it, and immediately makes one API call to
+confirm the server accepts it. If the key is wrong you find out now rather than
+three days into a collection run.
+
+That is all. You do not need to find or edit any file.
+
+> **Why not pass the key as an argument?** Anything you type on the command line
+> is written to your PowerShell history in plain text. The prompt avoids that.
+
+> **Where does it go?** `%USERPROFILE%\.donutflipper\config.json` — in your user
+> folder, deliberately outside the project, so it can never end up in a git
+> commit. Run `java -jar $J where` to print the exact path any time.
+
+**If you would rather edit it by hand**, the folder starts with a dot, which
+Explorer hides by default. Skip Explorer and open it directly:
 
 ```powershell
 notepad $HOME\.donutflipper\config.json
 ```
 
-Find the `apiKey` line and paste your key between the quotes:
-
-```json
-"apiKey": "paste-your-key-here",
-```
-
-Save and close.
-
-> **Why the config file rather than an environment variable?** In PowerShell,
-> `$env:VAR = "..."` only lasts until you close that window, and the collector is
-> meant to run for days. The config file persists. It lives in your user folder,
-> not in the project, so it can never end up in a git commit.
-
----
+The file only exists after you have run the program at least once. If Notepad
+offers to create a new file, run `java -jar $J where` first.
 
 ## 5. Probe, diagnose, collect
 

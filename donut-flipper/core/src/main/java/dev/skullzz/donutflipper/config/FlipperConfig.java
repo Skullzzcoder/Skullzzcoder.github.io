@@ -113,6 +113,20 @@ public final class FlipperConfig {
         return !apiKey().isEmpty();
     }
 
+    public void setApiKey(String key) {
+        this.apiKey = key == null ? "" : key.trim();
+    }
+
+    /**
+     * True when {@code DONUTSMP_API_KEY} is set and therefore overrides whatever
+     * is in the config file. Worth surfacing: a stale environment variable
+     * silently winning over a freshly-saved key is a genuinely confusing failure.
+     */
+    public static boolean envKeyPresent() {
+        String env = System.getenv(ENV_KEY);
+        return env != null && !env.isBlank();
+    }
+
     public int listingPollSeconds() {
         return Math.max(10, listingPollSeconds);
     }

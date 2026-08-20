@@ -71,11 +71,17 @@ installing a JDK, cloning, and the PowerShell equivalents of these commands.
 Run `/api` in game on DonutSMP. You need a linked Discord account. This is a
 one-off.
 
+Then store it:
+
 ```bash
-export DONUTSMP_API_KEY=your_key_here
+java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key
 ```
 
-Or put it in `~/.donutflipper/config.json`, which is created on first run.
+It prompts for the key, saves it, and makes one live call to confirm the server
+accepts it — so a bad key surfaces immediately rather than three days into a
+collection run. `where` prints the config path if you want to edit it by hand.
+
+`DONUTSMP_API_KEY` also works and takes precedence over the saved key.
 
 > The key never goes in the repo and never goes in the mod. `.gitignore` covers
 > the obvious accidents, but the real protection is that config lives in your
@@ -88,6 +94,7 @@ export DONUTSMP_API_KEY=your_key_here
 ./gradlew :daemon:fatJar
 J="java -jar daemon/build/libs/daemon-0.1.0-all.jar"
 
+$J set-key    # 0. store your key (prompts, then verifies it)
 $J probe      # 1. what does the API actually return?
 $J doctor     # 2. is anything broken?
 $J collect    # 3. start gathering. leave it running.
