@@ -66,12 +66,43 @@ class DatabaseTest {
     @Test
     @DisplayName("listings missing from a sweep are marked gone")
     void missingListingsAreMarkedGone() throws Exception {
-        Instant old = NOW.minusSeconds(600);
-        db.upsertListings(List.of(listing("L1", 1_000, old, old)));
-
+        Instant earlier = NOW.minusSeconds(600);
+        db.upsertListings(List.of(listing("L1", 1_000, earlier, earlier)));
         assertEquals(1, db.activeListings().size());
-        db.markMissingAsGone(NOW);
+
+        // A later sweep that did not contain it.
+        long sweepId = db.upsertListings(List.of());
+        db.markMissingAsGone(sweepId, NOW);
+
         assertEquals(0, db.activeListings().size());
+    }
+
+    @Test
+    @DisplayName("reconciliation works even when two sweeps land in the same second")
+    void reconciliationSurvivesSameSecondSweeps() throws Exception {
+        // Timestamps are stored at second resolution. The original timestamp-based
+        // reconciliation silently did nothing when two sweeps shared a second,
+        // because "last_seen < sweepStart" is false when they are equal.
+        db.upsertListings(List.of(listing("L1", 1_000, NOW, NOW),
+                listing("L2", 2_000, NOW, NOW)));
+
+        long sweepId = db.upsertListings(List.of(listing("L1", 1_000, NOW, NOW)));
+        db.markMissingAsGone(sweepId, NOW);
+
+        assertEquals(List.of("L1"),
+                db.activeListings().stream().map(Listing::listingId).toList());
+    }
+
+    @Test
+    @DisplayName("sweep numbers are monotonic even across empty sweeps")
+    void sweepIdsAreMonotonic() throws Exception {
+        long a = db.upsertListings(List.of());
+        long b = db.upsertListings(List.of());
+        long c = db.upsertListings(List.of(listing("L1", 1, NOW, NOW)));
+
+        assertTrue(a < b && b < c,
+                "an empty sweep must still advance the counter, or the next "
+                        + "reconciliation would compare against a stale number");
     }
 
     @Test

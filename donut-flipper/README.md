@@ -77,6 +77,23 @@ Or put it in `~/.donutflipper/config.json`, which is created on first run.
 > the obvious accidents, but the real protection is that config lives in your
 > home directory, outside any git tree.
 
+### Day one, in order
+
+```bash
+export DONUTSMP_API_KEY=your_key_here
+./gradlew :daemon:fatJar
+J="java -jar daemon/build/libs/daemon-0.1.0-all.jar"
+
+$J probe      # 1. what does the API actually return?
+$J doctor     # 2. is anything broken?
+$J collect    # 3. start gathering. leave it running.
+# ...wait a day or two...
+$J doctor     # 4. is there enough history yet?
+$J backtest   # 5. would this actually have made money?
+```
+
+Steps 1 and 2 take a minute. Step 3 is the one that needs patience.
+
 ### 2. Confirm the API shape
 
 ```bash
@@ -92,6 +109,25 @@ for days.
 If it reports `MAPPER FAILED`, open the saved JSON and correct the alias arrays
 at the top of `core/src/main/java/dev/skullzz/donutflipper/api/ApiMapper.java`.
 That file is the only place the wire format is known.
+
+The probe also writes `~/.donutflipper/probe/schema-report.md` — a compact,
+paste-ready description of the wire format. It contains field names and one
+sample record, and **no credentials**, so it is safe to share when asking for
+help fixing the aliases.
+
+### 2b. Diagnose
+
+```bash
+java -jar daemon/build/libs/daemon-0.1.0-all.jar doctor
+```
+
+Every failure in this system looks identical from the outside: an empty flip
+list. A wrong key, mis-guessed field names, a collector that has only run an
+hour, and a genuinely quiet market all present the same way. `doctor` tells you
+which one you have, and it answers the two questions that decide the whole
+strategy — whether the transaction feed exposes **buyer identity** (wash-trade
+detection depends on it) and whether listings carry **enchantment data** (exact
+keying depends on it).
 
 ### 3. Start collecting
 
@@ -183,6 +219,10 @@ mod/      Fabric client mod (built separately - needs Minecraft artifacts)
 ```bash
 ./gradlew :core:test        # run the engine test suite
 ```
+
+104 tests cover keying, valuation, the manipulation filter, the wire-format
+parser across every payload shape it claims to handle, backtest isolation, and
+end-to-end ingest against a real local HTTP server.
 
 `core` has no Minecraft dependency on purpose: valuation logic is testable in
 plain JUnit, and a Minecraft update cannot break your analysis engine. Only the

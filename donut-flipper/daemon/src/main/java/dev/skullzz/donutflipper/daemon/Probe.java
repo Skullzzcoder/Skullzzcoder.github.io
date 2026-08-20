@@ -14,6 +14,7 @@ import dev.skullzz.donutflipper.model.Sale;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +55,7 @@ public final class Probe {
         Files.createDirectories(outDir);
 
         RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
-        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter);
+        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
 
         System.out.println("Probing DonutSMP API -> " + outDir);
         System.out.println();
@@ -88,9 +89,103 @@ public final class Probe {
                     s.item().materialId(), s.item().count(), s.price(), s.soldAt()));
         }
 
+        writeSchemaReport(outDir, listings, sales);
+
         System.out.println();
         System.out.println("Raw payloads saved. If the counts above are 0 or mostly skipped,");
         System.out.println("open the saved JSON and correct the alias arrays in ApiMapper.java.");
+        System.out.println();
+        System.out.println("A paste-ready summary is at " + outDir.resolve("schema-report.md"));
+        System.out.println("It contains field names and one sample record. It does NOT contain");
+        System.out.println("your API key -- safe to share when asking for help.");
+    }
+
+    /**
+     * Writes a compact, shareable description of the wire format.
+     *
+     * <p>The raw dumps are large and awkward to read. This is the version worth
+     * sending to someone else: structure and field names, one representative
+     * record, and the mapper's verdict.
+     *
+     * <p>Contains no credentials. The key is never read into this file, and the
+     * payloads themselves are public auction data.
+     */
+    private static void writeSchemaReport(Path outDir, JsonElement listings, JsonElement sales)
+            throws Exception {
+        StringBuilder md = new StringBuilder();
+        md.append("# DonutSMP API schema report\n\n");
+        md.append("Generated ").append(Instant.now()).append("\n\n");
+        md.append("No credentials in this file.\n\n");
+
+        appendEndpointSection(md, "auction/list", listings);
+        appendEndpointSection(md, "auction/transactions", sales);
+
+        md.append("## Mapper verdict\n\n");
+        if (listings != null) {
+            ApiMapper.Result<Listing> r = ApiMapper.parseListings(listings, Instant.now());
+            md.append("- listings: parsed ").append(r.records().size())
+                    .append(", skipped ").append(r.skipped()).append("\n");
+        }
+        if (sales != null) {
+            ApiMapper.Result<Sale> r = ApiMapper.parseSales(sales, Instant.now());
+            long withBuyer = r.records().stream().filter(Sale::hasKnownBuyer).count();
+            md.append("- sales: parsed ").append(r.records().size())
+                    .append(", skipped ").append(r.skipped()).append("\n");
+            md.append("- buyer identity present: ").append(withBuyer)
+                    .append("/").append(r.records().size()).append("\n");
+        }
+
+        Files.writeString(outDir.resolve("schema-report.md"), md.toString());
+    }
+
+    private static void appendEndpointSection(StringBuilder md, String label, JsonElement root) {
+        md.append("## ").append(label).append("\n\n");
+        if (root == null) {
+            md.append("Request failed.\n\n");
+            return;
+        }
+
+        List<JsonElement> records = new ArrayList<>();
+        if (root.isJsonArray()) {
+            md.append("Envelope: bare array\n\n");
+            root.getAsJsonArray().forEach(records::add);
+        } else if (root.isJsonObject()) {
+            JsonObject o = root.getAsJsonObject();
+            md.append("Envelope keys: `").append(o.keySet()).append("`\n\n");
+            for (Map.Entry<String, JsonElement> e : o.entrySet()) {
+                if (e.getValue().isJsonArray()) {
+                    md.append("Records live under: `").append(e.getKey()).append("`\n\n");
+                    e.getValue().getAsJsonArray().forEach(records::add);
+                    break;
+                }
+            }
+        }
+
+        md.append("Record count on page 1: ").append(records.size()).append("\n\n");
+        if (records.isEmpty()) {
+            md.append("_No records to describe._\n\n");
+            return;
+        }
+
+        JsonObject first = Json0.asObject(records.get(0));
+        if (first != null) {
+            md.append("Record fields: `").append(first.keySet()).append("`\n\n");
+            for (Map.Entry<String, JsonElement> e : first.entrySet()) {
+                if (e.getValue().isJsonObject()) {
+                    md.append("- `").append(e.getKey()).append("` nested: `")
+                            .append(e.getValue().getAsJsonObject().keySet()).append("`\n");
+                }
+            }
+            md.append("\nSample record:\n\n```json\n")
+                    .append(PRETTY.toJson(first)).append("\n```\n\n");
+        }
+    }
+
+    /** Minimal local helper so this file does not depend on core's package-private Json. */
+    private static final class Json0 {
+        static JsonObject asObject(JsonElement el) {
+            return el != null && el.isJsonObject() ? el.getAsJsonObject() : null;
+        }
     }
 
     private static void report(String endpoint, int parsed, int skipped) {

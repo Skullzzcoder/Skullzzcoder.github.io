@@ -40,6 +40,7 @@ public final class Database implements AutoCloseable {
      */
     private static final String[] MIGRATIONS = {
             "/schema/V1__initial.sql",
+            "/schema/V2__sweep_tracking.sql",
     };
     private static final int TARGET_VERSION = MIGRATIONS.length;
 
@@ -145,22 +146,35 @@ public final class Database implements AutoCloseable {
     // ------------------------------------------------------------------
 
     /**
-     * Records a sweep's worth of listings.
+     * Records a sweep's worth of listings, allocating a fresh sweep number.
+     *
+     * @return the sweep number used, to pass to {@link #markMissingAsGone}
+     */
+    public long upsertListings(Collection<Listing> listings) throws SQLException {
+        long sweepId = nextSweepId();
+        upsertListings(listings, sweepId);
+        return sweepId;
+    }
+
+    /**
+     * Records a sweep's worth of listings under an explicit sweep number.
      *
      * <p>Existing rows keep their original {@code first_seen} and only advance
-     * {@code last_seen}. That preserves true listing age, which the scanner uses
-     * to tell a genuinely fresh underpriced listing from one that has sat there
-     * for six hours because everyone else already decided it was junk.
+     * {@code last_seen} and {@code last_sweep}. Preserving true listing age
+     * matters: the scanner uses it to tell a genuinely fresh mispricing from one
+     * that has sat there for six hours because everyone else already judged it junk.
      */
-    public void upsertListings(Collection<Listing> listings) throws SQLException {
+    public void upsertListings(Collection<Listing> listings, long sweepId) throws SQLException {
         String sql = """
                 INSERT INTO listings (listing_id, seller, price, count, unit_price,
-                                      exact_key, family_key, item_json, first_seen, last_seen, gone_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                                      exact_key, family_key, item_json, first_seen, last_seen,
+                                      gone_at, last_sweep)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
                 ON CONFLICT(listing_id) DO UPDATE SET
-                    last_seen = excluded.last_seen,
-                    price     = excluded.price,
-                    gone_at   = NULL
+                    last_seen  = excluded.last_seen,
+                    price      = excluded.price,
+                    gone_at    = NULL,
+                    last_sweep = excluded.last_sweep
                 """;
         boolean autoCommit = conn.getAutoCommit();
         conn.setAutoCommit(false);
@@ -177,6 +191,7 @@ public final class Database implements AutoCloseable {
                 ps.setString(8, GSON.toJson(l.item()));
                 ps.setLong(9, l.firstSeen().getEpochSecond());
                 ps.setLong(10, l.lastSeen().getEpochSecond());
+                ps.setLong(11, sweepId);
                 ps.addBatch();
             }
             ps.executeBatch();
@@ -190,14 +205,34 @@ public final class Database implements AutoCloseable {
     }
 
     /**
-     * Marks listings that vanished from the feed. Anything still flagged active
-     * but not seen in the latest sweep either sold or was cancelled.
+     * Allocates the next sweep number. Monotonic and independent of the clock.
      */
-    public int markMissingAsGone(Instant sweepTime) throws SQLException {
+    public long nextSweepId() throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("UPDATE sweep_counter SET value = value + 1 WHERE id = 1");
+        }
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT value FROM sweep_counter WHERE id = 1")) {
+            return rs.next() ? rs.getLong(1) : 1L;
+        }
+    }
+
+    /**
+     * Marks listings that vanished from the feed. Anything still flagged active
+     * but absent from the named sweep either sold or was cancelled.
+     *
+     * <p>Compares sweep numbers rather than timestamps. The timestamp version of
+     * this reconciled nothing when two sweeps fell inside the same stored second,
+     * because {@code last_seen < sweepStart} is false when they are equal.
+     *
+     * @param sweepId the sweep that just completed
+     * @param goneAt  when to record the disappearance
+     */
+    public int markMissingAsGone(long sweepId, Instant goneAt) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE listings SET gone_at = ? WHERE gone_at IS NULL AND last_seen < ?")) {
-            ps.setLong(1, sweepTime.getEpochSecond());
-            ps.setLong(2, sweepTime.getEpochSecond());
+                "UPDATE listings SET gone_at = ? WHERE gone_at IS NULL AND last_sweep < ?")) {
+            ps.setLong(1, goneAt.getEpochSecond());
+            ps.setLong(2, sweepId);
             return ps.executeUpdate();
         }
     }

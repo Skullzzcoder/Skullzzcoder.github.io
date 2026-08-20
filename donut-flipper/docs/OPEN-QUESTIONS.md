@@ -1,5 +1,8 @@
 # Open questions — resolve on first live run
 
+> **Fastest path:** run `daemon doctor`. It answers items 1, 3 and 4 below
+> directly and tells you which of the rest still need looking at.
+
 Everything here is a guess that the code is currently built to tolerate. Each one
 has a defined answer procedure and a named place to change.
 

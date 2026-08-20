@@ -57,6 +57,13 @@ public final class FlipperConfig {
     /** Port the mod uses to read flips from a running daemon. Localhost only. */
     private int localPort = 8731;
 
+    /**
+     * API base URL. Overridable so the endpoint can be repointed without a
+     * rebuild if it ever moves, and so diagnostics can be exercised against a
+     * local stub.
+     */
+    private String apiBaseUrl = dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_BASE_URL;
+
     public static Path configDir() {
         String override = System.getenv("DONUTFLIPPER_HOME");
         if (override != null && !override.isBlank()) {
@@ -133,5 +140,11 @@ public final class FlipperConfig {
 
     public int localPort() {
         return localPort;
+    }
+
+    public String apiBaseUrl() {
+        return apiBaseUrl == null || apiBaseUrl.isBlank()
+                ? dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_BASE_URL
+                : apiBaseUrl.trim();
     }
 }

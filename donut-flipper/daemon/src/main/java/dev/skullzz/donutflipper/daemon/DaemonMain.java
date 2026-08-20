@@ -26,6 +26,7 @@ import java.util.logging.Logger;
  *
  * <pre>
  *   java -jar daemon-all.jar probe      inspect the API and lock the schema
+ *   java -jar daemon-all.jar doctor     diagnose a live setup and say what to fix
  *   java -jar daemon-all.jar collect    run the collector (the normal mode)
  *   java -jar daemon-all.jar scan       print current flips and exit
  *   java -jar daemon-all.jar backtest   replay history and report whether this works
@@ -47,13 +48,15 @@ public final class DaemonMain {
 
         switch (command) {
             case "probe" -> Probe.run();
+            case "doctor" -> Doctor.run();
             case "collect" -> collect();
             case "scan" -> scanOnce();
             case "backtest" -> backtest();
             case "demo" -> Demo.run();
             default -> {
                 System.err.println("Unknown command: " + command);
-                System.err.println("Use one of: probe, collect, scan, backtest, demo");
+                System.err.println(
+                        "Use one of: probe, doctor, collect, scan, backtest, demo");
                 System.exit(2);
             }
         }
@@ -66,7 +69,7 @@ public final class DaemonMain {
 
         Database db = Database.open(FlipperConfig.databaseFile());
         RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
-        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter);
+        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
         AuctionPoller poller = new AuctionPoller(client, db);
 
         ValuationService valuations = new ValuationService(db, new Valuator());

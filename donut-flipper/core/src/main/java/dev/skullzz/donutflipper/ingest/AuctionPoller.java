@@ -76,11 +76,11 @@ public final class AuctionPoller {
         }
 
         if (!all.isEmpty()) {
-            db.upsertListings(all);
+            long sweepId = db.upsertListings(all);
             // Anything not touched by this sweep has left the auction house.
             // Reconciling only after a complete sweep matters: doing it per page
             // would mark every listing on page 2 as gone while page 1 was written.
-            db.markMissingAsGone(sweepStart);
+            db.markMissingAsGone(sweepId, sweepStart);
         }
 
         SweepResult result = new SweepResult(pages, all.size(), all.size(), skipped);
