@@ -62,6 +62,10 @@ clean sales from six different sellers.
 
 ## Setup
 
+Everything below runs on your own PC, in a terminal.
+**On Windows, follow [docs/WINDOWS-SETUP.md](docs/WINDOWS-SETUP.md)** — it covers
+installing a JDK, cloning, and the PowerShell equivalents of these commands.
+
 ### 1. Get an API key
 
 Run `/api` in game on DonutSMP. You need a linked Discord account. This is a
