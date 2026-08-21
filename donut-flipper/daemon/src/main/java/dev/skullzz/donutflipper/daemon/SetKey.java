@@ -189,7 +189,8 @@ final class SetKey {
         try {
             RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
             DonutApiClient client =
-                    new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
+                    new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl(),
+                    config.requestTimeoutSeconds());
             client.auctionList(1);
             System.out.println("  the API accepted it.");
             System.out.println();

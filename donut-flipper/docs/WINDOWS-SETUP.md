@@ -227,3 +227,5 @@ running for the board to show anything.
 | `doctor` says the key is rejected | Re-run `/api` in game, then `set-key --clipboard` again |
 | `doctor` says the mapper parsed 0 records | The API field names differ from what the code guesses. Send me `schema-report.md` |
 | Flip board is empty in game | The collector is not running, or has no history yet — run `doctor` |
+| `request timed out` | Run `net-test` — it isolates DNS vs firewall vs wrong path vs wrong method |
+| Timeouts only on some runs | Raise `requestTimeoutSeconds` in `config.json` (default 60) |

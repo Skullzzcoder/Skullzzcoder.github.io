@@ -64,6 +64,10 @@ public final class FlipperConfig {
      */
     private String apiBaseUrl = dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_BASE_URL;
 
+    /** Per-request timeout in seconds. Raise it on a slow connection. */
+    private int requestTimeoutSeconds =
+            dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_TIMEOUT_SECONDS;
+
     public static Path configDir() {
         String override = System.getenv("DONUTFLIPPER_HOME");
         if (override != null && !override.isBlank()) {
@@ -154,6 +158,10 @@ public final class FlipperConfig {
 
     public int localPort() {
         return localPort;
+    }
+
+    public int requestTimeoutSeconds() {
+        return Math.max(5, requestTimeoutSeconds);
     }
 
     public String apiBaseUrl() {

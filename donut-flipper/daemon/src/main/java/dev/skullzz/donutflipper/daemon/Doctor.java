@@ -105,7 +105,8 @@ final class Doctor {
         }
 
         RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
-        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
+        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl(),
+                    config.requestTimeoutSeconds());
         Instant now = Instant.now();
 
         JsonElement listingRoot;

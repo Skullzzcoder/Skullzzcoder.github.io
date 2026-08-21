@@ -55,7 +55,8 @@ public final class Probe {
         Files.createDirectories(outDir);
 
         RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
-        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
+        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl(),
+                    config.requestTimeoutSeconds());
 
         System.out.println("Probing DonutSMP API -> " + outDir);
         System.out.println();

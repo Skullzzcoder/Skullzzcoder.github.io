@@ -28,16 +28,28 @@ public final class DonutApiClient {
     public static final String DEFAULT_BASE_URL = "https://api.donutsmp.net/v1";
     private static final int MAX_ATTEMPTS = 5;
 
+    /**
+     * Per-request ceiling. A full auction page can be large, and the server is
+     * shared with every other player's tooling, so this is deliberately patient.
+     */
+    public static final int DEFAULT_TIMEOUT_SECONDS = 60;
+
     private final HttpClient http;
     private final String baseUrl;
     private final String apiKey;
     private final RateLimiter limiter;
+    private final Duration timeout;
 
     public DonutApiClient(String apiKey, RateLimiter limiter) {
         this(apiKey, limiter, DEFAULT_BASE_URL);
     }
 
     public DonutApiClient(String apiKey, RateLimiter limiter, String baseUrl) {
+        this(apiKey, limiter, baseUrl, DEFAULT_TIMEOUT_SECONDS);
+    }
+
+    public DonutApiClient(String apiKey, RateLimiter limiter, String baseUrl, int timeoutSeconds) {
+        this.timeout = Duration.ofSeconds(Math.max(5, timeoutSeconds));
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalArgumentException(
                     "No DonutSMP API key. Run /api in game, then set DONUTSMP_API_KEY "
@@ -47,7 +59,7 @@ public final class DonutApiClient {
         this.limiter = limiter;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.http = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15))
+                .connectTimeout(Duration.ofSeconds(20))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
     }
@@ -85,15 +97,30 @@ public final class DonutApiClient {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + path))
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(timeout)
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Accept", "application/json")
                     .header("User-Agent", "donut-flipper/0.1")
                     .GET()
                     .build();
 
-            HttpResponse<String> response =
-                    http.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response;
+            try {
+                response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (java.net.http.HttpTimeoutException timeout) {
+                // A bare "request timed out" tells you nothing about which of the
+                // several possible causes you have. Name them.
+                last = new ApiException(0, "Timed out after " + this.timeout.toSeconds()
+                        + "s on " + path + ". Possible causes: the endpoint path is wrong "
+                        + "and the server is not answering; a firewall or VPN is blocking "
+                        + "the connection; or the API is slow right now. "
+                        + "Run `net-test` to tell these apart.");
+                if (attempt < MAX_ATTEMPTS) {
+                    Thread.sleep(1000L * (1L << (attempt - 1)));
+                    continue;
+                }
+                throw last;
+            }
             int status = response.statusCode();
 
             if (status >= 200 && status < 300) {

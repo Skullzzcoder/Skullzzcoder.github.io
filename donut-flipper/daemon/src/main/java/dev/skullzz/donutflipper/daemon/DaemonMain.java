@@ -27,6 +27,7 @@ import java.util.logging.Logger;
  * <pre>
  *   java -jar daemon-all.jar set-key    store your API key and verify it works
  *   java -jar daemon-all.jar where      print where the config file lives
+ *   java -jar daemon-all.jar net-test   work out why a request failed
  *   java -jar daemon-all.jar probe      inspect the API and lock the schema
  *   java -jar daemon-all.jar doctor     diagnose a live setup and say what to fix
  *   java -jar daemon-all.jar collect    run the collector (the normal mode)
@@ -51,6 +52,7 @@ public final class DaemonMain {
         switch (command) {
             case "set-key", "setkey" -> SetKey.run(args);
             case "where", "config" -> SetKey.where();
+            case "net-test", "nettest" -> NetTest.run();
             case "probe" -> Probe.run();
             case "doctor" -> Doctor.run();
             case "collect" -> collect();
@@ -59,8 +61,8 @@ public final class DaemonMain {
             case "demo" -> Demo.run();
             default -> {
                 System.err.println("Unknown command: " + command);
-                System.err.println("Use one of: set-key, where, probe, doctor, "
-                        + "collect, scan, backtest, demo");
+                System.err.println("Use one of: set-key, where, net-test, probe, "
+                        + "doctor, collect, scan, backtest, demo");
                 System.exit(2);
             }
         }
@@ -73,7 +75,8 @@ public final class DaemonMain {
 
         Database db = Database.open(FlipperConfig.databaseFile());
         RateLimiter limiter = new RateLimiter(250 * config.rateLimitUtilisation());
-        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl());
+        DonutApiClient client = new DonutApiClient(config.apiKey(), limiter, config.apiBaseUrl(),
+                    config.requestTimeoutSeconds());
         AuctionPoller poller = new AuctionPoller(client, db);
 
         ValuationService valuations = new ValuationService(db, new Valuator());
