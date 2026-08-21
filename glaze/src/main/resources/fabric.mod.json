@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "glaze",
+	"version": "${version}",
+	"name": "Glaze",
+	"description": "Client-side quality-of-life tools for DonutSMP: auction price tracking, shulker previews, inventory warnings and a session HUD. Read-only - it renders information the client already received and never acts for you.",
+	"authors": [
+		"Skullzzcoder"
+	],
+	"contact": {
+		"sources": "https://github.com/Skullzzcoder/Skullzzcoder.github.io"
+	},
+	"license": "MIT",
+	"icon": "assets/glaze/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.skullzz.glaze.GlazeClient"
+		]
+	},
+	"mixins": [
+		"glaze.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=${loader_version}",
+		"fabric-api": "*",
+		"minecraft": "~${minecraft_version}",
+		"java": ">=21"
+	}
+}
