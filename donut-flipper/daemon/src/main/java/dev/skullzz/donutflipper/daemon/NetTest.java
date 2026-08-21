@@ -2,8 +2,13 @@ package dev.skullzz.donutflipper.daemon;
 
 import dev.skullzz.donutflipper.config.FlipperConfig;
 
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.security.cert.X509Certificate;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -40,6 +45,8 @@ final class NetTest {
 
         if (!dns(host)) return;
         if (!tcpPerAddress(host, port)) return;
+        tls(host, port);
+        control();
 
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(STEP_TIMEOUT)
@@ -158,6 +165,122 @@ final class NetTest {
             System.out.println("  >>> otherwise the host is genuinely down.");
         }
         return anyOk;
+    }
+
+    /**
+     * Completes a TLS handshake and reports what came back.
+     *
+     * <p>This is the layer between "TCP connected" and "HTTP replied", and it is
+     * where a connection that opens instantly can still hang forever. Two faults
+     * live here and nowhere else:
+     *
+     * <ul>
+     *   <li><b>TLS interception.</b> Antivirus products with HTTPS scanning
+     *       (Kaspersky, ESET, Avast, Bitdefender) sit in the middle and re-sign
+     *       traffic with their own certificate authority. When that goes wrong
+     *       the handshake stalls rather than failing cleanly. The certificate
+     *       issuer printed below is the giveaway: it should name Cloudflare or a
+     *       public CA, never a security product.</li>
+     *   <li><b>Server-side fingerprint blocking.</b> A CDN may accept the TCP
+     *       connection and then refuse to answer a client whose TLS fingerprint
+     *       it does not like, which looks identical to the server being down.</li>
+     * </ul>
+     */
+    private static void tls(String host, int port) {
+        System.out.println("\nTLS handshake");
+        long start = System.currentTimeMillis();
+
+        SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+        try (SSLSocket socket = (SSLSocket) factory.createSocket()) {
+            socket.connect(new java.net.InetSocketAddress(host, port),
+                    (int) STEP_TIMEOUT.toMillis());
+            socket.setSoTimeout((int) STEP_TIMEOUT.toMillis());
+
+            // SNI is mandatory for a CDN-hosted host: without it the edge has no
+            // idea which site is being asked for and may simply not answer.
+            SSLParameters params = socket.getSSLParameters();
+            params.setServerNames(java.util.List.of(new SNIHostName(host)));
+            socket.setSSLParameters(params);
+
+            socket.startHandshake();
+            long ms = System.currentTimeMillis() - start;
+
+            System.out.printf("  [ ok ] handshake completed in %d ms%n", ms);
+            System.out.printf("         protocol %s, cipher %s%n",
+                    socket.getSession().getProtocol(),
+                    socket.getSession().getCipherSuite());
+
+            java.security.cert.Certificate[] chain =
+                    socket.getSession().getPeerCertificates();
+            if (chain.length > 0 && chain[0] instanceof X509Certificate cert) {
+                String issuer = cert.getIssuerX500Principal().getName();
+                System.out.println("         issued to     " + cert.getSubjectX500Principal());
+                System.out.println("         issued by     " + issuer);
+                warnIfIntercepted(issuer);
+            }
+        } catch (java.net.SocketTimeoutException e) {
+            System.out.printf("  [FAIL] handshake timed out after %d ms%n",
+                    System.currentTimeMillis() - start);
+            System.out.println();
+            System.out.println("  >>> TCP connects but TLS never completes.");
+            System.out.println("  >>> That is antivirus HTTPS scanning, a TLS-inspecting");
+            System.out.println("  >>> firewall, or the server refusing this client.");
+            System.out.println("  >>> Try: disable HTTPS/SSL scanning in your antivirus,");
+            System.out.println("  >>>      or test from a phone hotspot to rule out the network.");
+        } catch (Exception e) {
+            System.out.printf("  [FAIL] handshake failed after %d ms: %s%n",
+                    System.currentTimeMillis() - start, e);
+        }
+    }
+
+    /** Names the usual TLS-intercepting products when their CA shows up. */
+    private static void warnIfIntercepted(String issuer) {
+        String lower = issuer.toLowerCase();
+        String[] products = {"kaspersky", "avast", "avg", "eset", "bitdefender",
+                "bullguard", "sophos", "fortinet", "zscaler", "netskope", "mcafee",
+                "norton", "malwarebytes"};
+        for (String product : products) {
+            if (lower.contains(product)) {
+                System.out.println();
+                System.out.println("  >>> This certificate was issued by " + product
+                        + ", not by the real site.");
+                System.out.println("  >>> That product is intercepting HTTPS traffic and is");
+                System.out.println("  >>> very likely the cause. Turn off its HTTPS/SSL scanning.");
+                return;
+            }
+        }
+    }
+
+    /**
+     * Same handshake against a host known to be healthy.
+     *
+     * <p>Separates "this machine cannot do HTTPS to anywhere" from "only this one
+     * host is affected" -- which are opposite problems, and the difference is not
+     * visible from a single failing target.
+     */
+    private static void control() {
+        System.out.println("\nCONTROL (a known-good host, to prove HTTPS works at all)");
+        try {
+            HttpClient http = HttpClient.newBuilder()
+                    .connectTimeout(STEP_TIMEOUT).build();
+            long start = System.currentTimeMillis();
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("https://www.cloudflare.com/cdn-cgi/trace"))
+                    .timeout(STEP_TIMEOUT)
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+
+            System.out.printf("  [ ok ] cloudflare.com answered %d in %d ms%n",
+                    response.statusCode(), System.currentTimeMillis() - start);
+            System.out.println("         So HTTPS works from this machine in general,");
+            System.out.println("         and the problem is specific to the DonutSMP API.");
+        } catch (Exception e) {
+            System.out.println("  [FAIL] " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            System.out.println();
+            System.out.println("  >>> A known-good HTTPS host also fails, so this is not about");
+            System.out.println("  >>> DonutSMP at all. Something on this machine or network is");
+            System.out.println("  >>> breaking HTTPS for programs: antivirus TLS scanning, a");
+            System.out.println("  >>> corporate proxy, or a VPN.");
+        }
     }
 
     /** Issues one request and reports status and timing without dumping the body. */
