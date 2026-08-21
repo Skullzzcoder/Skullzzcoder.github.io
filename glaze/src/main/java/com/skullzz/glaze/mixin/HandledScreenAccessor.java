@@ -1,6 +1,7 @@
 package com.skullzz.glaze.mixin;
 
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.screen.slot.Slot;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -25,4 +26,7 @@ public interface HandledScreenAccessor {
 
 	@Accessor("backgroundHeight")
 	int glaze$getBackgroundHeight();
+
+	@Accessor("focusedSlot")
+	Slot glaze$getFocusedSlot();
 }

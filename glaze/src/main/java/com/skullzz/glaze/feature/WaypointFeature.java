@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.world.World;
 import net.minecraft.util.Formatting;
 
 /**
@@ -111,6 +112,8 @@ public final class WaypointFeature {
 	}
 
 	private static String dimensionOf(ClientPlayerEntity player) {
-		return player.getWorld() == null ? "" : player.getWorld().getRegistryKey().getValue().toString();
+		// Entity's world getter is getEntityWorld() as of 1.21.11.
+		World world = player.getEntityWorld();
+		return world == null ? "" : world.getRegistryKey().getValue().toString();
 	}
 }

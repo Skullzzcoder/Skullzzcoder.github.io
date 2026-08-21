@@ -122,7 +122,7 @@ public final class AuctionOverlay {
 	 */
 	private static void drawHoveredPrice(DrawContext context, HandledScreen<?> handled,
 			int mouseX, int mouseY) {
-		Slot focused = handled.focusedSlot;
+		Slot focused = ((HandledScreenAccessor) handled).glaze$getFocusedSlot();
 
 		if (focused == null) {
 			return;
