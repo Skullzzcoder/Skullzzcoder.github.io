@@ -47,6 +47,10 @@ public final class DaemonMain {
     private static final Logger LOG = Logger.getLogger(DaemonMain.class.getName());
 
     public static void main(String[] args) throws Exception {
+        // Must happen before anything touches the network: the JDK reads this
+        // property once, when the networking stack initialises.
+        applyIpv4Preference(args);
+
         String command = args.length > 0 ? args[0].toLowerCase() : "collect";
 
         switch (command) {
@@ -192,6 +196,34 @@ public final class DaemonMain {
                     To try the pipeline without a key: java -jar daemon-all.jar demo
                     """.formatted(FlipperConfig.configFile()));
             System.exit(1);
+        }
+    }
+
+    /**
+     * Honours {@code --ipv4} or the {@code preferIpv4} config flag.
+     *
+     * <p>Exists because a network that advertises IPv6 without being able to
+     * route it makes every request hang until it times out, which is
+     * indistinguishable from the server being down unless you test the families
+     * separately. {@code net-test} does that and points here.
+     */
+    private static void applyIpv4Preference(String[] args) {
+        boolean flag = false;
+        for (String arg : args) {
+            if ("--ipv4".equalsIgnoreCase(arg) || "-4".equals(arg)) {
+                flag = true;
+            }
+        }
+        if (!flag) {
+            try {
+                flag = FlipperConfig.load().preferIpv4();
+            } catch (Exception ignored) {
+                // No config yet; the default of "let the OS choose" is correct.
+            }
+        }
+        if (flag) {
+            System.setProperty("java.net.preferIPv4Stack", "true");
+            System.out.println("(forcing IPv4)");
         }
     }
 

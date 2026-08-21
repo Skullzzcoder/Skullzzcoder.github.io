@@ -227,5 +227,6 @@ running for the board to show anything.
 | `doctor` says the key is rejected | Re-run `/api` in game, then `set-key --clipboard` again |
 | `doctor` says the mapper parsed 0 records | The API field names differ from what the code guesses. Send me `schema-report.md` |
 | Flip board is empty in game | The collector is not running, or has no history yet — run `doctor` |
-| `request timed out` | Run `net-test` — it isolates DNS vs firewall vs wrong path vs wrong method |
+| `request timed out` | Run `net-test` — it isolates DNS vs IPv6 vs firewall vs wrong path |
+| Everything times out, but sites load fine in your browser | Broken IPv6. Add `--ipv4` to the command, or set `"preferIpv4": true` in `config.json`. Browsers fall back automatically; Java does not |
 | Timeouts only on some runs | Raise `requestTimeoutSeconds` in `config.json` (default 60) |

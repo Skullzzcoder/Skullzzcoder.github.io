@@ -64,6 +64,14 @@ public final class FlipperConfig {
      */
     private String apiBaseUrl = dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_BASE_URL;
 
+    /**
+     * Force IPv4. Set this when the network advertises IPv6 but cannot actually
+     * route it -- a common home-router and ISP fault that presents as every
+     * request hanging until it times out, while the same site loads fine in a
+     * browser (browsers race both families and fall back; Java does not).
+     */
+    private boolean preferIpv4 = false;
+
     /** Per-request timeout in seconds. Raise it on a slow connection. */
     private int requestTimeoutSeconds =
             dev.skullzz.donutflipper.api.DonutApiClient.DEFAULT_TIMEOUT_SECONDS;
@@ -158,6 +166,10 @@ public final class FlipperConfig {
 
     public int localPort() {
         return localPort;
+    }
+
+    public boolean preferIpv4() {
+        return preferIpv4;
     }
 
     public int requestTimeoutSeconds() {

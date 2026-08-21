@@ -39,7 +39,7 @@ final class NetTest {
         System.out.println("=".repeat(72));
 
         if (!dns(host)) return;
-        if (!tcp(host, port)) return;
+        if (!tcpPerAddress(host, port)) return;
 
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(STEP_TIMEOUT)
@@ -83,13 +83,13 @@ final class NetTest {
         long start = System.currentTimeMillis();
         try {
             InetAddress[] addresses = InetAddress.getAllByName(host);
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < Math.min(3, addresses.length); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(addresses[i].getHostAddress());
+            System.out.printf("  [ ok ] %s resolves to %d address(es) in %d ms%n",
+                    host, addresses.length, System.currentTimeMillis() - start);
+            for (InetAddress a : addresses) {
+                System.out.printf("         %-6s %s%n",
+                        a instanceof java.net.Inet6Address ? "IPv6" : "IPv4",
+                        a.getHostAddress());
             }
-            System.out.printf("  [ ok ] %s resolves to %s (%d ms)%n",
-                    host, sb, System.currentTimeMillis() - start);
             return true;
         } catch (Exception e) {
             System.out.printf("  [FAIL] cannot resolve %s: %s%n", host, e.getMessage());
@@ -98,21 +98,66 @@ final class NetTest {
         }
     }
 
-    private static boolean tcp(String host, int port) {
-        System.out.println("\nTCP");
-        long start = System.currentTimeMillis();
-        try (Socket socket = new Socket()) {
-            socket.connect(new java.net.InetSocketAddress(host, port),
-                    (int) STEP_TIMEOUT.toMillis());
-            System.out.printf("  [ ok ] connected to %s:%d (%d ms)%n",
-                    host, port, System.currentTimeMillis() - start);
-            return true;
+    /**
+     * Connects to each resolved address separately.
+     *
+     * <p>This is the check that catches broken IPv6, which is a common and
+     * badly-disguised fault: the machine prefers an AAAA record, the SYN goes
+     * nowhere, and the connection hangs until it times out with zero bytes. It
+     * looks like the server is down. Browsers hide it by racing both families
+     * and falling back in milliseconds; Java and curl do not, so the same host
+     * that loads fine in a browser times out from a program.
+     *
+     * <p>Testing families separately turns "timed out" into "IPv4 works, IPv6
+     * does not", which is a one-flag fix rather than an evening of guessing.
+     */
+    private static boolean tcpPerAddress(String host, int port) {
+        System.out.println("\nTCP (each address tested separately)");
+        boolean anyOk = false;
+        boolean v4Ok = false;
+        boolean v6Failed = false;
+
+        try {
+            for (InetAddress address : InetAddress.getAllByName(host)) {
+                boolean isV6 = address instanceof java.net.Inet6Address;
+                long start = System.currentTimeMillis();
+                try (Socket socket = new Socket()) {
+                    socket.connect(new java.net.InetSocketAddress(address, port),
+                            (int) STEP_TIMEOUT.toMillis());
+                    System.out.printf("  [ ok ] %-6s %-40s connected (%d ms)%n",
+                            isV6 ? "IPv6" : "IPv4", address.getHostAddress(),
+                            System.currentTimeMillis() - start);
+                    anyOk = true;
+                    if (!isV6) {
+                        v4Ok = true;
+                    }
+                } catch (Exception e) {
+                    System.out.printf("  [FAIL] %-6s %-40s %s%n",
+                            isV6 ? "IPv6" : "IPv4", address.getHostAddress(), e.getMessage());
+                    if (isV6) {
+                        v6Failed = true;
+                    }
+                }
+            }
         } catch (Exception e) {
-            System.out.printf("  [FAIL] cannot connect to %s:%d: %s%n", host, port, e.getMessage());
-            System.out.println("         A firewall, antivirus, or VPN is the usual cause.");
-            System.out.println("         Try disabling a VPN, or allow java.exe through the firewall.");
+            System.out.println("  [FAIL] " + e);
             return false;
         }
+
+        if (v6Failed && v4Ok) {
+            System.out.println();
+            System.out.println("  >>> IPv6 is broken on this network but IPv4 works.");
+            System.out.println("  >>> That is almost certainly the whole problem.");
+            System.out.println("  >>> Fix: re-run any command with --ipv4, e.g.");
+            System.out.println("  >>>   java -jar daemon-all.jar collect --ipv4");
+            System.out.println("  >>> Or set \"preferIpv4\": true in config.json to make it permanent.");
+        } else if (!anyOk) {
+            System.out.println();
+            System.out.println("  >>> No address accepted a connection.");
+            System.out.println("  >>> A firewall, antivirus or VPN is the usual cause;");
+            System.out.println("  >>> otherwise the host is genuinely down.");
+        }
+        return anyOk;
     }
 
     /** Issues one request and reports status and timing without dumping the body. */
