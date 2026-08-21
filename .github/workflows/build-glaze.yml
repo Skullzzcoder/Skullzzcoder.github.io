@@ -1,0 +1,90 @@
+name: Build Glaze
+
+# Builds the mod jar on GitHub's runners, which have the network access needed to
+# fetch Fabric Loom and the Minecraft jar. Every successful build is attached to a
+# rolling prerelease so the jar has a stable download link.
+
+on:
+  push:
+    paths:
+      - 'glaze/**'
+      - '.github/workflows/build-glaze.yml'
+  pull_request:
+    paths:
+      - 'glaze/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build
+        working-directory: glaze
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon --stacktrace
+
+      - name: Collect the mod jar
+        id: collect
+        working-directory: glaze
+        run: |
+          mkdir -p ../dist
+          # build/libs also holds the -sources jar, which is not what goes in a mods folder.
+          jar=$(find build/libs -name '*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' | head -1)
+
+          if [ -z "$jar" ]; then
+            echo "No mod jar was produced" >&2
+            ls -la build/libs || true
+            exit 1
+          fi
+
+          cp "$jar" ../dist/
+          echo "name=$(basename "$jar")" >> "$GITHUB_OUTPUT"
+          echo "Built $(basename "$jar")"
+
+      - name: Upload jar as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: glaze-jar
+          path: dist/*.jar
+          if-no-files-found: error
+
+      - name: Publish rolling release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Replace the previous rolling build so the download link never changes.
+          gh release delete glaze-latest --yes --cleanup-tag 2>/dev/null || true
+
+          # Build the notes in a file so their indentation here cannot leak into
+          # the rendered markdown as an accidental code block.
+          {
+            echo "Automatic build of \`${{ github.sha }}\`."
+            echo
+            echo "Drop this jar **and Fabric API 0.141.6+1.21.11** into your mods folder."
+            echo
+            echo "Lunar Client: \`~/.lunarclient/profiles/<profile>/1.21/mods/\`"
+            echo
+            echo "Built from \`glaze/\` on \`${{ github.ref_name }}\`."
+          } > notes.md
+
+          gh release create glaze-latest dist/*.jar \
+            --title "Glaze - latest build" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --notes-file notes.md

@@ -2,7 +2,7 @@ package com.skullzz.glaze.mc;
 
 import com.skullzz.glaze.Glaze;
 import com.skullzz.glaze.GlazeClient;
-import com.skullzz.glaze.config.ConfigScreen;
+import com.skullzz.glaze.config.GlazeScreen;
 import com.skullzz.glaze.core.GlazeConfig;
 import com.skullzz.glaze.core.Loadout;
 import com.skullzz.glaze.feature.AuctionScanner;
@@ -68,7 +68,7 @@ public final class Keybinds {
 		}
 
 		if (config) {
-			client.setScreen(new ConfigScreen(null));
+			client.setScreen(new GlazeScreen(null));
 		} else if (hud) {
 			client.setScreen(new HudEditScreen(null));
 		}

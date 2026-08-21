@@ -47,14 +47,23 @@ the server has not already sent.
   they survive even if the config is lost.
 - Personal waypoints with a direction arrow and distance.
 
+## Getting the jar
+
+GitHub builds it for you. Every push to `glaze/` runs the **Build Glaze** workflow
+and attaches the jar to a rolling prerelease:
+
+- **Releases → "Glaze - latest build"** → download `glaze-0.1.0+mc1.21.11.jar`
+
+You can also trigger it by hand from the **Actions** tab → *Build Glaze* → *Run
+workflow*, or build locally with `./gradlew build` (see below).
+
 ## Installing on Lunar Client
 
 Lunar loads external Fabric mods, but it does not bundle Fabric API, so you need
 both jars:
 
-1. Build the mod (below) or grab `glaze-x.y.z+mc1.21.11.jar` from `build/libs/`.
-   Ignore the `-sources` jar.
-2. Download **Fabric API 0.141.6+1.21.11** from Modrinth or CurseForge.
+1. The Glaze jar, from the release above. Ignore any `-sources` jar.
+2. **Fabric API 0.141.6+1.21.11**, from Modrinth or CurseForge.
 3. Drop both into `~/.lunarclient/profiles/<your profile>/1.21/mods/`
    (`%USERPROFILE%\.lunarclient\...` on Windows).
 4. Restart Lunar and pick the 1.21 profile.
@@ -89,11 +98,30 @@ them under Options → Controls → Glaze:
 
 | Action | What it does |
 | --- | --- |
-| Open Glaze settings | The toggle screen |
+| Open Glaze settings | The settings GUI |
 | Edit HUD layout | Drag readouts, right-click to show/hide |
 | Check loadout | Prints what your kit is missing |
 | Clear auction filter | Cancels `/glaze filter` |
 | Quick-stash into container | Only if you enabled it |
+
+## The settings GUI
+
+Press your *Open Glaze settings* key, or click through from anywhere the mod
+mentions it. Eight categories down the left, scrolling rows on the right, and a
+search box in the header that cuts across every category at once — handy when you
+know what a setting is called but not where it lives.
+
+- **Toggles** flip on click.
+- **Sliders** drag, and show their live value.
+- **Cycles** step forward on left-click, backward on right-click.
+- **Lists** (watchlist, low-item thresholds, loadout contents) are edited on the
+  *Lists* tab: pick which list with the cycle at the top, type into the box at the
+  bottom and press **Add**, or click the red cross beside an entry to remove it.
+  Threshold entries take a trailing number, e.g. `ender pearl 8`.
+
+Everything saves the moment you change it. Chat patterns and price-lore patterns
+are the one thing not in the GUI — a grid of buttons is a poor regex editor, so
+they stay in `config.json`, and `/glaze reload` picks up your edits.
 
 ## Commands
 
@@ -178,7 +206,7 @@ src/main/java/com/skullzz/glaze/
   mc/        the adapter over the Minecraft client API, keybinds, commands
   feature/   chat, session, warnings, tooltips, auction scanning, quick-stash
   hud/       HUD rendering and the layout editor
-  config/    JSON persistence and the settings screen
+  config/    JSON persistence, the settings GUI and its widgets
   mixin/     one accessor, for the container menu's origin
 src/test/java/  unit tests for everything under core/
 ```
