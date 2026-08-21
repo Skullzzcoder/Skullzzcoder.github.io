@@ -115,6 +115,18 @@ final class Doctor {
             pass("auction/list", "reachable");
         } catch (DonutApiClient.ApiException e) {
             fail("auction/list", e.getMessage());
+            // statusCode 0 is our marker for "no reply at all", as opposed to a
+            // real HTTP status. That distinction matters: a rejection is
+            // something you fix here, silence is not.
+            if (e.statusCode() == 0) {
+                System.out.println("       The server took the request and never answered.");
+                System.out.println("       Run `net-test`: if TLS completes and the control host");
+                System.out.println("       responds, the API is down and nothing here is wrong.");
+            }
+            return false;
+        } catch (java.net.http.HttpTimeoutException e) {
+            fail("auction/list", "no response within the timeout");
+            System.out.println("       Run `net-test` to confirm whether this is server-side.");
             return false;
         } catch (Exception e) {
             fail("auction/list", "unreachable: " + e);

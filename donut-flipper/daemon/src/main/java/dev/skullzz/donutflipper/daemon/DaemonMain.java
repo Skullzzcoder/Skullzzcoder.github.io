@@ -92,8 +92,9 @@ public final class DaemonMain {
         server.start();
 
         ScheduledExecutorService pool = Executors.newScheduledThreadPool(2);
+        ApiHealth health = new ApiHealth();
 
-        pool.scheduleAtFixedRate(() -> guard("transaction sweep", () -> {
+        pool.scheduleAtFixedRate(() -> guard(health, "transaction sweep", () -> {
             // Transactions first and more often than listings: sale history is the
             // scarcer, more valuable signal, and a missed listing sweep costs one
             // minute of visibility while a missed sale is gone for good.
@@ -101,7 +102,7 @@ public final class DaemonMain {
             LOG.info("sales: " + r.stored() + " new across " + r.pages() + " pages");
         }), 0, config.transactionPollSeconds(), TimeUnit.SECONDS);
 
-        pool.scheduleAtFixedRate(() -> guard("listing sweep", () -> {
+        pool.scheduleAtFixedRate(() -> guard(health, "listing sweep", () -> {
             AuctionPoller.SweepResult r = poller.sweepListings();
             LOG.info("listings: " + r.records() + " across " + r.pages() + " pages");
         }), 5, config.listingPollSeconds(), TimeUnit.SECONDS);
@@ -227,14 +228,77 @@ public final class DaemonMain {
         }
     }
 
-    /** Keeps one failed sweep from killing the scheduled task permanently. */
-    private static void guard(String label, ThrowingRunnable body) {
+    /**
+     * Runs one sweep, surviving failure and backing off while the API is down.
+     *
+     * <p>Two things must both hold. A scheduled task that throws is silently
+     * cancelled by the executor, so collection would stop with no obvious
+     * symptom -- hence catching everything. And an API outage must not turn into
+     * a wall of identical warnings every minute, or the log becomes unreadable
+     * exactly when you need to see the recovery.
+     */
+    private static void guard(ApiHealth health, String label, ThrowingRunnable body) {
+        if (!health.shouldAttempt()) {
+            return;
+        }
         try {
             body.run();
+            health.recordSuccess();
         } catch (Exception e) {
-            // A scheduled task that throws is silently cancelled by the executor,
-            // which would stop collection without any obvious symptom.
-            LOG.warning(label + " failed: " + e);
+            health.recordFailure(label, e);
+        }
+    }
+
+    /**
+     * Tracks whether the API is answering, and paces retries while it is not.
+     *
+     * <p>The collector is meant to be left running for days, including across an
+     * outage it can do nothing about. When the API goes away it should say so
+     * once, wait quietly, and start collecting the moment it returns -- so a
+     * server-side outage costs you the downtime and nothing more.
+     */
+    private static final class ApiHealth {
+        private static final long MAX_BACKOFF_SECONDS = 300;
+
+        private int consecutiveFailures;
+        private boolean announcedDown;
+        private java.time.Instant nextAttempt = java.time.Instant.EPOCH;
+
+        synchronized boolean shouldAttempt() {
+            return !java.time.Instant.now().isBefore(nextAttempt);
+        }
+
+        synchronized void recordSuccess() {
+            if (announcedDown) {
+                LOG.info("API is answering again -- resuming normal collection.");
+            }
+            consecutiveFailures = 0;
+            announcedDown = false;
+            nextAttempt = java.time.Instant.EPOCH;
+        }
+
+        synchronized void recordFailure(String label, Exception e) {
+            consecutiveFailures++;
+
+            // Back off gradually, capped, so a long outage costs a handful of
+            // requests an hour rather than one per minute.
+            long delay = Math.min(MAX_BACKOFF_SECONDS, 30L * consecutiveFailures);
+            nextAttempt = java.time.Instant.now().plusSeconds(delay);
+
+            if (consecutiveFailures == 1) {
+                // Several connection exceptions carry no message at all, so fall
+                // back to the type -- "failed: null" tells nobody anything.
+                String detail = e.getMessage() == null || e.getMessage().isBlank()
+                        ? e.getClass().getSimpleName()
+                        : e.getMessage();
+                LOG.warning(label + " failed: " + detail);
+            } else if (!announcedDown && consecutiveFailures >= 2) {
+                announcedDown = true;
+                LOG.warning("The API is not responding. This is server-side -- nothing to fix "
+                        + "here. Leaving the collector running; it will start gathering data "
+                        + "automatically as soon as the API comes back. Retrying every "
+                        + delay + "s.");
+            }
         }
     }
 
