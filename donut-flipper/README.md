@@ -74,11 +74,13 @@ one-off.
 Then store it:
 
 ```bash
-java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key
+java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key             # prompt (hidden input)
+java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key --clipboard # read the clipboard
+java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key --visible   # prompt, echoing input
+java -jar daemon/build/libs/daemon-0.1.0-all.jar set-key --file k.txt
 ```
 
-It prompts for the key, saves it, and makes one live call to confirm the server
-accepts it — so a bad key surfaces immediately rather than three days into a
+It saves the key and makes one live call to confirm the server accepts it — so a bad key surfaces immediately rather than three days into a
 collection run. `where` prints the config path if you want to edit it by hand.
 
 `DONUTSMP_API_KEY` also works and takes precedence over the saved key.

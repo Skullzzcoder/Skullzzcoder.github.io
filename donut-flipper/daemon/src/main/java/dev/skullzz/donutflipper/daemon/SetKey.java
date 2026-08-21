@@ -21,22 +21,48 @@ import java.nio.file.Path;
  * <p>Prompts rather than taking the key as an argument by default, because a key
  * passed on the command line is written into shell history in plain text.
  *
- * <pre>{@code java -jar daemon-all.jar set-key}</pre>
+ * <pre>{@code
+ * java -jar daemon-all.jar set-key              prompt (input hidden)
+ * java -jar daemon-all.jar set-key --visible    prompt, showing what you type
+ * java -jar daemon-all.jar set-key --clipboard  read straight from the clipboard
+ * java -jar daemon-all.jar set-key --file k.txt read from a text file
+ * }</pre>
  */
 final class SetKey {
 
     static void run(String[] args) throws Exception {
         FlipperConfig config = FlipperConfig.load();
 
-        String key = args.length > 1 ? args[1].trim() : prompt();
+        String mode = args.length > 1 ? args[1].toLowerCase() : "";
+        String key;
+
+        switch (mode) {
+            case "--clipboard", "-c" -> key = fromClipboard();
+            case "--file", "-f" -> {
+                if (args.length < 3) {
+                    System.out.println("Usage: set-key --file <path-to-file-containing-key>");
+                    return;
+                }
+                key = fromFile(Path.of(args[2]));
+            }
+            case "--visible", "-v" -> key = prompt(true);
+            case "" -> key = prompt(false);
+            // Anything else is treated as the key itself, for scripts.
+            default -> key = args[1].trim();
+        }
+
         if (key == null || key.isBlank()) {
-            System.out.println("No key entered, nothing changed.");
+            System.out.println("No key found, nothing changed.");
             return;
         }
+        key = key.trim();
+
         if (key.length() < 8) {
-            // Almost always a paste that lost most of its content.
+            // Almost always a paste that lost most of its content, or an empty
+            // clipboard. Saving it would fail confusingly much later.
             System.out.println("That looks too short to be an API key ("
                     + key.length() + " characters). Nothing saved.");
+            System.out.println("If your paste did not register, try:  set-key --clipboard");
             return;
         }
 
@@ -59,18 +85,82 @@ final class SetKey {
         verify(config);
     }
 
-    private static String prompt() throws Exception {
-        System.out.println("Paste your DonutSMP API key (run /api in game to get one).");
-        System.out.print("Key: ");
-        System.out.flush();
+    /**
+     * Reads the key straight from the system clipboard.
+     *
+     * <p>The most reliable route on Windows, where pasting into a console is
+     * genuinely awkward: the classic console ignores Ctrl+V, and a hidden-input
+     * prompt shows nothing when a paste does land, so a successful paste and a
+     * failed one look identical. Copy the key, run this, done.
+     */
+    private static String fromClipboard() {
+        try {
+            Object data = java.awt.Toolkit.getDefaultToolkit()
+                    .getSystemClipboard()
+                    .getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+            String text = data == null ? null : data.toString().trim();
+            if (text == null || text.isBlank()) {
+                System.out.println("The clipboard is empty, or holds something that is not text.");
+                return null;
+            }
+            System.out.println("Read " + text.length() + " characters from the clipboard.");
+            return text;
+        } catch (java.awt.HeadlessException e) {
+            System.out.println("No desktop session, so the clipboard is unavailable here.");
+            System.out.println("Use:  set-key --file <path>   or   set-key --visible");
+            return null;
+        } catch (Exception e) {
+            System.out.println("Could not read the clipboard: " + e);
+            return null;
+        }
+    }
 
-        // Console hides typing, but is null when stdout is piped or when run
-        // through a Gradle daemon. Fall back to a visible read rather than failing.
-        Console console = System.console();
+    /**
+     * Reads the key from a text file. The escape hatch when the terminal will
+     * not cooperate at all -- paste into Notepad, save, point this at it.
+     */
+    private static String fromFile(Path path) {
+        try {
+            String text = Files.readString(path).trim();
+            if (text.isBlank()) {
+                System.out.println("That file is empty: " + path.toAbsolutePath());
+                return null;
+            }
+            System.out.println("Read " + text.length() + " characters from "
+                    + path.toAbsolutePath());
+            return text;
+        } catch (Exception e) {
+            System.out.println("Could not read " + path.toAbsolutePath() + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static String prompt(boolean visible) throws Exception {
+        System.out.println("Paste your DonutSMP API key (run /api in game to get one).");
+        System.out.println();
+        System.out.println("  Windows Terminal : Ctrl+V");
+        System.out.println("  Classic console  : right-click");
+        System.out.println();
+
+        Console console = visible ? null : System.console();
+
         if (console != null) {
+            // Hidden input shows nothing at all when you paste. Say so plainly --
+            // otherwise a paste that worked looks exactly like one that failed,
+            // and people retry until they give up.
+            System.out.println("Your key will NOT appear as you paste. That is normal.");
+            System.out.println("Paste, then press Enter. Or re-run with --visible to see it.");
+            System.out.print("Key: ");
+            System.out.flush();
             char[] chars = console.readPassword();
             return chars == null ? null : new String(chars);
         }
+
+        if (visible) {
+            System.out.println("(visible mode -- your key will be shown on screen)");
+        }
+        System.out.print("Key: ");
+        System.out.flush();
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         return reader.readLine();
     }

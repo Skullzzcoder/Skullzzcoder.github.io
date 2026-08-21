@@ -89,32 +89,62 @@ and works.
 
 ## 4. Add your API key
 
+**Easiest — copy the key, then let it read your clipboard:**
+
+```powershell
+java -jar daemon\build\libs\daemon-0.1.0-all.jar set-key --clipboard
+```
+
+No pasting into the terminal at all. Copy the key from wherever it is, run that,
+done. It saves the key and immediately makes one API call to confirm the server
+accepts it, so a bad key surfaces now rather than three days into a run.
+
+### If you would rather type or paste it
+
 ```powershell
 java -jar daemon\build\libs\daemon-0.1.0-all.jar set-key
 ```
 
-It asks you to paste your key, saves it, and immediately makes one API call to
-confirm the server accepts it. If the key is wrong you find out now rather than
-three days into a collection run.
+**Your key will not appear on screen as you paste.** That is deliberate, and it
+is the single most confusing part of this step: a paste that worked and one that
+failed look identical. Paste, press Enter, and read the confirmation — it prints
+the key length and last four characters so you can tell it landed.
 
-That is all. You do not need to find or edit any file.
-
-> **Why not pass the key as an argument?** Anything you type on the command line
-> is written to your PowerShell history in plain text. The prompt avoids that.
-
-> **Where does it go?** `%USERPROFILE%\.donutflipper\config.json` — in your user
-> folder, deliberately outside the project, so it can never end up in a git
-> commit. Run `java -jar $J where` to print the exact path any time.
-
-**If you would rather edit it by hand**, the folder starts with a dot, which
-Explorer hides by default. Skip Explorer and open it directly:
+To see what you are typing instead:
 
 ```powershell
-notepad $HOME\.donutflipper\config.json
+java -jar daemon\build\libs\daemon-0.1.0-all.jar set-key --visible
 ```
 
-The file only exists after you have run the program at least once. If Notepad
-offers to create a new file, run `java -jar $J where` first.
+### How to paste into a Windows terminal
+
+| Terminal | Paste |
+|---|---|
+| Windows Terminal (the modern one) | `Ctrl+V` |
+| Classic console window | **right-click** — `Ctrl+V` does nothing |
+| Either | `Ctrl+Shift+V` |
+
+If right-click does not paste in the classic console, right-click the title bar →
+Properties → tick **Use Ctrl+Shift+C/V as Copy/Paste**.
+
+### If the terminal simply will not cooperate
+
+Paste the key into Notepad, save it, and point the tool at the file:
+
+```powershell
+notepad $HOME\key.txt
+java -jar daemon\build\libs\daemon-0.1.0-all.jar set-key --file $HOME\key.txt
+Remove-Item $HOME\key.txt
+```
+
+Delete the file afterwards, as above — it is a plaintext copy of your key.
+
+> **Where does the key end up?** `%USERPROFILE%\.donutflipper\config.json` — in
+> your user folder, deliberately outside the project, so it can never end up in a
+> git commit. Run `java -jar $J where` to print the path.
+
+> **Why not pass the key as a command argument?** Anything typed on the command
+> line is written into your PowerShell history in plain text.
 
 ## 5. Probe, diagnose, collect
 
@@ -192,6 +222,8 @@ running for the board to show anything.
 | `javac` not recognised | No JDK, or PATH not refreshed — open a new PowerShell window |
 | `gradlew.bat` not recognised | You are in the wrong folder, or typed `./gradlew` instead of `.\gradlew.bat` |
 | `BUILD FAILED` mentioning a download | Network hiccup — just run it again |
-| `doctor` says the key is rejected | Re-run `/api` in game and update `config.json` |
+| Cannot paste into the terminal | Use `set-key --clipboard`, or right-click to paste in the classic console |
+| Paste seems to do nothing | Input is hidden by design. Paste and press Enter anyway, or use `--visible` |
+| `doctor` says the key is rejected | Re-run `/api` in game, then `set-key --clipboard` again |
 | `doctor` says the mapper parsed 0 records | The API field names differ from what the code guesses. Send me `schema-report.md` |
 | Flip board is empty in game | The collector is not running, or has no history yet — run `doctor` |
