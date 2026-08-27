@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "donutgambler",
+	"version": "${version}",
+	"name": "Donut Gambler",
+	"description": "Client-side gambling tracker and advisor for DonutSMP: logs your bets from chat, tracks wins/losses/profit per game and per opponent, and gives bankroll, edge and tilt advice through an in-game GUI and HUD. Read-only - it never automates a bet.",
+	"authors": [
+		"Skullzzcoder"
+	],
+	"contact": {
+		"homepage": "https://github.com/Skullzzcoder/Skullzzcoder.github.io",
+		"sources": "https://github.com/Skullzzcoder/Skullzzcoder.github.io"
+	},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.skullzz.donutgambler.DonutGamblerClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=${loader_version}",
+		"minecraft": "~${minecraft_version}",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

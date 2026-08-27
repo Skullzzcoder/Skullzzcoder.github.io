@@ -1,0 +1,14 @@
+# Gradle / Loom
+.gradle/
+build/
+run/
+remappedSrc/
+.loom-cache/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project

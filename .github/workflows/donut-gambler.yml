@@ -1,0 +1,49 @@
+name: Build Donut Gambler
+
+on:
+  push:
+    paths:
+      - 'donut-gambler/**'
+      - '.github/workflows/donut-gambler.yml'
+  pull_request:
+    paths:
+      - 'donut-gambler/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: donut-gambler/*.gradle*
+
+      - name: Build and test
+        working-directory: donut-gambler
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon --stacktrace
+
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: donut-gambler-jar
+          path: |
+            donut-gambler/build/libs/*.jar
+            !donut-gambler/build/libs/*-sources.jar
+          if-no-files-found: error
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: donut-gambler/build/reports/tests/test
+          if-no-files-found: ignore
