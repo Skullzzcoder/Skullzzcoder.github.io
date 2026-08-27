@@ -1,5 +1,6 @@
 package com.skullzz.donutgambler.gui.tabs;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -121,7 +122,7 @@ public class OpponentsTab extends ScrollTab {
 	}
 
 	private List<OpponentFlag> sorted() {
-		List<OpponentFlag> flags = Advisor.opponentFlags(DonutGambler.config(), DonutGambler.log());
+		List<OpponentFlag> flags = new ArrayList<>(DonutGambler.stats().opponents());
 
 		switch (sort) {
 		case MONEY -> flags.sort((a, b) -> Double.compare(a.agg().net, b.agg().net));

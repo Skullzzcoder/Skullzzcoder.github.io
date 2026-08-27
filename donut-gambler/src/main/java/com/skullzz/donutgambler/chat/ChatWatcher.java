@@ -117,7 +117,7 @@ public final class ChatWatcher {
 		Advice advice = DonutGambler.advice();
 
 		if (config.chatNotifyOnBet) {
-			Agg session = DonutGambler.log().aggSession();
+			Agg session = DonutGambler.stats().session();
 			String vs = record.hasOpponent() ? " vs " + record.opponent : "";
 			String line = String.format(Locale.ROOT, "%s %s %s%s  |  session %s (%d-%d)",
 					record.gameName,

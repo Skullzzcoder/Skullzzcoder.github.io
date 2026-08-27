@@ -54,8 +54,9 @@ public class DashboardTab extends ScrollTab {
 		int width = screen.contentWidth() - 24;
 		int y = screen.contentY() + 10 - (int) scroll;
 
-		Agg session = DonutGambler.log().aggSession();
-		Agg all = DonutGambler.log().aggAll();
+		DonutGambler.Stats stats = DonutGambler.stats();
+		Agg session = stats.session();
+		Agg all = stats.allTime();
 		Advice advice = DonutGambler.advice();
 
 		int cardW = (width - 16) / 3;
@@ -175,8 +176,9 @@ public class DashboardTab extends ScrollTab {
 
 	/** Plain-text session/all-time summary, for pasting into Discord. */
 	public static String summary() {
-		Agg session = DonutGambler.log().aggSession();
-		Agg all = DonutGambler.log().aggAll();
+		DonutGambler.Stats stats = DonutGambler.stats();
+		Agg session = stats.session();
+		Agg all = stats.allTime();
 		Advice advice = DonutGambler.advice();
 
 		StringBuilder sb = new StringBuilder();
@@ -189,7 +191,7 @@ public class DashboardTab extends ScrollTab {
 				MoneyParser.signedPercent(all.roi())));
 		sb.append("Verdict: ").append(advice.verdict.label).append(" - ").append(advice.headline).append('\n');
 
-		DonutGambler.log().byGame().forEach((id, agg) -> sb.append(String.format(Locale.ROOT,
+		stats.byGame().forEach((id, agg) -> sb.append(String.format(Locale.ROOT,
 				"  %s: %s over %d bets (%d-%d)%n",
 				agg.label, MoneyParser.formatSigned(agg.net), agg.bets, agg.wins, agg.losses)));
 

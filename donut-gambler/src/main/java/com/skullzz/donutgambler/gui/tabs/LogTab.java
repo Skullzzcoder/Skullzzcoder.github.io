@@ -26,7 +26,12 @@ public class LogTab extends ScrollTab {
 	private static final int HEADER_OFFSET = 26;
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MMM d HH:mm").withZone(ZoneId.systemDefault());
 
+	private static final int MAX_ROWS = 2000;
+
 	private boolean confirmingClear;
+	private List<BetRecord> cachedRows = List.of();
+	private long cachedAt;
+	private int cachedForSize = -1;
 
 	@Override
 	public String title() {
@@ -78,7 +83,7 @@ public class LogTab extends ScrollTab {
 		int w = screen.contentWidth();
 		int[] cols = columns(x, w);
 
-		List<BetRecord> records = DonutGambler.log().recent(2000);
+		List<BetRecord> records = rows();
 
 		int headerY = screen.contentY() + 10;
 		graphics.drawString(font, "WHEN", cols[0], headerY, Theme.MUTED);
@@ -119,6 +124,20 @@ public class LogTab extends ScrollTab {
 		contentHeight = HEADER_OFFSET + records.size() * ROW_HEIGHT + 10;
 		clampScroll(screen);
 		drawScrollbar(screen, graphics);
+	}
+
+	/** The newest bets, rebuilt only when the history changes or twice a second. */
+	private List<BetRecord> rows() {
+		long now = System.currentTimeMillis();
+		int size = DonutGambler.log().size();
+
+		if (size != cachedForSize || now - cachedAt > 500) {
+			cachedRows = DonutGambler.log().recent(MAX_ROWS);
+			cachedForSize = size;
+			cachedAt = now;
+		}
+
+		return cachedRows;
 	}
 
 	private static int[] columns(int x, int w) {

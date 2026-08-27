@@ -15,6 +15,7 @@ import com.skullzz.donutgambler.gui.tabs.RulesTab;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -121,8 +122,11 @@ public class GamblerScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (super.mouseClicked(mouseX, mouseY, button)) return true;
+	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		if (super.mouseClicked(event, doubleClick)) return true;
+
+		double mouseX = event.x();
+		double mouseY = event.y();
 
 		for (int i = 0; i < tabBoxes.size(); i++) {
 			if (inBox((int) mouseX, (int) mouseY, tabBoxes.get(i))) {
@@ -132,7 +136,7 @@ public class GamblerScreen extends Screen {
 		}
 
 		if (inContent(mouseX, mouseY)) {
-			return current.mouseClicked(this, mouseX, mouseY, button);
+			return current.mouseClicked(this, mouseX, mouseY, event.button());
 		}
 
 		return false;

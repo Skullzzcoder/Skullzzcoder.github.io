@@ -87,8 +87,9 @@ public final class GamblerCommands {
 	}
 
 	private static int stats() {
-		Agg session = DonutGambler.log().aggSession();
-		Agg all = DonutGambler.log().aggAll();
+		DonutGambler.Stats stats = DonutGambler.stats();
+		Agg session = stats.session();
+		Agg all = stats.allTime();
 
 		feedback(String.format(Locale.ROOT, "Session %s over %d bets (%d-%d)",
 				MoneyParser.formatSigned(session.net), session.bets, session.wins, session.losses),
@@ -98,7 +99,7 @@ public final class GamblerCommands {
 				MoneyParser.signedPercent(all.roi())),
 				all.net >= 0 ? ChatFormatting.GREEN : ChatFormatting.RED);
 
-		for (Map.Entry<String, Agg> entry : DonutGambler.log().byGame().entrySet()) {
+		for (Map.Entry<String, Agg> entry : stats.byGame().entrySet()) {
 			Agg agg = entry.getValue();
 			feedback(String.format(Locale.ROOT, "  %s: %s (%d-%d)", agg.label,
 					MoneyParser.formatSigned(agg.net), agg.wins, agg.losses), ChatFormatting.GRAY);

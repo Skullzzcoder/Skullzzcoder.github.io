@@ -75,7 +75,8 @@ public final class GamblerHud {
 
 	private static List<Row> buildRows(Font font, GamblerConfig config) {
 		List<Row> rows = new ArrayList<>();
-		Agg session = DonutGambler.log().aggSession();
+		DonutGambler.Stats stats = DonutGambler.stats();
+		Agg session = stats.session();
 		Advice advice = DonutGambler.advice();
 
 		rows.add(new Row(DonutGambler.NAME + "  [" + advice.verdict.label + "]",
@@ -89,7 +90,7 @@ public final class GamblerHud {
 		}
 
 		if (config.hudShowAllTime) {
-			Agg all = DonutGambler.log().aggAll();
+			Agg all = stats.allTime();
 			rows.add(new Row(String.format(Locale.ROOT, "All time %s   %d-%d",
 					MoneyParser.formatSigned(all.net), all.wins, all.losses), Theme.money(all.net)));
 		}

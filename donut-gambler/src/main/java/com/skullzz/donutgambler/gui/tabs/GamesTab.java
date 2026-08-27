@@ -2,6 +2,7 @@ package com.skullzz.donutgambler.gui.tabs;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import com.skullzz.donutgambler.DonutGambler;
 import com.skullzz.donutgambler.advisor.Advisor;
@@ -47,6 +48,7 @@ public class GamesTab extends ScrollTab {
 	public void render(GamblerScreen screen, GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		Font font = screen.font();
 		List<GameDef> games = DonutGambler.config().games;
+		Map<String, Agg> byGame = DonutGambler.stats().byGame();
 		int x = screen.contentX();
 		int w = screen.contentWidth();
 
@@ -88,7 +90,7 @@ public class GamesTab extends ScrollTab {
 			graphics.drawString(font, bet > 0 ? MoneyParser.format(bet) : "-", cols[3], textY,
 					bet > 0 ? Theme.TEXT : Theme.DIM);
 
-			Agg measured = DonutGambler.log().byGame().get(game.id);
+			Agg measured = byGame.get(game.id);
 			String record = measured == null ? "no data"
 					: String.format(Locale.ROOT, "%d-%d  %s  %s", measured.wins, measured.losses,
 							MoneyParser.percent(measured.winRate()), MoneyParser.formatSigned(measured.net));

@@ -149,7 +149,7 @@ public class GameEditScreen extends Screen {
 				margin, y, bet > 0 ? Theme.TEXT : Theme.YELLOW);
 
 		y += 12;
-		Agg measured = DonutGambler.log().byGame().get(game.id);
+		Agg measured = DonutGambler.stats().byGame().get(game.id);
 
 		if (measured != null) {
 			graphics.drawString(font, String.format(Locale.ROOT,

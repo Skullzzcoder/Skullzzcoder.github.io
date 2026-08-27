@@ -31,25 +31,6 @@ jobs:
           chmod +x gradlew
           ./gradlew build --no-daemon --stacktrace
 
-      - name: Dump Minecraft API signatures (diagnostic)
-        if: always()
-        working-directory: donut-gambler
-        run: |
-          MC=""
-          for j in $(find ~/.gradle/caches/fabric-loom -name "*.jar" 2>/dev/null); do
-            if unzip -l "$j" 2>/dev/null | grep -q "net/minecraft/client/gui/screens/Screen.class"; then MC="$j"; break; fi
-          done
-          echo "minecraft jar: $MC"
-          if [ -z "$MC" ]; then exit 0; fi
-          for c in net.minecraft.client.input.MouseButtonEvent \
-                   net.minecraft.client.gui.screens.Screen \
-                   net.minecraft.client.gui.GuiGraphics \
-                   net.minecraft.client.gui.components.EditBox \
-                   net.minecraft.client.gui.components.Button; do
-            echo "=====> $c"
-            javap -protected -cp "$MC" "$c" 2>&1 | head -120
-          done
-
       - name: Upload mod jar
         uses: actions/upload-artifact@v4
         with:
