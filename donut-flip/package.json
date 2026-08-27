@@ -1,0 +1,17 @@
+{
+  "name": "donut-flip",
+  "version": "1.0.0",
+  "description": "Tracks the DonutSMP market and advises which items to order-flip (buy via /order, resell on /ah) for the best risk-adjusted margins.",
+  "type": "module",
+  "bin": { "donut-flip": "./bin/donut-flip.js" },
+  "scripts": {
+    "scan": "node bin/donut-flip.js scan",
+    "watch": "node bin/donut-flip.js watch",
+    "serve": "node bin/donut-flip.js serve",
+    "demo": "node bin/donut-flip.js scan --mock",
+    "test": "node --test test/"
+  },
+  "engines": { "node": ">=18" },
+  "private": true,
+  "license": "MIT"
+}

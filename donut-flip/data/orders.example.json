@@ -1,0 +1,11 @@
+{
+  "_comment": "Top buy-order price per item, per single unit. Copy to data/orders.json and set orders.source to \"file\".",
+  "updatedAt": "2026-08-27T12:00:00Z",
+  "orders": [
+    { "item": "totem_of_undying",       "price": 17000,  "quantity": 512 },
+    { "item": "ancient_debris",         "price": 31000,  "quantity": 256 },
+    { "item": "netherite_ingot",        "price": 185000, "quantity": 64 },
+    { "item": "shulker_shell",          "price": 24000,  "quantity": 128 },
+    { "item": "enchanted_golden_apple", "price": 112000, "quantity": 64 }
+  ]
+}

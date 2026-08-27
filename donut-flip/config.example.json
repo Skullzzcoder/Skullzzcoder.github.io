@@ -1,0 +1,41 @@
+{
+  "apiKey": null,
+
+  "api": {
+    "baseUrl": "https://api.donutsmp.net/v1",
+    "authHeader": "Authorization",
+    "authPrefix": "Bearer ",
+    "listings":     { "method": "POST", "path": "/auction/list/{page}",         "body": { "search": "", "sort": "recently_listed" } },
+    "transactions": { "method": "POST", "path": "/auction/transactions/{page}", "body": { "search": "", "sort": "recently_sold" } },
+    "firstPage": 1,
+    "maxPages": 10,
+    "requestsPerMinute": 180
+  },
+
+  "economics": {
+    "ahTaxPct": 0.05,
+    "orderFeePct": 0,
+    "outbidPct": 0.01,
+    "undercutPct": 0.02,
+    "captureShare": 0.35,
+    "targetRoiPct": 25
+  },
+
+  "filters": {
+    "minUnitProfit": 500,
+    "minRoiPct": 8,
+    "minSales": 4,
+    "minConfidence": 0.3,
+    "budget": null,
+    "maxExposurePct": 0.25,
+    "include": [],
+    "exclude": ["shulker_box"]
+  },
+
+  "market": { "typoFloorRatio": 0.25 },
+  "windows": { "salesLookbackHours": 24, "historyDays": 14 },
+  "output": { "top": 25, "json": "data/opportunities.json", "history": "data/history.jsonl" },
+  "orders": { "source": "none", "file": "data/orders.json" },
+  "alerts": { "discordWebhook": null, "minScore": 0, "cooldownMinutes": 90 },
+  "watch": { "intervalMinutes": 10 }
+}
