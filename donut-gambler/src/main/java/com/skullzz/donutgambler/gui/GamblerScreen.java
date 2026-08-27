@@ -83,9 +83,16 @@ public class GamblerScreen extends Screen {
 	}
 
 	@Override
+	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+		super.renderBackground(graphics, mouseX, mouseY, delta);
+		// Drawn here rather than in render() so the panels sit behind the widgets the
+		// settings tabs place inside the content area, not on top of them.
+		renderChrome(graphics, mouseX, mouseY);
+	}
+
+	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		super.render(graphics, mouseX, mouseY, delta);
-		renderChrome(graphics, mouseX, mouseY);
 
 		graphics.enableScissor(contentX + 1, contentY + 1, contentX + contentW - 1, contentY + contentH - 1);
 		current.render(this, graphics, mouseX, mouseY, delta);
