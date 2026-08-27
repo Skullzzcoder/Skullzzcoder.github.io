@@ -109,10 +109,10 @@ public final class ChatWatcher {
 		}
 
 		DonutGambler.invalidateAdvice();
-		notify(record);
+		announce(record);
 	}
 
-	private static void notify(BetRecord record) {
+	private static void announce(BetRecord record) {
 		GamblerConfig config = DonutGambler.config();
 		Advice advice = DonutGambler.advice();
 

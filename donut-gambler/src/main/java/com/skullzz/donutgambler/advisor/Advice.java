@@ -7,11 +7,11 @@ import java.util.List;
 public class Advice {
 	public enum Verdict {
 		/** Nothing wrong: the bet is sized, the game is not obviously rigged, you are not tilted. */
-		GREEN("OK", 0x4CE07A),
+		GREEN("OK", 0xFF4CE07A),
 		/** Something is off. Read the lines before betting again. */
-		YELLOW("CAUTION", 0xE8C547),
+		YELLOW("CAUTION", 0xFFE8C547),
 		/** Stop. Losing streak, blown stop-loss, negative edge you keep paying, or a flagged opponent. */
-		RED("STOP", 0xE5544B);
+		RED("STOP", 0xFFE5544B);
 
 		public final String label;
 		public final int color;
@@ -23,10 +23,10 @@ public class Advice {
 	}
 
 	public enum Severity {
-		GOOD(0x4CE07A),
-		INFO(0xB9BCC4),
-		WARN(0xE8C547),
-		BAD(0xE5544B);
+		GOOD(0xFF4CE07A),
+		INFO(0xFFB9BCC4),
+		WARN(0xFFE8C547),
+		BAD(0xFFE5544B);
 
 		public final int color;
 

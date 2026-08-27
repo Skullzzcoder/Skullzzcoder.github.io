@@ -24,14 +24,12 @@ public final class Fields {
 
 	/** ON/OFF button that writes straight back to the config. */
 	public static Button toggle(int x, int y, int w, int h, String label, BooleanSupplier getter, Consumer<Boolean> setter) {
-		Button[] holder = new Button[1];
-		holder[0] = Button.builder(text(label, getter.getAsBoolean()), b -> {
+		return Button.builder(text(label, getter.getAsBoolean()), b -> {
 			boolean next = !getter.getAsBoolean();
 			setter.accept(next);
 			b.setMessage(text(label, next));
 			DonutGambler.markConfigDirty();
 		}).bounds(x, y, w, h).build();
-		return holder[0];
 	}
 
 	private static Component text(String label, boolean on) {
@@ -40,13 +38,11 @@ public final class Fields {
 
 	/** Button that cycles through values, e.g. the HUD anchor. */
 	public static Button cycle(int x, int y, int w, int h, String label, Supplier<String> value, Runnable next) {
-		Button[] holder = new Button[1];
-		holder[0] = Button.builder(Component.literal(label + ": " + value.get()), b -> {
+		return Button.builder(Component.literal(label + ": " + value.get()), b -> {
 			next.run();
 			b.setMessage(Component.literal(label + ": " + value.get()));
 			DonutGambler.markConfigDirty();
 		}).bounds(x, y, w, h).build();
-		return holder[0];
 	}
 
 	/**
