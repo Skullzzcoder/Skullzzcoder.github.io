@@ -3,20 +3,19 @@ plugins {
     id 'maven-publish'
 }
 
-// The four toolchain versions live in gradle.properties. Read them defensively so that
-// a missing one produces a useful message instead of "unknown property", and so that
-// the fabricVersions helper below still runs when they are wrong.
+// The four toolchain versions live in gradle.properties. Read them defensively so a
+// missing one names itself instead of surfacing as Gradle's "unknown property".
+// Run fabric-versions.ps1 to fill them in for your Minecraft version.
 def versionProps = ['minecraft_version', 'yarn_mappings', 'loader_version', 'fabric_version']
 def prop = { String name -> project.findProperty(name) ?: 'MISSING' }
 
-def askingForHelp = gradle.startParameter.taskNames.any { it.equalsIgnoreCase('fabricVersions') }
 def missing = versionProps.findAll { !project.hasProperty(it) }
-if (!missing.isEmpty() && !askingForHelp) {
+if (!missing.isEmpty()) {
     throw new GradleException(
             "gradle.properties is missing: ${missing.join(', ')}\n\n" +
-            "Run this to print the correct values for your Minecraft version:\n" +
-            "    gradlew fabricVersions\n\n" +
-            "then paste its output into gradle.properties and build again.")
+            "Get the correct values for your Minecraft version with:\n" +
+            "    powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write\n" +
+            "or by hand from https://fabricmc.net/develop/")
 }
 
 version = project.findProperty('mod_version') ?: '1.0.0'
@@ -58,72 +57,5 @@ java {
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
-    }
-}
-
-/**
- * Prints the exact gradle.properties lines for the Minecraft version you are targeting,
- * straight from Fabric's and Modrinth's APIs. Run: gradlew fabricVersions
- */
-tasks.register('fabricVersions') {
-    group = 'help'
-    description = 'Prints the correct yarn / loader / Fabric API versions for minecraft_version.'
-    notCompatibleWithConfigurationCache('Reads live version metadata over the network.')
-
-    doLast {
-        def mc = project.findProperty('minecraft_version') ?: '1.21.11'
-        def json = new groovy.json.JsonSlurper()
-
-        def fetch = { String spec ->
-            def connection = new URL(spec).openConnection()
-            connection.setRequestProperty('User-Agent', 'mirage-build (fabric mod build script)')
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
-            connection.inputStream.withReader('UTF-8') { it.text }
-        }
-
-        def yarn = null, loader = null, api = null
-        def problems = []
-
-        try {
-            def builds = json.parseText(fetch("https://meta.fabricmc.net/v2/versions/yarn/${mc}"))
-            if (builds) yarn = builds[0].version else problems << "Fabric has no yarn mappings for ${mc}."
-        } catch (Exception e) {
-            problems << "Could not reach Fabric's yarn API: ${e.message}"
-        }
-
-        try {
-            def loaders = json.parseText(fetch("https://meta.fabricmc.net/v2/versions/loader/${mc}"))
-            def stable = loaders.find { it.loader.stable } ?: loaders[0]
-            if (stable) loader = stable.loader.version else problems << "Fabric has no loader for ${mc}."
-        } catch (Exception e) {
-            problems << "Could not reach Fabric's loader API: ${e.message}"
-        }
-
-        try {
-            def games = java.net.URLEncoder.encode("[\"${mc}\"]", 'UTF-8')
-            def url = "https://api.modrinth.com/v2/project/fabric-api/version" +
-                    "?game_versions=${games}&loaders=%5B%22fabric%22%5D"
-            def releases = json.parseText(fetch(url))
-            if (releases) api = releases[0].version_number else problems << "Modrinth lists no Fabric API for ${mc}."
-        } catch (Exception e) {
-            problems << "Could not reach Modrinth: ${e.message}"
-        }
-
-        println ""
-        println "Paste these four lines into gradle.properties (Minecraft ${mc}):"
-        println ""
-        println "minecraft_version=${mc}"
-        println "yarn_mappings=${yarn ?: '<lookup failed>'}"
-        println "loader_version=${loader ?: '<lookup failed>'}"
-        println "fabric_version=${api ?: '<lookup failed>'}"
-        println ""
-
-        if (!problems.isEmpty()) {
-            println "Some lookups failed:"
-            problems.each { println "  - ${it}" }
-            println "Get the missing values by hand from https://fabricmc.net/develop/"
-            println ""
-        }
     }
 }
