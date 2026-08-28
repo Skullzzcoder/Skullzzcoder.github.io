@@ -38,7 +38,7 @@ public final class MirageCommands {
                                 CommandRegistryAccess registryAccess,
                                 CommandManager.RegistrationEnvironment environment) {
         dispatcher.register(CommandManager.literal("mirage")
-                .requires(source -> source.getPermissions().test(2))
+                .requires(MirageCommands::isOperator)
                 .then(ghost(registryAccess))
                 .then(dispenser(registryAccess))
                 .then(CommandManager.literal("refresh")
@@ -311,6 +311,18 @@ public final class MirageCommands {
                     "Heads up: there is no dispenser at " + key + " yet. The rig is saved and will "
                             + "start working as soon as one is placed there.").formatted(Formatting.YELLOW), false);
         }
+    }
+
+    /**
+     * Minecraft 1.21.11 replaced ServerCommandSource's integer permission level with a
+     * Permission object API, so operator status is read off the server's op list instead.
+     */
+    private static boolean isOperator(ServerCommandSource source) {
+        // The console and command blocks are trusted.
+        if (!source.isExecutedByPlayer()) return true;
+
+        return source.getEntity() instanceof ServerPlayerEntity player
+                && source.getServer().getPlayerManager().isOperator(player.getGameProfile());
     }
 
     /** GameProfile is a record in current authlib, so the accessor is name(), not getName(). */

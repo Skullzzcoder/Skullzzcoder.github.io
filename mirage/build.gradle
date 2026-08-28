@@ -88,7 +88,8 @@ tasks.register('inspectApi') {
         // Printing a member resolves the classes in its signature, and some Minecraft
         // classes fail JVM verification when loaded outside the game. So keep filters
         // narrow, and let a single unprintable member be skipped rather than aborting.
-        def dump = { Class type, List filters, String note ->
+        def dump
+        dump = { Class type, List filters, String note ->
             println ""
             println "== ${type.name}${note}"
             def lines = [] as TreeSet
@@ -138,29 +139,59 @@ tasks.register('inspectApi') {
             }
         }
 
+        // Dump whatever types a method mentions, so an unfamiliar API can be explored
+        // without having to know which package its classes live in.
+        def follow
+        follow = { Class owner, String methodName ->
+            try {
+                // Every overload, since the interesting one may not be the first found.
+                def methods = owner.methods.findAll { it.name == methodName }
+                if (methods.isEmpty()) {
+                    println ""
+                    println "  <${owner.simpleName} has no ${methodName}>"
+                    return null
+                }
+
+                def seen = [] as Set
+                methods.each { method ->
+                    if (method.returnType != void.class && !method.returnType.isPrimitive()
+                            && seen.add(method.returnType)) {
+                        dump(method.returnType, [], "  <- returned by ${owner.simpleName}#${methodName}")
+                    }
+                    method.parameterTypes.each { param ->
+                        if (!param.isPrimitive() && seen.add(param)) {
+                            dump(param, [], "  <- parameter of ${owner.simpleName}#${methodName}")
+                        }
+                    }
+                }
+                return methods.first()
+            } catch (Throwable failure) {
+                println "  <could not follow ${methodName}: ${failure}>"
+                return null
+            }
+        }
+
         def source = load('net.minecraft.server.command.ServerCommandSource')
         if (source != null) {
             dump(source, ['permission', 'player', 'entity', 'server'], '')
 
-            // Follow the type getPermissions() hands back, whatever it is called, so the
-            // real permission check can be read off without knowing its package.
-            try {
-                def permissions = source.methods.find { it.name == 'getPermissions' }
-                if (permissions != null) {
-                    def type = permissions.returnType
-                    println ""
-                    println "   (ServerCommandSource#getPermissions returns ${type.name})"
-                    dump(type, [], '  <- the permission API')
-                }
-            } catch (Throwable failure) {
-                println "  <could not follow getPermissions: ${failure}>"
-            }
+            def permissions = follow(source, 'getPermissions')
+            // ...and what hasPermission wants handed to it.
+            if (permissions != null) follow(permissions.returnType, 'hasPermission')
         }
 
         def commandManager = load('net.minecraft.server.command.CommandManager')
         if (commandManager != null) {
             dump(commandManager, ['permission', 'require', 'level'], '')
+            follow(commandManager, 'requirePermissionLevel')
         }
+
+        // The fallback route: read operator status straight off the server.
+        def playerManager = load('net.minecraft.server.PlayerManager')
+        if (playerManager != null) dump(playerManager, ['operator', 'permission', 'op'], '')
+
+        def server = load('net.minecraft.server.MinecraftServer')
+        if (server != null) dump(server, ['operator', 'permission', 'playermanager'], '')
 
         println ""
     }
