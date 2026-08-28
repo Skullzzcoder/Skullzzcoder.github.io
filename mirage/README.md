@@ -95,6 +95,48 @@ item field turns a click into a clear. There are typed equivalents too:
 
 Slots are `hotbar1`–`hotbar9` and `inv1`–`inv27`.
 
+### Fake dispenser and dropper contents
+
+The right-hand 3x3 grid in the menu is what you see when you open a dispenser or dropper.
+Same rules: type an item, click a slot, empty field clears. Or:
+
+```
+/fake dispenser <slot 0-8> <item> [count]
+/fake dispenser clear
+```
+
+This paints the first nine slots of whatever container you open, which is exactly a
+dispenser or dropper's grid. Open a chest and its top row gets the same treatment — harmless,
+and it keeps the code free of guessing at screen types.
+
+### Price lines
+
+Fake items can carry a lore line so they read like a server-formatted item rather than a
+plain vanilla one. Prices live in `config/mirage-prices.json`:
+
+```json
+{
+  "lore": ["&7Sell Price: &a$%price%"],
+  "prices": {
+    "minecraft:diamond_block": 4500,
+    "minecraft:netherite_ingot": 32000
+  }
+}
+```
+
+`%price%` is the price times the stack size, `%unit%` is the per-item price, and `&` codes
+are colours. An item with no entry gets no lore line at all.
+
+**The shipped values are placeholders, not real server prices.** Nothing is fetched from
+anywhere — put the real numbers in yourself, or the lore will read convincingly and be wrong.
+After editing the file:
+
+```
+/fake prices reload
+```
+
+That re-reads the file and rebuilds every fake you have set, so you don't retype anything.
+
 ### How it works, and why it is safe on someone else's server
 
 The fake stacks are written into your client's own copy of your inventory each tick, so

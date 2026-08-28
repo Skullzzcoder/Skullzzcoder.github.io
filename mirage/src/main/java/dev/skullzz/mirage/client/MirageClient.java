@@ -32,6 +32,7 @@ import dev.skullzz.mirage.Mirage;
 public class MirageClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        FakeLore.load();
         SelfFakes.load();
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
@@ -53,6 +54,18 @@ public class MirageClient implements ClientModInitializer {
                                     .suggests((context, builder) ->
                                             CommandSource.suggestMatching(SelfFakes.slotNames(), builder))
                                     .executes(MirageClient::clearSlot)))
+                    .then(ClientCommandManager.literal("dispenser")
+                            .then(ClientCommandManager.literal("clear")
+                                    .executes(MirageClient::clearDispenser))
+                            .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(0, 8))
+                                    .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                            .executes(context -> setDispenser(context, 1))
+                                            .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                                    .executes(context -> setDispenser(context,
+                                                            IntegerArgumentType.getInteger(context, "count")))))))
+                    .then(ClientCommandManager.literal("prices")
+                            .then(ClientCommandManager.literal("reload")
+                                    .executes(MirageClient::reloadPrices)))
                     .then(ClientCommandManager.literal("list")
                             .executes(MirageClient::list)));
         });
@@ -92,9 +105,41 @@ public class MirageClient implements ClientModInitializer {
             return 0;
         }
 
-        SelfFakes.set(slot, new ItemStack(item, count));
+        SelfFakes.set(slot, SelfFakes.buildStack(item, count));
         context.getSource().sendFeedback(Text.literal("Showing " + count + "x " + itemName
                 + " in " + slotName + ".").formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int setDispenser(CommandContext<FabricClientCommandSource> context, int count) {
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        String itemName = StringArgumentType.getString(context, "item");
+
+        Item item = SelfFakes.lookupItem(itemName);
+        if (item == null) {
+            context.getSource().sendFeedback(Text.literal("No item called '" + itemName + "'.")
+                    .formatted(Formatting.RED));
+            return 0;
+        }
+
+        SelfFakes.setContainer(slot, SelfFakes.buildStack(item, count));
+        context.getSource().sendFeedback(Text.literal("Dispensers will show " + count + "x "
+                + itemName + " in slot " + slot + ".").formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int clearDispenser(CommandContext<FabricClientCommandSource> context) {
+        SelfFakes.clearAllContainer(MinecraftClient.getInstance().player);
+        context.getSource().sendFeedback(Text.literal("Cleared the fake dispenser contents.")
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int reloadPrices(CommandContext<FabricClientCommandSource> context) {
+        FakeLore.load();
+        SelfFakes.rebakeLore(MinecraftClient.getInstance().player);
+        context.getSource().sendFeedback(Text.literal("Reloaded prices and refreshed every fake.")
+                .formatted(Formatting.GREEN));
         return 1;
     }
 
@@ -115,6 +160,7 @@ public class MirageClient implements ClientModInitializer {
 
     private static int clearAll(CommandContext<FabricClientCommandSource> context) {
         SelfFakes.clearAll(MinecraftClient.getInstance().player);
+        SelfFakes.clearAllContainer(MinecraftClient.getInstance().player);
         context.getSource().sendFeedback(Text.literal("Cleared every fake.")
                 .formatted(Formatting.GREEN));
         return 1;
@@ -122,17 +168,28 @@ public class MirageClient implements ClientModInitializer {
 
     private static int list(CommandContext<FabricClientCommandSource> context) {
         Map<Integer, ItemStack> fakes = SelfFakes.all();
-        if (fakes.isEmpty()) {
+        Map<Integer, ItemStack> container = SelfFakes.allContainer();
+        if (fakes.isEmpty() && container.isEmpty()) {
             context.getSource().sendFeedback(Text.literal("No fake items set."));
             return 0;
         }
 
-        context.getSource().sendFeedback(Text.literal("Fake items:").formatted(Formatting.AQUA));
-        for (Map.Entry<Integer, ItemStack> entry : fakes.entrySet()) {
-            ItemStack stack = entry.getValue();
-            context.getSource().sendFeedback(Text.literal("  " + SelfFakes.slotName(entry.getKey())
-                    + ": " + stack.getCount() + "x " + stack.getName().getString()));
+        if (!fakes.isEmpty()) {
+            context.getSource().sendFeedback(Text.literal("Inventory:").formatted(Formatting.AQUA));
+            for (Map.Entry<Integer, ItemStack> entry : fakes.entrySet()) {
+                ItemStack stack = entry.getValue();
+                context.getSource().sendFeedback(Text.literal("  " + SelfFakes.slotName(entry.getKey())
+                        + ": " + stack.getCount() + "x " + stack.getName().getString()));
+            }
         }
-        return fakes.size();
+        if (!container.isEmpty()) {
+            context.getSource().sendFeedback(Text.literal("Dispensers and droppers:").formatted(Formatting.AQUA));
+            for (Map.Entry<Integer, ItemStack> entry : container.entrySet()) {
+                ItemStack stack = entry.getValue();
+                context.getSource().sendFeedback(Text.literal("  slot " + entry.getKey()
+                        + ": " + stack.getCount() + "x " + stack.getName().getString()));
+            }
+        }
+        return fakes.size() + container.size();
     }
 }
