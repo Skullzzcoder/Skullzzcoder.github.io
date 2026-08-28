@@ -160,6 +160,26 @@ visible and only your fake item comes out.
 /fake dispenser unwatchall
 ```
 
+### Fake arrows that always land where you say
+
+For games where an arrow decides an outcome. Look at the exact spot you want it to land:
+
+```
+/fake arrow target
+/fake dispenser watch     (looking at the dispenser that fires)
+```
+
+Every time that dispenser fires, an arrow flies out of it and lands on your chosen point.
+The landing point is the precise spot on the block face you were looking at, not the middle
+of the block, so it can sit on one pad rather than between two.
+
+The arrow's path is interpolated along an arc rather than launched ballistically: solving for
+a velocity that hits an exact point through Minecraft's drag is approximate, and the whole
+point is that it never misses. `/fake arrow clear` turns it off.
+
+**This changes nothing about the real outcome.** The arrow exists only on your client; the
+server's arrow, and whatever it pays, are untouched and unaware.
+
 ### Price lines
 
 Fake items can carry a lore line so they read like a server-formatted item rather than a
@@ -185,6 +205,32 @@ After editing the file:
 ```
 /fake prices reload
 ```
+
+### Live prices from an API
+
+The price file also has an `api` block, off by default:
+
+```json
+"api": {
+  "enabled": true,
+  "url": "https://your.api/price/%item_short%",
+  "headers": { "Authorization": "Bearer YOUR_KEY" },
+  "path": "result.price",
+  "cacheMinutes": 30
+}
+```
+
+`%item%` is the full id, `%item_short%` drops the namespace. `path` is a dotted path to the
+number in the response, and `data[0].sell` style indexing works. Anything answering with JSON
+containing a number will do — it is deliberately generic, because it was written without
+sight of the API it would talk to.
+
+Lookups run on a background thread and never block the game: a miss returns nothing, queues a
+fetch, and the item updates a moment later. Anything in `prices` wins over the API, so a value
+you set by hand is never overwritten. Failed responses are not logged with their body, since
+a body can echo the request and your key with it.
+
+**Your key sits in that file in plain text.** Don't share it or upload it anywhere.
 
 That re-reads the file and rebuilds every fake you have set, so you don't retype anything.
 

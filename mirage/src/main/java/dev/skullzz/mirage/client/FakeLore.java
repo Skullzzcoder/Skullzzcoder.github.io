@@ -69,6 +69,7 @@ public final class FakeLore {
                 JsonArray array = root.getAsJsonArray("lore");
                 for (JsonElement line : array) loreLines.add(line.getAsString());
             }
+            if (root.has("api")) PriceApi.configure(root.getAsJsonObject("api"));
             if (root.has("prices")) {
                 for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("prices").entrySet()) {
                     String id = entry.getKey().contains(":") ? entry.getKey() : "minecraft:" + entry.getKey();
@@ -101,6 +102,19 @@ public final class FakeLore {
         root.addProperty("_comment", "Placeholder values -- replace with the real ones. "
                 + "An item with no price here gets no lore line.");
 
+        // Optional live lookup. Off by default, and deliberately generic: fill in the URL,
+        // the headers and the path to the number, whatever shape the API returns.
+        JsonObject api = new JsonObject();
+        api.addProperty("enabled", false);
+        api.addProperty("url", "https://example.invalid/price/%item_short%");
+        api.addProperty("path", "result.price");
+        api.addProperty("cacheMinutes", 30);
+        JsonObject headers = new JsonObject();
+        headers.addProperty("Authorization", "Bearer PUT_YOUR_KEY_HERE");
+        api.add("headers", headers);
+        api.addProperty("_comment", "Your key lives in this file. Do not share or upload it.");
+        root.add("api", api);
+
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(root));
@@ -115,7 +129,10 @@ public final class FakeLore {
     }
 
     private static Double priceOf(ItemStack stack) {
-        return prices.get(Registries.ITEM.getId(stack.getItem()).toString());
+        String id = Registries.ITEM.getId(stack.getItem()).toString();
+        // The local table wins, so a value you set by hand is never overwritten by the API.
+        Double local = prices.get(id);
+        return local != null ? local : PriceApi.lookup(id);
     }
 
     public static ItemStack applyTo(ItemStack stack) {

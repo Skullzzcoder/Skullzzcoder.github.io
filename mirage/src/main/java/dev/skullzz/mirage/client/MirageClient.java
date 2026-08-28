@@ -42,6 +42,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(inventoryBranch())
                         .then(enderBranch())
                         .then(dispenserBranch())
+                        .then(arrowBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(MirageClient::reloadPrices)))
@@ -52,6 +53,8 @@ public class MirageClient implements ClientModInitializer {
             // Repaint every tick: the server overwrites a slot whenever the real item changes.
             if (client.player != null) SelfFakes.apply(client.player);
             ClientDispensers.tick(client);
+            // A price that arrived from the API rebuilds the fakes once, not every tick.
+            if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -115,6 +118,30 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setContainer(context, SelfFakes.DISPENSER,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> arrowBranch() {
+        return ClientCommandManager.literal("arrow")
+                .then(ClientCommandManager.literal("target").executes(MirageClient::setArrowTarget))
+                .then(ClientCommandManager.literal("clear").executes(context -> {
+                    ClientDispensers.setArrowTarget(null);
+                    SelfFakes.save();
+                    return feedback(context, "Fake arrows turned off.");
+                }));
+    }
+
+    private static int setArrowTarget(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        HitResult target = client.crosshairTarget;
+        if (!(target instanceof BlockHitResult hit)) {
+            return error(context, "Look at the exact spot the arrow should land.");
+        }
+
+        // The precise point on the block face, so it lands on the pad rather than its middle.
+        ClientDispensers.setArrowTarget(hit.getPos());
+        SelfFakes.save();
+        return feedback(context, "Fake arrows will land there. Watch the dispenser that fires them "
+                + "with /fake dispenser watch.");
     }
 
     // ------------------------------------------------------------------ actions

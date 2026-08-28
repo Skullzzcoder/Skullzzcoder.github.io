@@ -104,10 +104,23 @@ public class FakeItemsScreen extends Screen {
                 button -> setDispenserOutput()).dimensions(this.width / 2 - 152, top + 74, 150, 20).build();
         ButtonWidget watch = ButtonWidget.builder(Text.literal("Watch block I'm facing"),
                 button -> watchLookedAt()).dimensions(this.width / 2 + 2, top + 74, 150, 20).build();
+        ButtonWidget arrow = ButtonWidget.builder(Text.literal("Arrow lands where I face"),
+                button -> setArrowTarget()).dimensions(this.width / 2 - 152, top + 96, 150, 20).build();
+        ButtonWidget noArrow = ButtonWidget.builder(Text.literal("No fake arrow"),
+                button -> {
+                    ClientDispensers.setArrowTarget(null);
+                    SelfFakes.save();
+                    this.status = Text.literal("Fake arrows turned off.").formatted(Formatting.GREEN);
+                }).dimensions(this.width / 2 + 2, top + 96, 150, 20).build();
+
         this.dispenserExtras.add(output);
         this.dispenserExtras.add(watch);
+        this.dispenserExtras.add(arrow);
+        this.dispenserExtras.add(noArrow);
         this.addDrawableChild(output);
         this.addDrawableChild(watch);
+        this.addDrawableChild(arrow);
+        this.addDrawableChild(noArrow);
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Clear all"), button -> {
             ClientPlayerEntity player = this.client == null ? null : this.client.player;
@@ -210,6 +223,20 @@ public class FakeItemsScreen extends Screen {
         SelfFakes.save();
         this.status = Text.literal("Watched dispensers will appear to fire that.")
                 .formatted(Formatting.GREEN);
+    }
+
+    private void setArrowTarget() {
+        HitResult target = this.client == null ? null : this.client.crosshairTarget;
+        if (!(target instanceof BlockHitResult hit)) {
+            this.status = Text.literal("Close this and look at the landing spot first.")
+                    .formatted(Formatting.RED);
+            return;
+        }
+
+        // The precise point on the block face, so it lands on the pad rather than its middle.
+        ClientDispensers.setArrowTarget(hit.getPos());
+        SelfFakes.save();
+        this.status = Text.literal("Fake arrows will land there.").formatted(Formatting.GREEN);
     }
 
     private void watchLookedAt() {

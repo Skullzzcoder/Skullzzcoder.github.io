@@ -17,9 +17,14 @@ import net.minecraft.block.DispenserBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 
 /**
  * Makes a watched dispenser appear to fire something of your choosing.
@@ -42,7 +47,14 @@ public final class ClientDispensers {
     private static final List<PendingFire> pending = new ArrayList<>();
     private static final List<ExpiringItem> spawned = new ArrayList<>();
 
+    /** How long a fake arrow takes to reach its target. */
+    private static final int ARROW_FLIGHT_TICKS = 18;
+    /** How long it stays stuck there afterwards. */
+    private static final int ARROW_LINGER_TICKS = 100;
+
     private static FakeSpec result;
+    /** Where a fake arrow always lands. Null means don't fire one. */
+    private static Vec3d arrowTarget;
     private static long tick;
 
     /** Client-only ids, taken from the top of the range so they miss the server's. */
@@ -53,6 +65,30 @@ public final class ClientDispensers {
 
     private record ExpiringItem(ItemEntity entity, long removeAt) {
     }
+
+    /** An arrow flown along a fixed arc, so it lands exactly where it was told to. */
+    private static final class FlyingArrow {
+        final ArrowEntity entity;
+        final Vec3d from;
+        final Vec3d to;
+        final double arcHeight;
+        final long startTick;
+        final long removeAt;
+        Vec3d previous;
+
+        FlyingArrow(ArrowEntity entity, Vec3d from, Vec3d to, long startTick) {
+            this.entity = entity;
+            this.from = from;
+            this.to = to;
+            // A flatter arc over a short distance, a lobbed one over a long shot.
+            this.arcHeight = Math.min(6.0, from.distanceTo(to) * 0.22);
+            this.startTick = startTick;
+            this.removeAt = startTick + ARROW_FLIGHT_TICKS + ARROW_LINGER_TICKS;
+            this.previous = from;
+        }
+    }
+
+    private static final List<FlyingArrow> arrows = new ArrayList<>();
 
     private ClientDispensers() {
     }
@@ -65,6 +101,14 @@ public final class ClientDispensers {
 
     public static void setResult(FakeSpec spec) {
         result = spec;
+    }
+
+    public static Vec3d arrowTarget() {
+        return arrowTarget;
+    }
+
+    public static void setArrowTarget(Vec3d target) {
+        arrowTarget = target;
     }
 
     public static void invalidateResult() {
@@ -98,7 +142,8 @@ public final class ClientDispensers {
         tick++;
 
         expire();
-        if (result == null || watched.isEmpty()) return;
+        flyArrows();
+        if ((result == null && arrowTarget == null) || watched.isEmpty()) return;
 
         for (BlockPos pos : watched) {
             // Don't reach into chunks the client has not got.
@@ -123,8 +168,78 @@ public final class ClientDispensers {
             PendingFire fire = iterator.next();
             if (tick < fire.fireAt()) continue;
             iterator.remove();
-            spawn(world, fire.pos());
+            if (result != null) spawn(world, fire.pos());
+            if (arrowTarget != null) launchArrow(world, fire.pos());
         }
+    }
+
+    /**
+     * Flies each arrow along its arc and parks it on the target.
+     *
+     * <p>The path is interpolated rather than launched ballistically: solving for a velocity
+     * that lands on an exact point through Minecraft's drag is fiddly and approximate, and
+     * the whole point is that it never misses.
+     */
+    private static void flyArrows() {
+        Iterator<FlyingArrow> iterator = arrows.iterator();
+        while (iterator.hasNext()) {
+            FlyingArrow arrow = iterator.next();
+
+            if (arrow.entity.isRemoved()) {
+                iterator.remove();
+                continue;
+            }
+            if (tick >= arrow.removeAt) {
+                arrow.entity.discard();
+                iterator.remove();
+                continue;
+            }
+
+            double progress = (tick - arrow.startTick) / (double) ARROW_FLIGHT_TICKS;
+            Vec3d position;
+            if (progress >= 1.0) {
+                position = arrow.to;
+            } else {
+                position = new Vec3d(
+                        MathHelper.lerp(progress, arrow.from.x, arrow.to.x),
+                        MathHelper.lerp(progress, arrow.from.y, arrow.to.y)
+                                + arrow.arcHeight * Math.sin(Math.PI * progress),
+                        MathHelper.lerp(progress, arrow.from.z, arrow.to.z));
+            }
+
+            Vec3d step = position.subtract(arrow.previous);
+            if (step.lengthSquared() > 1.0E-6) {
+                double flat = Math.sqrt(step.x * step.x + step.z * step.z);
+                arrow.entity.setYaw((float) (MathHelper.atan2(step.z, step.x) * 180.0 / Math.PI) - 90.0F);
+                arrow.entity.setPitch((float) (-(MathHelper.atan2(step.y, flat) * 180.0 / Math.PI)));
+            }
+
+            arrow.entity.setPosition(position.x, position.y, position.z);
+            arrow.previous = position;
+        }
+    }
+
+    private static void launchArrow(ClientWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        Direction facing = state.getBlock() instanceof DispenserBlock
+                ? state.get(DispenserBlock.FACING) : Direction.UP;
+
+        Vec3d from = new Vec3d(
+                pos.getX() + 0.5 + facing.getOffsetX() * 0.6,
+                pos.getY() + 0.5 + facing.getOffsetY() * 0.6,
+                pos.getZ() + 0.5 + facing.getOffsetZ() * 0.6);
+
+        ArrowEntity arrow = new ArrowEntity(world, from.x, from.y, from.z,
+                new ItemStack(Items.ARROW), null);
+        arrow.setId(nextId());
+        // We drive the position ourselves, so keep vanilla physics out of it entirely.
+        arrow.setNoGravity(true);
+        arrow.noClip = true;
+        arrow.setVelocity(Vec3d.ZERO);
+        arrow.setPosition(from.x, from.y, from.z);
+
+        world.addEntity(arrow);
+        arrows.add(new FlyingArrow(arrow, from, arrowTarget, tick));
     }
 
     private static void spawn(ClientWorld world, BlockPos pos) {
@@ -172,6 +287,7 @@ public final class ClientDispensers {
 
     /** Leaving a world takes the client entities with it. */
     public static void reset() {
+        arrows.clear();
         spawned.clear();
         pending.clear();
         lastTriggered.clear();
@@ -186,6 +302,10 @@ public final class ClientDispensers {
         }
         root.add("watchedDispensers", positions);
         if (result != null) root.add("dispenserResult", SelfFakes.writeSpec(result));
+        if (arrowTarget != null) {
+            root.addProperty("arrowTarget",
+                    arrowTarget.x + "," + arrowTarget.y + "," + arrowTarget.z);
+        }
     }
 
     public static void load(JsonObject root) {
@@ -202,6 +322,19 @@ public final class ClientDispensers {
                             Integer.parseInt(parts[1]), Integer.parseInt(parts[2])));
                 } catch (NumberFormatException ignored) {
                     // skip an unreadable position
+                }
+            }
+        }
+
+        arrowTarget = null;
+        if (root.has("arrowTarget")) {
+            String[] parts = root.get("arrowTarget").getAsString().split(",");
+            if (parts.length == 3) {
+                try {
+                    arrowTarget = new Vec3d(Double.parseDouble(parts[0]),
+                            Double.parseDouble(parts[1]), Double.parseDouble(parts[2]));
+                } catch (NumberFormatException ignored) {
+                    // skip an unreadable target
                 }
             }
         }

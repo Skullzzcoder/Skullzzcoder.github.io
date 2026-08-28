@@ -238,6 +238,9 @@ tasks.register('inspectApi') {
                             'net.minecraft.item.ItemStack'                  : ['set', 'count', 'name'],
                             'net.minecraft.screen.slot.Slot'                : ['stack'],
                             'net.minecraft.client.world.ClientWorld'        : ['addentity', 'chunk', 'random'],
+                            'net.minecraft.entity.projectile.ArrowEntity'   : [],
+                            'net.minecraft.util.math.MathHelper'            : ['lerp', 'atan2'],
+                            'net.minecraft.util.hit.BlockHitResult'         : ['pos', 'side'],
                             'net.minecraft.client.gui.widget.ClickableWidget': ['visible', 'active', 'getx', 'gety'],
                     ].each { className, filters ->
                         def type = load(className)
