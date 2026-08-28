@@ -3,6 +3,18 @@ pluginManagement {
         maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
         gradlePluginPortal()
     }
+
+    resolutionStrategy {
+        eachPlugin {
+            // Map the plugin id onto Loom's real coordinates. The plugin-marker artifact
+            // cannot be resolved with a dynamic version, but the real module can, which is
+            // what lets build.gradle ask for the newest 1.x Loom rather than pinning a
+            // version that may be too old for the targeted Fabric API.
+            if (requested.id.id == 'fabric-loom') {
+                useModule("net.fabricmc:fabric-loom:${requested.version}")
+            }
+        }
+    }
 }
 
 rootProject.name = 'mirage'

@@ -1,5 +1,9 @@
 plugins {
-    id 'fabric-loom' version '1.11-SNAPSHOT'
+    // Newest 1.x Loom. A pinned older Loom fails during Minecraft setup against a recent
+    // Fabric API with "Javadoc provided by mod (...) must be have an intermediary source
+    // namespace". settings.gradle maps this id onto net.fabricmc:fabric-loom so the range
+    // resolves. Pin an exact version here if you ever need a reproducible toolchain.
+    id 'fabric-loom' version '1.+'
     id 'maven-publish'
 }
 
