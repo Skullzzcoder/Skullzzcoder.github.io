@@ -91,6 +91,9 @@ tasks.register('inspectApi') {
         // narrow, and let a single unprintable member be skipped rather than aborting.
         def dump
         dump = { Class type, List filters, String note ->
+          // Blanket guard: reading any member can trigger loading a class that fails
+          // verification, and this is a diagnostic tool -- it must never fail the build.
+          try {
             println ""
             println "== ${type.name}${note}"
             def lines = [] as TreeSet
@@ -138,6 +141,9 @@ tasks.register('inspectApi') {
                 lines.each { println it }
             }
             if (skipped > 0) println "  (${skipped} member(s) skipped: signature classes would not load)"
+          } catch (Throwable failure) {
+            println "  <could not inspect ${type}: ${failure}>"
+          }
         }
 
         def load = { String name ->
@@ -183,34 +189,45 @@ tasks.register('inspectApi') {
             }
         }
 
-        def source = load('net.minecraft.server.command.ServerCommandSource')
-        if (source != null) {
-            dump(source, ['permission', 'player', 'entity', 'server'], '')
-
-            def permissions = follow(source, 'getPermissions')
-            // ...and what hasPermission wants handed to it.
-            if (permissions != null) follow(permissions.returnType, 'hasPermission')
+        [
+                { ->
+                    def source = load('net.minecraft.server.command.ServerCommandSource')
+                    if (source != null) {
+                        dump(source, ['permission', 'player', 'entity', 'server'], '')
+                        def permissions = follow(source, 'getPermissions')
+                        if (permissions != null) follow(permissions.returnType, 'hasPermission')
+                    }
+                },
+                { ->
+                    def commandManager = load('net.minecraft.server.command.CommandManager')
+                    if (commandManager != null) {
+                        dump(commandManager, ['permission', 'require', 'level'], '')
+                        follow(commandManager, 'requirePermissionLevel')
+                    }
+                },
+                { ->
+                    def playerManager = load('net.minecraft.server.PlayerManager')
+                    if (playerManager != null) {
+                        dump(playerManager, ['operator', 'permission', 'op'], '')
+                        follow(playerManager, 'isOperator')
+                    }
+                },
+                { ->
+                    def player = load('net.minecraft.server.network.ServerPlayerEntity')
+                    if (player != null) dump(player, ['config', 'profile', 'permission', 'operator'], '')
+                },
+                { ->
+                    def server = load('net.minecraft.server.MinecraftServer')
+                    if (server != null) dump(server, ['operator', 'permission', 'playermanager', 'host'], '')
+                },
+        ].each { section ->
+            try {
+                section()
+            } catch (Throwable failure) {
+                println ""
+                println "  <section failed: ${failure}>"
+            }
         }
-
-        def commandManager = load('net.minecraft.server.command.CommandManager')
-        if (commandManager != null) {
-            dump(commandManager, ['permission', 'require', 'level'], '')
-            follow(commandManager, 'requirePermissionLevel')
-        }
-
-        // The fallback route: read operator status straight off the server. isOperator now
-        // takes a PlayerConfigEntry, so follow it to find that type and how one is built.
-        def playerManager = load('net.minecraft.server.PlayerManager')
-        if (playerManager != null) {
-            dump(playerManager, ['operator', 'permission', 'op'], '')
-            follow(playerManager, 'isOperator')
-        }
-
-        def player = load('net.minecraft.server.network.ServerPlayerEntity')
-        if (player != null) dump(player, ['config', 'profile', 'permission', 'operator'], '')
-
-        def server = load('net.minecraft.server.MinecraftServer')
-        if (server != null) dump(server, ['operator', 'permission', 'playermanager', 'host'], '')
 
         println ""
     }

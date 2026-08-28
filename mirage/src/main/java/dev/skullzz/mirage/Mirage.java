@@ -167,8 +167,9 @@ public class Mirage implements ModInitializer {
             if (world == null) continue;
 
             BlockPos pos = key.pos();
-            // Don't force chunks to load just to watch a prank.
-            if (!world.isChunkLoaded(pos)) continue;
+            // Don't force chunks to load just to watch a prank. The BlockPos overload of
+            // isChunkLoaded is deprecated, so pass chunk coordinates.
+            if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
 
             BlockState state = world.getBlockState(pos);
             if (!(state.getBlock() instanceof DispenserBlock)) {
