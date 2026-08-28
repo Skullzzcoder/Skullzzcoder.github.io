@@ -38,7 +38,7 @@ public final class MirageCommands {
                                 CommandRegistryAccess registryAccess,
                                 CommandManager.RegistrationEnvironment environment) {
         dispatcher.register(CommandManager.literal("mirage")
-                .requires(source -> source.hasPermissionLevel(2))
+                .requires(source -> source.hasPermission(2))
                 .then(ghost(registryAccess))
                 .then(dispenser(registryAccess))
                 .then(CommandManager.literal("refresh")
@@ -89,7 +89,7 @@ public final class MirageCommands {
         Mirage.STATE.save(context.getSource().getServer());
         Mirage.pushGhosts(target, ghosts);
 
-        context.getSource().sendFeedback(() -> Text.literal(target.getGameProfile().getName() + " now sees "
+        context.getSource().sendFeedback(() -> Text.literal(nameOf(target) + " now sees "
                         + describe(stack) + " in " + slotName).formatted(Formatting.GREEN), false);
         return 1;
     }
@@ -98,7 +98,7 @@ public final class MirageCommands {
         ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
 
         if (Mirage.STATE.ghosts.remove(target.getUuid()) == null) {
-            context.getSource().sendError(Text.literal(target.getGameProfile().getName() + " has no ghost items."));
+            context.getSource().sendError(Text.literal(nameOf(target) + " has no ghost items."));
             return 0;
         }
 
@@ -106,7 +106,7 @@ public final class MirageCommands {
         Mirage.resync(target);
 
         context.getSource().sendFeedback(() -> Text.literal("Cleared every ghost item from "
-                + target.getGameProfile().getName() + ".").formatted(Formatting.GREEN), false);
+                + nameOf(target) + ".").formatted(Formatting.GREEN), false);
         return 1;
     }
 
@@ -140,12 +140,12 @@ public final class MirageCommands {
         Map<Integer, ItemStack> ghosts = Mirage.STATE.ghosts.get(target.getUuid());
 
         if (ghosts == null || ghosts.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal(target.getGameProfile().getName()
+            context.getSource().sendFeedback(() -> Text.literal(nameOf(target)
                     + " has no ghost items."), false);
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal(target.getGameProfile().getName() + " is seeing:")
+        context.getSource().sendFeedback(() -> Text.literal(nameOf(target) + " is seeing:")
                 .formatted(Formatting.AQUA), false);
         for (Map.Entry<Integer, ItemStack> entry : ghosts.entrySet()) {
             String line = "  " + GhostSlots.nameOf(entry.getKey()) + ": " + describe(entry.getValue());
@@ -227,7 +227,7 @@ public final class MirageCommands {
         rig.onlyPlayer = target.getUuid();
         Mirage.STATE.save(context.getSource().getServer());
 
-        context.getSource().sendFeedback(() -> Text.literal("Only " + target.getGameProfile().getName()
+        context.getSource().sendFeedback(() -> Text.literal("Only " + nameOf(target)
                 + " will see the fake contents at " + key + ".").formatted(Formatting.GREEN), false);
         return 1;
     }
@@ -279,7 +279,7 @@ public final class MirageCommands {
             if (!rig.result.isEmpty()) line.append(", fires ").append(describe(rig.result));
             if (rig.onlyPlayer != null) {
                 ServerPlayerEntity only = context.getSource().getServer().getPlayerManager().getPlayer(rig.onlyPlayer);
-                line.append(", only ").append(only == null ? rig.onlyPlayer.toString() : only.getGameProfile().getName());
+                line.append(", only ").append(only == null ? rig.onlyPlayer.toString() : nameOf(only));
             }
             String text = line.toString();
             context.getSource().sendFeedback(() -> Text.literal(text), false);
@@ -293,7 +293,7 @@ public final class MirageCommands {
         ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
         Mirage.resync(target);
 
-        context.getSource().sendFeedback(() -> Text.literal("Resynced " + target.getGameProfile().getName()
+        context.getSource().sendFeedback(() -> Text.literal("Resynced " + nameOf(target)
                 + ". Any ghosts come back on the next refresh unless you cleared them.")
                 .formatted(Formatting.GREEN), false);
         return 1;
@@ -311,6 +311,11 @@ public final class MirageCommands {
                     "Heads up: there is no dispenser at " + key + " yet. The rig is saved and will "
                             + "start working as soon as one is placed there.").formatted(Formatting.YELLOW), false);
         }
+    }
+
+    /** GameProfile is a record in current authlib, so the accessor is name(), not getName(). */
+    private static String nameOf(ServerPlayerEntity player) {
+        return player.getGameProfile().name();
     }
 
     private static String describe(ItemStack stack) {

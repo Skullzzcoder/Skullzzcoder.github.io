@@ -68,3 +68,62 @@ jar {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
 }
+
+/**
+ * Prints the real members of the Minecraft classes this mod leans on, read straight off the
+ * remapped compile classpath. Run this when a "cannot find symbol" error means a yarn name
+ * moved between versions: gradlew inspectApi
+ */
+tasks.register('inspectApi') {
+    group = 'help'
+    description = 'Prints members of the Minecraft classes this mod depends on.'
+    notCompatibleWithConfigurationCache('Loads classes from the compile classpath.')
+
+    def compileClasspath = sourceSets.main.compileClasspath
+
+    doLast {
+        // Only members whose name contains one of the filters are printed; an empty filter
+        // list prints everything the class declares.
+        def targets = [
+                'net.minecraft.server.command.ServerCommandSource': ['permission', 'feedback', 'error'],
+                'com.mojang.authlib.GameProfile'                  : [],
+                'net.minecraft.entity.ItemEntity'                 : ['pickup', 'velocity'],
+                'net.minecraft.entity.Entity'                     : ['velocity'],
+                'net.minecraft.world.World'                       : ['chunk', 'loaded'],
+                'net.minecraft.screen.ScreenHandler'              : ['revision', 'sync', 'slot'],
+        ]
+
+        def urls = compileClasspath.files.collect { it.toURI().toURL() }
+        def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
+
+        targets.each { className, filters ->
+            println ""
+            println "== ${className}"
+            try {
+                def type = loader.loadClass(className)
+                def lines = [] as TreeSet
+
+                type.methods.each { method ->
+                    if (filters.isEmpty() || filters.any { method.name.toLowerCase().contains(it) }) {
+                        def params = method.parameterTypes.collect { it.simpleName }.join(', ')
+                        lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
+                    }
+                }
+                type.fields.each { field ->
+                    if (filters.isEmpty() || filters.any { field.name.toLowerCase().contains(it) }) {
+                        lines << "  [field] ${field.type.simpleName} ${field.name}"
+                    }
+                }
+
+                if (lines.isEmpty()) {
+                    println "  <nothing matched the filters ${filters}>"
+                } else {
+                    lines.each { println it }
+                }
+            } catch (Throwable failure) {
+                println "  <could not inspect: ${failure}>"
+            }
+        }
+        println ""
+    }
+}

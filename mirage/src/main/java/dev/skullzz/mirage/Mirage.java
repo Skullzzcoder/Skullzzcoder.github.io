@@ -220,7 +220,6 @@ public class Mirage implements ModInitializer {
                 facing.getOffsetX() * 0.22 + (random.nextDouble() - 0.5) * spread,
                 facing.getOffsetY() * 0.22 + 0.10 + (random.nextDouble() - 0.5) * spread,
                 facing.getOffsetZ() * 0.22 + (random.nextDouble() - 0.5) * spread);
-        item.velocityModified = true;
 
         world.spawnEntity(item);
         world.playSound(null, pos, SoundEvents.BLOCK_DISPENSER_DISPENSE, SoundCategory.BLOCKS, 1.0F, 1.0F);
