@@ -72,8 +72,16 @@ State lives in `<world>/mirage.json`, so pranks survive a restart.
 
 ## Commands
 
-All of `/mirage` needs permission level 2 (op). Command output goes only to you — it is not
-broadcast to other operators.
+On a dedicated server, all of `/mirage` requires op. In a single-player or LAN world it is
+available to anyone in that world, because an integrated server keeps no op list — the host
+holds full permissions without appearing in `ops.json`, so an op-list check would hide the
+command from the very person running it.
+
+Command output goes only to you — it is not broadcast to other operators.
+
+If `/mirage` does not tab-complete at all, that is this permission check refusing you, which
+looks identical to the mod having failed to load. Check the log for `Mirage loaded` to tell
+the two apart.
 
 ### Ghost items in someone's inventory
 

@@ -18,6 +18,7 @@ import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.command.argument.ItemStackArgumentType;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -321,10 +322,18 @@ public final class MirageCommands {
         // The console and command blocks are trusted.
         if (!source.isExecutedByPlayer()) return true;
 
+        MinecraftServer server = source.getServer();
+
+        // An integrated server keeps no op list: the host of a single-player or LAN world
+        // holds permission level 4 without ever appearing in ops.json. Checking only the op
+        // list there hides the whole command tree, which looks exactly like a mod that
+        // failed to load. So trust a local world, and require op on a dedicated server.
+        if (!server.isDedicated()) return true;
+
         // isOperator takes a PlayerConfigEntry in 1.21.11, not a GameProfile. This accessor
         // avoids naming that type, whose package we would otherwise have to import.
         return source.getEntity() instanceof ServerPlayerEntity player
-                && source.getServer().getPlayerManager().isOperator(player.getPlayerConfigEntry());
+                && server.getPlayerManager().isOperator(player.getPlayerConfigEntry());
     }
 
     /** GameProfile is a record in current authlib, so the accessor is name(), not getName(). */
