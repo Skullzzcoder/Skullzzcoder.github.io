@@ -220,6 +220,23 @@ tasks.register('inspectApi') {
                     def server = load('net.minecraft.server.MinecraftServer')
                     if (server != null) dump(server, ['operator', 'permission', 'playermanager', 'host'], '')
                 },
+                { ->
+                    // Client-side surfaces used by the fake-items GUI.
+                    [
+                            'net.minecraft.client.MinecraftClient'          : ['screen', 'execute', 'player'],
+                            'net.minecraft.client.network.ClientPlayerEntity': ['inventory'],
+                            'net.minecraft.entity.player.PlayerInventory'   : ['stack'],
+                            'net.minecraft.registry.Registries'             : ['item'],
+                            'net.minecraft.registry.Registry'               : ['get'],
+                            'net.minecraft.client.gui.screen.Screen'        : ['init', 'render', 'drawable', 'close', 'pause'],
+                            'net.minecraft.client.gui.DrawContext'          : ['text', 'item'],
+                            'net.minecraft.client.gui.widget.ButtonWidget'  : ['build', 'dimension', 'message'],
+                            'net.minecraft.client.gui.widget.TextFieldWidget': ['text', 'placeholder', 'max'],
+                    ].each { className, filters ->
+                        def type = load(className)
+                        if (type != null) dump(type, filters, '')
+                    }
+                },
         ].each { section ->
             try {
                 section()

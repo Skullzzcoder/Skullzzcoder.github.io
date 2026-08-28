@@ -8,7 +8,8 @@
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "main": ["dev.skullzz.mirage.Mirage"]
+    "main": ["dev.skullzz.mirage.Mirage"],
+    "client": ["dev.skullzz.mirage.client.MirageClient"]
   },
   "depends": {
     "fabricloader": ">=0.16.0",

@@ -70,6 +70,46 @@ your server's `mods/` folder and restart. Nothing goes on the clients.
 
 State lives in `<world>/mirage.json`, so pranks survive a restart.
 
+## Client-side fake items (no server needed)
+
+Everything above needs the mod on the **server**, because only the server can send packets
+to other players' clients. If you play on a server you cannot install mods on, the client
+half still works — but the fakes appear **only on your own screen**. Nobody standing next
+to you sees anything. It is for screenshots, recordings and screen-shares, not for pranks.
+
+Open the menu:
+
+```
+/fake ui
+```
+
+That is a *client* command: your client intercepts it, so it works on any server and is
+never sent to anyone. Type an item name, then click the slots it should appear in. An empty
+item field turns a click into a clear. There are typed equivalents too:
+
+```
+/fake set hotbar3 diamond_block 64
+/fake clear [slot]
+/fake list
+```
+
+Slots are `hotbar1`–`hotbar9` and `inv1`–`inv27`.
+
+### How it works, and why it is safe on someone else's server
+
+The fake stacks are written into your client's own copy of your inventory each tick, so
+vanilla draws them everywhere for free — hotbar, inventory screen, held item. Nothing is
+transmitted: a Minecraft client sends *actions* ("I right-clicked"), never item identities,
+so the server's view of your inventory is untouched and there is nothing for an anticheat
+to see. Interacting with a fake simply does whatever your real item in that slot does.
+
+The real stack a fake covers is remembered, so clearing a fake puts the truth straight back
+rather than waiting for the server to next touch that slot. Fakes persist in
+`config/mirage-client.json`.
+
+Client fakes carry an item and a count only, not enchantments or custom names — the
+server-side ghosts above keep full data components.
+
 ## Commands
 
 On a dedicated server, all of `/mirage` requires op. In a single-player or LAN world it is
