@@ -38,7 +38,7 @@ public final class MirageCommands {
                                 CommandRegistryAccess registryAccess,
                                 CommandManager.RegistrationEnvironment environment) {
         dispatcher.register(CommandManager.literal("mirage")
-                .requires(source -> source.hasPermission(2))
+                .requires(source -> source.getPermissions().test(2))
                 .then(ghost(registryAccess))
                 .then(dispenser(registryAccess))
                 .then(CommandManager.literal("refresh")

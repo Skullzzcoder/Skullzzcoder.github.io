@@ -82,48 +82,64 @@ tasks.register('inspectApi') {
     def compileClasspath = sourceSets.main.compileClasspath
 
     doLast {
-        // Only members whose name contains one of the filters are printed; an empty filter
-        // list prints everything the class declares.
-        def targets = [
-                'net.minecraft.server.command.ServerCommandSource': ['permission', 'feedback', 'error'],
-                'com.mojang.authlib.GameProfile'                  : [],
-                'net.minecraft.entity.ItemEntity'                 : ['pickup', 'velocity'],
-                'net.minecraft.entity.Entity'                     : ['velocity'],
-                'net.minecraft.world.World'                       : ['chunk', 'loaded'],
-                'net.minecraft.screen.ScreenHandler'              : ['revision', 'sync', 'slot'],
-        ]
-
         def urls = compileClasspath.files.collect { it.toURI().toURL() }
         def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
 
-        targets.each { className, filters ->
+        // Only members whose name contains one of the filters are printed; an empty filter
+        // list prints everything the class declares.
+        def dump = { Class type, List filters, String note ->
             println ""
-            println "== ${className}"
-            try {
-                def type = loader.loadClass(className)
-                def lines = [] as TreeSet
-
-                type.methods.each { method ->
-                    if (filters.isEmpty() || filters.any { method.name.toLowerCase().contains(it) }) {
-                        def params = method.parameterTypes.collect { it.simpleName }.join(', ')
-                        lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
-                    }
+            println "== ${type.name}${note}"
+            def lines = [] as TreeSet
+            type.methods.each { method ->
+                if (method.declaringClass == Object.class) return
+                if (filters.isEmpty() || filters.any { method.name.toLowerCase().contains(it) }) {
+                    def params = method.parameterTypes.collect { it.simpleName }.join(', ')
+                    lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
                 }
-                type.fields.each { field ->
-                    if (filters.isEmpty() || filters.any { field.name.toLowerCase().contains(it) }) {
-                        lines << "  [field] ${field.type.simpleName} ${field.name}"
-                    }
+            }
+            type.fields.each { field ->
+                if (filters.isEmpty() || filters.any { field.name.toLowerCase().contains(it) }) {
+                    lines << "  [field] ${field.type.simpleName} ${field.name}"
                 }
-
-                if (lines.isEmpty()) {
-                    println "  <nothing matched the filters ${filters}>"
-                } else {
-                    lines.each { println it }
-                }
-            } catch (Throwable failure) {
-                println "  <could not inspect: ${failure}>"
+            }
+            if (lines.isEmpty()) {
+                println "  <nothing matched the filters ${filters}>"
+            } else {
+                lines.each { println it }
             }
         }
+
+        def load = { String name ->
+            try {
+                return loader.loadClass(name)
+            } catch (Throwable failure) {
+                println ""
+                println "== ${name}"
+                println "  <could not load: ${failure}>"
+                return null
+            }
+        }
+
+        // Everything ServerCommandSource offers, since the permission API moved and the
+        // replacement is not obvious from the name alone.
+        def source = load('net.minecraft.server.command.ServerCommandSource')
+        if (source != null) {
+            dump(source, [], '')
+
+            // Follow the type getPermissions() hands back, whatever it is called, so the
+            // real permission check can be read off without knowing its package.
+            def permissions = source.methods.find { it.name == 'getPermissions' }
+            if (permissions != null) {
+                dump(permissions.returnType, [], '  (returned by ServerCommandSource#getPermissions)')
+            }
+        }
+
+        def commandManager = load('net.minecraft.server.command.CommandManager')
+        if (commandManager != null) {
+            dump(commandManager, ['permission', 'require', 'level'], '')
+        }
+
         println ""
     }
 }

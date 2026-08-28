@@ -168,7 +168,7 @@ public class Mirage implements ModInitializer {
 
             BlockPos pos = key.pos();
             // Don't force chunks to load just to watch a prank.
-            if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
+            if (!world.isChunkLoaded(pos)) continue;
 
             BlockState state = world.getBlockState(pos);
             if (!(state.getBlock() instanceof DispenserBlock)) {
@@ -220,6 +220,7 @@ public class Mirage implements ModInitializer {
                 facing.getOffsetX() * 0.22 + (random.nextDouble() - 0.5) * spread,
                 facing.getOffsetY() * 0.22 + 0.10 + (random.nextDouble() - 0.5) * spread,
                 facing.getOffsetZ() * 0.22 + (random.nextDouble() - 0.5) * spread);
+        item.velocityDirty = true;
 
         world.spawnEntity(item);
         world.playSound(null, pos, SoundEvents.BLOCK_DISPENSER_DISPENSE, SoundCategory.BLOCKS, 1.0F, 1.0F);
