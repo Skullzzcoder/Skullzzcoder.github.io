@@ -44,6 +44,9 @@ public final class SelfFakes {
     /** The exact stack instance we last wrote, to spot the server overwriting it. */
     private static final Map<Integer, ItemStack> applied = new HashMap<>();
 
+    /** Item id index, built on first use. The registry is fixed once the game is running. */
+    private static Map<Identifier, Item> itemsById;
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     public static final int SLOT_COUNT = 36;
 
@@ -82,7 +85,13 @@ public final class SelfFakes {
         return names;
     }
 
-    /** Looks up an item id, with or without the namespace. Isolated: one place to fix. */
+    /**
+     * Looks up an item id, with or without the namespace.
+     *
+     * <p>Built by walking the registry once rather than calling a lookup method, because the
+     * shape of those has churned across versions while iteration and getId have not. The
+     * scan happens once and only on the first lookup, which is a menu click.
+     */
     public static Item lookupItem(String id) {
         String cleaned = id.toLowerCase(Locale.ROOT).trim();
         if (cleaned.isEmpty()) return null;
@@ -90,7 +99,15 @@ public final class SelfFakes {
 
         Identifier identifier = Identifier.tryParse(cleaned);
         if (identifier == null) return null;
-        return Registries.ITEM.getOrEmpty(identifier).orElse(null);
+
+        if (itemsById == null) {
+            Map<Identifier, Item> index = new HashMap<>();
+            for (Item candidate : Registries.ITEM) {
+                index.put(Registries.ITEM.getId(candidate), candidate);
+            }
+            itemsById = index;
+        }
+        return itemsById.get(identifier);
     }
 
     // ------------------------------------------------------------------- state
