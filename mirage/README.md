@@ -28,7 +28,22 @@ on a version bump — the worst case is that it stops working.
 
 ## Building
 
-You need a JDK 21. From the project folder (the one with `gradlew.bat` in it):
+**You need JDK 25.** Loom 1.17+ refuses to load on anything older, and Minecraft 1.21.11 is
+itself built for Java 25. If Gradle is running on an older JDK the build stops immediately
+with `Dependency requires at least JVM runtime version 25`.
+
+Get it from [Adoptium](https://adoptium.net/temurin/releases/?version=25) or
+`winget install EclipseAdoptium.Temurin.25.JDK`. Check what Gradle is actually using:
+
+```
+gradlew -version
+```
+
+If the `JVM:` line is not 25, either point `JAVA_HOME` at the new JDK, or uncomment the
+`org.gradle.java.home` line in `gradle.properties` — that changes this project only and
+leaves the rest of your machine alone.
+
+Then build:
 
 ```
 gradlew build
@@ -38,18 +53,22 @@ On macOS or Linux use `./gradlew build`; you may need `chmod +x gradlew` first.
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
-The toolchain versions in `gradle.properties` are set for Minecraft 1.21.11 and verified
-against Fabric's and Modrinth's APIs. If you retarget to another Minecraft version,
-regenerate them:
+### Toolchain versions
+
+`gradle.properties` is set for Minecraft 1.21.11 and verified against Fabric's and
+Modrinth's APIs. Retargeting another Minecraft version means regenerating them:
 
 ```
 powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write
 ```
 
 Drop `-Write` to print them instead of editing the file, or copy them from
-<https://fabricmc.net/develop/>. Loom resolves these while Gradle is still configuring the
-project, so if one is wrong the build stops before any Gradle task can run -- which is why
-the lookup is a standalone script and not a Gradle task.
+<https://fabricmc.net/develop/>. You may also need to change `java_version` (older
+Minecraft wants 21) and the pinned `fabric-loom` version in `build.gradle`.
+
+Loom resolves all of this while Gradle is still configuring the project, so if one value is
+wrong the build stops before any Gradle task can run — which is why the version lookup is a
+standalone script rather than a Gradle task.
 
 ## Installing
 
