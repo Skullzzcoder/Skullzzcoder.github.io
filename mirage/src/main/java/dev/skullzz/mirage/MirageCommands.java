@@ -321,8 +321,10 @@ public final class MirageCommands {
         // The console and command blocks are trusted.
         if (!source.isExecutedByPlayer()) return true;
 
+        // isOperator takes a PlayerConfigEntry in 1.21.11, not a GameProfile. This accessor
+        // avoids naming that type, whose package we would otherwise have to import.
         return source.getEntity() instanceof ServerPlayerEntity player
-                && source.getServer().getPlayerManager().isOperator(player.getGameProfile());
+                && source.getServer().getPlayerManager().isOperator(player.getPlayerConfigEntry());
     }
 
     /** GameProfile is a record in current authlib, so the accessor is name(), not getName(). */

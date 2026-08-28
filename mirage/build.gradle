@@ -57,6 +57,7 @@ def javaVersion = Integer.parseInt((project.findProperty('java_version') ?: '21'
 // sourceCompatibility/targetCompatibility it is not deprecated under Gradle 9.
 tasks.withType(JavaCompile).configureEach {
     it.options.release = javaVersion
+    it.options.compilerArgs << '-Xlint:deprecation'
 }
 
 java {
@@ -114,6 +115,17 @@ tasks.register('inspectApi') {
                         }
                     } catch (Throwable ignored) {
                         skipped++
+                    }
+                }
+                // Constructors have no name to filter on, so only list them on a full dump.
+                if (filters.isEmpty()) {
+                    type.constructors.each { constructor ->
+                        try {
+                            def params = constructor.parameterTypes.collect { it.simpleName }.join(', ')
+                            lines << "  [ctor] ${type.simpleName}(${params})"
+                        } catch (Throwable ignored) {
+                            skipped++
+                        }
                     }
                 }
             } catch (Throwable failure) {
@@ -186,12 +198,19 @@ tasks.register('inspectApi') {
             follow(commandManager, 'requirePermissionLevel')
         }
 
-        // The fallback route: read operator status straight off the server.
+        // The fallback route: read operator status straight off the server. isOperator now
+        // takes a PlayerConfigEntry, so follow it to find that type and how one is built.
         def playerManager = load('net.minecraft.server.PlayerManager')
-        if (playerManager != null) dump(playerManager, ['operator', 'permission', 'op'], '')
+        if (playerManager != null) {
+            dump(playerManager, ['operator', 'permission', 'op'], '')
+            follow(playerManager, 'isOperator')
+        }
+
+        def player = load('net.minecraft.server.network.ServerPlayerEntity')
+        if (player != null) dump(player, ['config', 'profile', 'permission', 'operator'], '')
 
         def server = load('net.minecraft.server.MinecraftServer')
-        if (server != null) dump(server, ['operator', 'permission', 'playermanager'], '')
+        if (server != null) dump(server, ['operator', 'permission', 'playermanager', 'host'], '')
 
         println ""
     }
