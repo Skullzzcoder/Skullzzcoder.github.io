@@ -28,28 +28,17 @@ on a version bump — the worst case is that it stops working.
 
 ## Building
 
-**You need JDK 25.** Loom 1.17+ refuses to load on anything older, and Minecraft 1.21.11 is
-itself built for Java 25. If Gradle is running on an older JDK the build stops immediately
-with `Dependency requires at least JVM runtime version 25`.
-
-Get it from [Adoptium](https://adoptium.net/temurin/releases/?version=25) or
-`winget install EclipseAdoptium.Temurin.25.JDK`. Check what Gradle is actually using:
-
-```
-gradlew -version
-```
-
-If the `JVM:` line is not 25, either point `JAVA_HOME` at the new JDK, or uncomment the
-`org.gradle.java.home` line in `gradle.properties` — that changes this project only and
-leaves the rest of your machine alone.
-
-Then build:
+JDK 21 is enough. From the project folder (the one with `gradlew.bat` in it):
 
 ```
 gradlew build
 ```
 
 On macOS or Linux use `./gradlew build`; you may need `chmod +x gradlew` first.
+
+The first run downloads Gradle 9.5.1, which takes a minute. Loom 1.17.20 declares
+`org.gradle.plugin.api-version` 9.5.0, so an older wrapper fails to resolve the plugin at
+all — hence the pinned distribution in `gradle/wrapper/gradle-wrapper.properties`.
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
@@ -63,8 +52,12 @@ powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write
 ```
 
 Drop `-Write` to print them instead of editing the file, or copy them from
-<https://fabricmc.net/develop/>. You may also need to change `java_version` (older
-Minecraft wants 21) and the pinned `fabric-loom` version in `build.gradle`.
+<https://fabricmc.net/develop/>. You may also need to change the pinned `fabric-loom`
+version in `build.gradle` — and if Loom changes, check that the wrapper's Gradle version
+still satisfies whatever `org.gradle.plugin.api-version` that Loom declares.
+
+`java_version` sets the bytecode level of the jar. 21 loads on any Java 21+ server; raise
+it only if the compiler reports that Minecraft's class files are newer than that.
 
 Loom resolves all of this while Gradle is still configuring the project, so if one value is
 wrong the build stops before any Gradle task can run — which is why the version lookup is a

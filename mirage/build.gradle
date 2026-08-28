@@ -2,7 +2,8 @@ plugins {
     // Newest stable Loom. Older Loom (1.11) fails during Minecraft setup against a recent
     // Fabric API with "Javadoc provided by mod (...) must be have an intermediary source
     // namespace"; a dynamic range picks up 1.18.0-alpha builds, which we do not want.
-    // Loom from this era requires Gradle itself to run on JDK 25 -- see the README.
+    // This Loom declares org.gradle.plugin.api-version 9.5.0, so the wrapper must be
+    // Gradle 9.5 or newer -- see gradle/wrapper/gradle-wrapper.properties.
     id 'fabric-loom' version '1.17.20'
     id 'maven-publish'
 }
@@ -48,18 +49,18 @@ processResources {
     }
 }
 
-// Minecraft 1.21.11 is built for Java 25. Override with java_version in gradle.properties
-// if you are targeting an older Minecraft that still wants 21.
-def javaVersion = Integer.parseInt((project.findProperty('java_version') ?: '25').toString())
+// Compile target. 21 keeps the jar loadable on any Java 21+ server; raise it only if
+// compilation complains that Minecraft's class files are a newer version than this.
+def javaVersion = Integer.parseInt((project.findProperty('java_version') ?: '21').toString())
 
+// options.release alone pins both source and target, and unlike the java extension's
+// sourceCompatibility/targetCompatibility it is not deprecated under Gradle 9.
 tasks.withType(JavaCompile).configureEach {
     it.options.release = javaVersion
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.toVersion(javaVersion)
-    targetCompatibility = JavaVersion.toVersion(javaVersion)
 }
 
 jar {
