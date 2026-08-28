@@ -95,6 +95,20 @@ item field turns a click into a clear. There are typed equivalents too:
 
 Slots are `hotbar1`–`hotbar9` and `inv1`–`inv27`.
 
+### Enchantments
+
+The menu's third field takes a spec like `sharpness:5, unbreaking:3`, or as a command:
+
+```
+/fake set hotbar1 netherite_sword 1 sharpness:5, unbreaking:3
+```
+
+These are drawn as lore lines plus the enchantment glint, not as real enchantment
+components. Building a real one needs a lookup in the dynamic enchantment registry, whose
+shape has changed repeatedly between versions; a vanilla tooltip renders enchantments as grey
+non-italic lines above the lore, which is exactly what this produces. Since only you ever see
+the item, the distinction is invisible.
+
 ### Fake dispenser and dropper contents
 
 The right-hand 3x3 grid in the menu is what you see when you open a dispenser or dropper.
@@ -108,6 +122,43 @@ Same rules: type an item, click a slot, empty field clears. Or:
 This paints the first nine slots of whatever container you open, which is exactly a
 dispenser or dropper's grid. Open a chest and its top row gets the same treatment — harmless,
 and it keeps the code free of guessing at screen types.
+
+### Fake ender chest contents
+
+The **Ender chest** tab fills a 9x3 grid, or:
+
+```
+/fake ender <slot 0-26> <item> [count]
+```
+
+Containers are told apart by size: nine slots is a dispenser or dropper, twenty-seven an
+ender chest. A normal chest is also twenty-seven and so shows the ender chest's fakes — a
+fair trade for not having to guess at screen handler types.
+
+### Making a dispenser appear to fire something
+
+Look at a dispenser and run:
+
+```
+/fake dispenser watch
+/fake dispenser result diamond_block
+```
+
+When that dispenser next fires, an item of your choosing appears to fly out, then vanishes
+after three seconds. The **Dispenser** tab has buttons for both steps.
+
+Firing is spotted from the vanilla `TRIGGERED` blockstate, which your client already
+receives, and the item is an entity added to your client world only. Only dispensers you
+explicitly watch are polled, so this costs a few blockstate reads per tick rather than a scan
+of everything around you.
+
+For the cleanest version of the gag, watch an **empty** dispenser: vanilla then does nothing
+visible and only your fake item comes out.
+
+```
+/fake dispenser unwatch        # the one you're looking at
+/fake dispenser unwatchall
+```
 
 ### Price lines
 

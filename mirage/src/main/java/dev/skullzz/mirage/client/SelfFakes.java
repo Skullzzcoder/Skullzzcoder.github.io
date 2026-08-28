@@ -34,36 +34,33 @@ import dev.skullzz.mirage.Mirage;
  *
  * <p>Nothing here reaches the server. The client transmits actions, never item identities,
  * so the server's view is untouched and nobody else sees any of this.
- *
- * <p>The real stack a fake covers is remembered, so clearing a fake puts the truth back
- * immediately rather than waiting for the server to next touch that slot.
  */
 public final class SelfFakes {
-    /** Inventory slot to the stack shown there. 0-8 is the hotbar, 9-35 the main inventory. */
-    private static final Map<Integer, ItemStack> fakes = new LinkedHashMap<>();
+    public static final int SLOT_COUNT = 36;
+    /** Container sizes we keep separate sets of fakes for. */
+    public static final int DISPENSER = 9;
+    public static final int ENDER_CHEST = 27;
+    /** Every container handler carries the player's 36 inventory slots after its own. */
+    private static final int PLAYER_SLOTS = 36;
+
+    private static final Map<Integer, FakeSpec> fakes = new LinkedHashMap<>();
     private static final Map<Integer, ItemStack> shadowed = new HashMap<>();
     /** The exact stack instance we last wrote, to spot the server overwriting it. */
     private static final Map<Integer, ItemStack> applied = new HashMap<>();
 
-    /** Slot 0-8 of whatever container is open: a dispenser or dropper's nine slots. */
-    private static final Map<Integer, ItemStack> containerFakes = new LinkedHashMap<>();
+    /** Container size to (slot to fake). 9 is a dispenser or dropper, 27 an ender chest. */
+    private static final Map<Integer, Map<Integer, FakeSpec>> containerFakes = new HashMap<>();
     private static final Map<Integer, ItemStack> containerShadowed = new HashMap<>();
     private static final Map<Integer, ItemStack> containerApplied = new HashMap<>();
 
-    /** Item id index, built on first use. The registry is fixed once the game is running. */
     private static Map<Identifier, Item> itemsById;
-
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-    public static final int SLOT_COUNT = 36;
-    public static final int CONTAINER_SLOT_COUNT = 9;
 
     private SelfFakes() {
     }
 
     // ------------------------------------------------------------------- slots
 
-    /** @return the inventory index for a friendly name, or -1. */
     public static int slotIndex(String name) {
         String cleaned = name.toLowerCase(Locale.ROOT).trim();
         try {
@@ -75,7 +72,7 @@ public final class SelfFakes {
                 if (number >= 1 && number <= 27) return 8 + number;
             }
         } catch (NumberFormatException ignored) {
-            // fall through to the failure below
+            // fall through
         }
         return -1;
     }
@@ -97,8 +94,7 @@ public final class SelfFakes {
      * Looks up an item id, with or without the namespace.
      *
      * <p>Built by walking the registry once rather than calling a lookup method, because the
-     * shape of those has churned across versions while iteration and getId have not. The
-     * scan happens once and only on the first lookup, which is a menu click.
+     * shape of those has churned across versions while iteration and getId have not.
      */
     public static Item lookupItem(String id) {
         String cleaned = id.toLowerCase(Locale.ROOT).trim();
@@ -118,14 +114,9 @@ public final class SelfFakes {
         return itemsById.get(identifier);
     }
 
-    /** Builds the stack as it will be shown, price lore included. */
-    public static ItemStack buildStack(Item item, int count) {
-        return FakeLore.applyTo(new ItemStack(item, Math.max(1, Math.min(count, 127))));
-    }
+    // --------------------------------------------------------- inventory fakes
 
-    // ------------------------------------------------------- inventory fakes
-
-    public static Map<Integer, ItemStack> all() {
+    public static Map<Integer, FakeSpec> all() {
         return fakes;
     }
 
@@ -134,20 +125,18 @@ public final class SelfFakes {
     }
 
     public static ItemStack get(int slot) {
-        ItemStack stack = fakes.get(slot);
-        return stack == null ? ItemStack.EMPTY : stack;
+        FakeSpec spec = fakes.get(slot);
+        return spec == null ? ItemStack.EMPTY : spec.stack();
     }
 
-    public static void set(int slot, ItemStack stack) {
-        if (slot < 0 || slot >= SLOT_COUNT || stack.isEmpty()) return;
-        fakes.put(slot, stack.copy());
+    public static void set(int slot, FakeSpec spec) {
+        if (slot < 0 || slot >= SLOT_COUNT) return;
+        fakes.put(slot, spec);
         save();
     }
 
-    /** Clears one slot and puts the real stack back on screen straight away. */
     public static void clear(int slot, ClientPlayerEntity player) {
         if (fakes.remove(slot) == null) return;
-
         ItemStack real = shadowed.remove(slot);
         applied.remove(slot);
         if (player != null && real != null) player.getInventory().setStack(slot, real);
@@ -156,67 +145,51 @@ public final class SelfFakes {
 
     public static void clearAll(ClientPlayerEntity player) {
         for (Integer slot : new ArrayList<>(fakes.keySet())) {
-            clearWithoutSaving(slot, player);
+            fakes.remove(slot);
+            ItemStack real = shadowed.remove(slot);
+            applied.remove(slot);
+            if (player != null && real != null) player.getInventory().setStack(slot, real);
         }
         save();
     }
 
-    private static void clearWithoutSaving(int slot, ClientPlayerEntity player) {
-        fakes.remove(slot);
-        ItemStack real = shadowed.remove(slot);
-        applied.remove(slot);
-        if (player != null && real != null) player.getInventory().setStack(slot, real);
+    // --------------------------------------------------------- container fakes
+
+    public static Map<Integer, FakeSpec> allContainer(int size) {
+        return containerFakes.computeIfAbsent(size, key -> new LinkedHashMap<>());
     }
 
-    // ------------------------------------------------------- container fakes
-
-    public static Map<Integer, ItemStack> allContainer() {
-        return containerFakes;
+    public static boolean hasContainer(int size, int slot) {
+        return allContainer(size).containsKey(slot);
     }
 
-    public static boolean hasContainer(int slot) {
-        return containerFakes.containsKey(slot);
+    public static ItemStack getContainer(int size, int slot) {
+        FakeSpec spec = allContainer(size).get(slot);
+        return spec == null ? ItemStack.EMPTY : spec.stack();
     }
 
-    public static ItemStack getContainer(int slot) {
-        ItemStack stack = containerFakes.get(slot);
-        return stack == null ? ItemStack.EMPTY : stack;
-    }
-
-    public static void setContainer(int slot, ItemStack stack) {
-        if (slot < 0 || slot >= CONTAINER_SLOT_COUNT || stack.isEmpty()) return;
-        containerFakes.put(slot, stack.copy());
+    public static void setContainer(int size, int slot, FakeSpec spec) {
+        if (slot < 0 || slot >= size) return;
+        allContainer(size).put(slot, spec);
         save();
     }
 
-    public static void clearContainer(int slot, ClientPlayerEntity player) {
-        if (containerFakes.remove(slot) == null) return;
-        restoreContainerSlot(slot, player);
-        save();
-    }
-
-    public static void clearAllContainer(ClientPlayerEntity player) {
-        for (Integer slot : new ArrayList<>(containerFakes.keySet())) {
-            containerFakes.remove(slot);
-            restoreContainerSlot(slot, player);
-        }
-        save();
-    }
-
-    private static void restoreContainerSlot(int slot, ClientPlayerEntity player) {
-        ItemStack real = containerShadowed.remove(slot);
+    public static void clearContainer(int size, int slot, ClientPlayerEntity player) {
+        if (allContainer(size).remove(slot) == null) return;
+        containerShadowed.remove(slot);
         containerApplied.remove(slot);
-        if (player == null || real == null) return;
+        save();
+    }
 
-        ScreenHandler handler = player.currentScreenHandler;
-        if (handler != player.playerScreenHandler && slot < handler.slots.size()) {
-            handler.setStackInSlot(slot, handler.getRevision(), real);
-        }
+    public static void clearAllContainers(ClientPlayerEntity player) {
+        containerFakes.clear();
+        containerShadowed.clear();
+        containerApplied.clear();
+        save();
     }
 
     // ----------------------------------------------------------------- applying
 
-    /** Repaints the fakes over the client's own state. Called every client tick. */
     public static void apply(ClientPlayerEntity player) {
         applyInventory(player);
         applyContainer(player);
@@ -226,16 +199,16 @@ public final class SelfFakes {
         if (fakes.isEmpty()) return;
         PlayerInventory inventory = player.getInventory();
 
-        for (Map.Entry<Integer, ItemStack> entry : fakes.entrySet()) {
+        for (Map.Entry<Integer, FakeSpec> entry : fakes.entrySet()) {
             int slot = entry.getKey();
             if (slot < 0 || slot >= SLOT_COUNT) continue;
 
             ItemStack current = inventory.getStack(slot);
-            // Identity, not equality: if this is not the very stack we wrote, the server
-            // has since replaced it, so that is the real item now hiding underneath.
+            // Identity, not equality: if this is not the very stack we wrote, the server has
+            // since replaced it, so that is the real item now hiding underneath.
             if (current != applied.get(slot)) {
                 shadowed.put(slot, current.copy());
-                ItemStack copy = entry.getValue().copy();
+                ItemStack copy = entry.getValue().stack().copy();
                 inventory.setStack(slot, copy);
                 applied.put(slot, copy);
             }
@@ -243,37 +216,42 @@ public final class SelfFakes {
     }
 
     /**
-     * Paints the container fakes into an open dispenser or dropper.
+     * Paints the fakes for whatever container is open.
      *
-     * <p>The first nine slots of any non-player screen handler are the container's own, which
-     * is exactly a dispenser or dropper's grid. Bigger containers get their top row faked;
-     * that is harmless and keeps this free of screen-type guessing.
+     * <p>The open container's own slots come before the player's 36, so its size identifies
+     * it well enough: nine is a dispenser or dropper, twenty-seven an ender chest. A normal
+     * chest is also twenty-seven and gets the ender chest's fakes, which is a fair trade for
+     * not having to guess at screen handler types.
      */
     private static void applyContainer(ClientPlayerEntity player) {
         ScreenHandler handler = player.currentScreenHandler;
         if (handler == player.playerScreenHandler) {
-            // Nothing is open, so anything we painted is gone with the screen.
+            // Nothing is open, so anything we painted went with the screen.
             containerApplied.clear();
             containerShadowed.clear();
             return;
         }
-        if (containerFakes.isEmpty() || handler.slots.size() < CONTAINER_SLOT_COUNT) return;
 
-        for (Map.Entry<Integer, ItemStack> entry : containerFakes.entrySet()) {
+        int size = handler.slots.size() - PLAYER_SLOTS;
+        if (size <= 0) return;
+
+        Map<Integer, FakeSpec> target = containerFakes.get(size);
+        if (target == null || target.isEmpty()) return;
+
+        for (Map.Entry<Integer, FakeSpec> entry : target.entrySet()) {
             int slot = entry.getKey();
-            if (slot < 0 || slot >= CONTAINER_SLOT_COUNT) continue;
+            if (slot < 0 || slot >= size) continue;
 
             ItemStack current = handler.getSlot(slot).getStack();
             if (current != containerApplied.get(slot)) {
                 containerShadowed.put(slot, current.copy());
-                ItemStack copy = entry.getValue().copy();
+                ItemStack copy = entry.getValue().stack().copy();
                 handler.setStackInSlot(slot, handler.getRevision(), copy);
                 containerApplied.put(slot, copy);
             }
         }
     }
 
-    /** Forgets what was underneath, e.g. after leaving a world. */
     public static void forgetShadows() {
         shadowed.clear();
         applied.clear();
@@ -282,20 +260,14 @@ public final class SelfFakes {
     }
 
     /** Rebuilds every fake so a changed price file shows up without retyping anything. */
-    public static void rebakeLore(ClientPlayerEntity player) {
-        rebake(fakes);
-        rebake(containerFakes);
-        // Force a repaint on the next tick.
+    public static void rebuildAll() {
+        for (FakeSpec spec : fakes.values()) spec.invalidate();
+        for (Map<Integer, FakeSpec> target : containerFakes.values()) {
+            for (FakeSpec spec : target.values()) spec.invalidate();
+        }
+        ClientDispensers.invalidateResult();
         applied.clear();
         containerApplied.clear();
-        save();
-    }
-
-    private static void rebake(Map<Integer, ItemStack> target) {
-        for (Map.Entry<Integer, ItemStack> entry : target.entrySet()) {
-            ItemStack old = entry.getValue();
-            entry.setValue(buildStack(old.getItem(), old.getCount()));
-        }
     }
 
     // -------------------------------------------------------------- persistence
@@ -316,13 +288,21 @@ public final class SelfFakes {
             if (!parsed.isJsonObject()) return;
             JsonObject root = parsed.getAsJsonObject();
 
-            if (root.has("inventory") || root.has("container")) {
-                if (root.has("inventory")) readSection(root.getAsJsonObject("inventory"), fakes);
-                if (root.has("container")) readSection(root.getAsJsonObject("container"), containerFakes);
-            } else {
-                // Files written before container fakes existed were a bare slot map.
+            if (root.has("inventory")) {
+                readSection(root.getAsJsonObject("inventory"), fakes);
+            } else if (!root.has("containers")) {
+                // Files written before sections existed were a bare slot map.
                 readSection(root, fakes);
             }
+
+            if (root.has("containers")) {
+                JsonObject containers = root.getAsJsonObject("containers");
+                for (Map.Entry<String, JsonElement> entry : containers.entrySet()) {
+                    int size = Integer.parseInt(entry.getKey());
+                    readSection(entry.getValue().getAsJsonObject(), allContainer(size));
+                }
+            }
+            ClientDispensers.load(root);
         } catch (IOException | RuntimeException e) {
             Mirage.LOGGER.error("Mirage could not read {} -- starting empty", file, e);
             fakes.clear();
@@ -330,7 +310,7 @@ public final class SelfFakes {
         }
     }
 
-    private static void readSection(JsonObject section, Map<Integer, ItemStack> target) {
+    private static void readSection(JsonObject section, Map<Integer, FakeSpec> target) {
         for (Map.Entry<String, JsonElement> entry : section.entrySet()) {
             try {
                 int slot = Integer.parseInt(entry.getKey());
@@ -340,7 +320,8 @@ public final class SelfFakes {
                 if (item == null) continue;
 
                 int count = json.has("count") ? json.get("count").getAsInt() : 1;
-                target.put(slot, buildStack(item, count));
+                String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
+                target.put(slot, new FakeSpec(item, count, enchants));
             } catch (RuntimeException ignored) {
                 // one unreadable entry should not lose the rest
             }
@@ -350,7 +331,14 @@ public final class SelfFakes {
     public static void save() {
         JsonObject root = new JsonObject();
         root.add("inventory", writeSection(fakes));
-        root.add("container", writeSection(containerFakes));
+
+        JsonObject containers = new JsonObject();
+        for (Map.Entry<Integer, Map<Integer, FakeSpec>> entry : containerFakes.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            containers.add(String.valueOf(entry.getKey()), writeSection(entry.getValue()));
+        }
+        root.add("containers", containers);
+        ClientDispensers.save(root);
 
         Path file = file();
         try {
@@ -361,15 +349,18 @@ public final class SelfFakes {
         }
     }
 
-    private static JsonObject writeSection(Map<Integer, ItemStack> source) {
-        JsonObject section = new JsonObject();
-        for (Map.Entry<Integer, ItemStack> entry : source.entrySet()) {
-            ItemStack stack = entry.getValue();
+    public static JsonObject writeSpec(FakeSpec spec) {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", Registries.ITEM.getId(spec.item).toString());
+        json.addProperty("count", spec.count);
+        if (!spec.enchants.isEmpty()) json.addProperty("enchants", spec.enchants);
+        return json;
+    }
 
-            JsonObject json = new JsonObject();
-            json.addProperty("id", Registries.ITEM.getId(stack.getItem()).toString());
-            json.addProperty("count", stack.getCount());
-            section.add(String.valueOf(entry.getKey()), json);
+    private static JsonObject writeSection(Map<Integer, FakeSpec> source) {
+        JsonObject section = new JsonObject();
+        for (Map.Entry<Integer, FakeSpec> entry : source.entrySet()) {
+            section.add(String.valueOf(entry.getKey()), writeSpec(entry.getValue()));
         }
         return section;
     }

@@ -1,40 +1,41 @@
 package dev.skullzz.mirage.client;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 
 /**
- * Point-and-click front end for {@link SelfFakes}: type an item, click the slots it should
- * appear in. The left grid is laid out like the real inventory, main storage above the
- * hotbar; the right grid is the nine slots of a dispenser or dropper.
+ * Point-and-click front end for the client-side fakes. One tab per place a fake can live;
+ * type an item, click the slots it should appear in, empty field clears.
  */
 public class FakeItemsScreen extends Screen {
-    private static final int COLUMNS = 9;
+    private enum Tab { INVENTORY, DISPENSER, ENDER }
+
     private static final int CELL = 22;
     private static final int BUTTON = 20;
-    private static final int GAP = 20;
 
-    private static final int INVENTORY_WIDTH = COLUMNS * CELL - (CELL - BUTTON);
-    private static final int DISPENSER_WIDTH = 3 * CELL - (CELL - BUTTON);
-    private static final int TOTAL_WIDTH = INVENTORY_WIDTH + GAP + DISPENSER_WIDTH;
-
-    private final ButtonWidget[] slotButtons = new ButtonWidget[SelfFakes.SLOT_COUNT];
-    private final ButtonWidget[] containerButtons = new ButtonWidget[SelfFakes.CONTAINER_SLOT_COUNT];
+    private final List<ButtonWidget> inventoryButtons = new ArrayList<>();
+    private final List<ButtonWidget> dispenserButtons = new ArrayList<>();
+    private final List<ButtonWidget> enderButtons = new ArrayList<>();
+    private final List<ClickableWidget> dispenserExtras = new ArrayList<>();
 
     private TextFieldWidget itemField;
     private TextFieldWidget countField;
+    private TextFieldWidget enchantField;
     private Text status = Text.empty();
-
-    private int gridLeft;
-    private int gridTop;
-    private int dispenserLeft;
+    private Tab tab = Tab.INVENTORY;
 
     public FakeItemsScreen() {
         super(Text.literal("Mirage - Fake Items"));
@@ -42,93 +43,123 @@ public class FakeItemsScreen extends Screen {
 
     @Override
     protected void init() {
-        this.gridLeft = (this.width - TOTAL_WIDTH) / 2;
-        this.gridTop = 88;
-        this.dispenserLeft = this.gridLeft + INVENTORY_WIDTH + GAP;
+        this.inventoryButtons.clear();
+        this.dispenserButtons.clear();
+        this.enderButtons.clear();
+        this.dispenserExtras.clear();
 
-        this.itemField = new TextFieldWidget(this.textRenderer, this.gridLeft, 44, 150, 20,
-                Text.literal("item"));
+        int tabsLeft = (this.width - 3 * 92) / 2;
+        addTab("Inventory", Tab.INVENTORY, tabsLeft);
+        addTab("Dispenser", Tab.DISPENSER, tabsLeft + 92);
+        addTab("Ender chest", Tab.ENDER, tabsLeft + 184);
+
+        int fieldsLeft = (this.width - 330) / 2;
+        this.itemField = new TextFieldWidget(this.textRenderer, fieldsLeft, 68, 150, 20, Text.literal("item"));
         this.itemField.setMaxLength(64);
         this.addDrawableChild(this.itemField);
 
-        this.countField = new TextFieldWidget(this.textRenderer, this.gridLeft + 156, 44, 40, 20,
-                Text.literal("count"));
+        this.countField = new TextFieldWidget(this.textRenderer, fieldsLeft + 156, 68, 40, 20, Text.literal("count"));
         this.countField.setMaxLength(3);
         this.countField.setText("1");
         this.addDrawableChild(this.countField);
 
+        this.enchantField = new TextFieldWidget(this.textRenderer, fieldsLeft + 202, 68, 128, 20,
+                Text.literal("enchants"));
+        this.enchantField.setMaxLength(128);
+        this.addDrawableChild(this.enchantField);
+
+        int wideLeft = (this.width - (9 * CELL - (CELL - BUTTON))) / 2;
+        int top = 110;
+
+        // Inventory: main storage above, hotbar below, as on the real screen.
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 9; column++) {
+                this.inventoryButtons.add(addSlot(9 + row * 9 + column,
+                        wideLeft + column * CELL, top + row * CELL, Tab.INVENTORY));
+            }
+        }
+        int hotbarY = top + 3 * CELL + 8;
+        for (int column = 0; column < 9; column++) {
+            this.inventoryButtons.add(addSlot(column, wideLeft + column * CELL, hotbarY, Tab.INVENTORY));
+        }
+
+        // Ender chest: the same nine-wide grid, three rows.
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 9; column++) {
+                this.enderButtons.add(addSlot(row * 9 + column,
+                        wideLeft + column * CELL, top + row * CELL, Tab.ENDER));
+            }
+        }
+
+        // Dispenser: three by three, centred.
+        int narrowLeft = (this.width - (3 * CELL - (CELL - BUTTON))) / 2;
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 3; column++) {
+                this.dispenserButtons.add(addSlot(row * 3 + column,
+                        narrowLeft + column * CELL, top + row * CELL, Tab.DISPENSER));
+            }
+        }
+
+        ButtonWidget output = ButtonWidget.builder(Text.literal("Set what it fires"),
+                button -> setDispenserOutput()).dimensions(this.width / 2 - 152, top + 74, 150, 20).build();
+        ButtonWidget watch = ButtonWidget.builder(Text.literal("Watch block I'm facing"),
+                button -> watchLookedAt()).dimensions(this.width / 2 + 2, top + 74, 150, 20).build();
+        this.dispenserExtras.add(output);
+        this.dispenserExtras.add(watch);
+        this.addDrawableChild(output);
+        this.addDrawableChild(watch);
+
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Clear all"), button -> {
             ClientPlayerEntity player = this.client == null ? null : this.client.player;
             SelfFakes.clearAll(player);
-            SelfFakes.clearAllContainer(player);
-            refreshButtons();
+            SelfFakes.clearAllContainers(player);
             this.status = Text.literal("Cleared every fake.").formatted(Formatting.GREEN);
-        }).dimensions(this.gridLeft + 202, 44, 82, 20).build());
-
-        // Main inventory on top, hotbar underneath, matching the real inventory screen.
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                addSlotButton(9 + row * COLUMNS + column,
-                        this.gridLeft + column * CELL, this.gridTop + row * CELL);
-            }
-        }
-        int hotbarY = this.gridTop + 3 * CELL + 8;
-        for (int column = 0; column < COLUMNS; column++) {
-            addSlotButton(column, this.gridLeft + column * CELL, hotbarY);
-        }
-
-        // The dispenser grid, aligned with the top of the inventory grid.
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < 3; column++) {
-                addContainerButton(row * 3 + column,
-                        this.dispenserLeft + column * CELL, this.gridTop + row * CELL);
-            }
-        }
+        }).dimensions(this.width / 2 - 152, hotbarY + 34, 150, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> this.close())
-                .dimensions(this.width / 2 - 50, hotbarY + 34, 100, 20).build());
+                .dimensions(this.width / 2 + 2, hotbarY + 34, 150, 20).build());
 
-        refreshButtons();
+        applyTabVisibility();
     }
 
-    private void addSlotButton(int slot, int x, int y) {
-        ButtonWidget button = ButtonWidget.builder(Text.empty(), ignored -> onSlotClicked(slot, false))
+    private void addTab(String label, Tab target, int x) {
+        this.addDrawableChild(ButtonWidget.builder(Text.literal(label), button -> {
+            this.tab = target;
+            applyTabVisibility();
+        }).dimensions(x, 42, 90, 20).build());
+    }
+
+    private ButtonWidget addSlot(int slot, int x, int y, Tab owner) {
+        ButtonWidget button = ButtonWidget.builder(Text.empty(), ignored -> onSlotClicked(slot, owner))
                 .dimensions(x, y, BUTTON, BUTTON)
                 .build();
-        this.slotButtons[slot] = button;
         this.addDrawableChild(button);
+        return button;
     }
 
-    private void addContainerButton(int slot, int x, int y) {
-        ButtonWidget button = ButtonWidget.builder(Text.empty(), ignored -> onSlotClicked(slot, true))
-                .dimensions(x, y, BUTTON, BUTTON)
-                .build();
-        this.containerButtons[slot] = button;
-        this.addDrawableChild(button);
+    /** Only the active tab's widgets are shown; the rest stay built but hidden. */
+    private void applyTabVisibility() {
+        setVisible(this.inventoryButtons, this.tab == Tab.INVENTORY);
+        setVisible(this.dispenserButtons, this.tab == Tab.DISPENSER);
+        setVisible(this.enderButtons, this.tab == Tab.ENDER);
+        for (ClickableWidget widget : this.dispenserExtras) {
+            widget.visible = this.tab == Tab.DISPENSER;
+            widget.active = this.tab == Tab.DISPENSER;
+        }
     }
 
-    /** Empty item field clears the slot; otherwise the slot takes the typed item. */
-    private void onSlotClicked(int slot, boolean container) {
-        ClientPlayerEntity player = this.client == null ? null : this.client.player;
-        String typed = this.itemField.getText().trim();
-        String where = container ? ("dispenser slot " + slot) : SelfFakes.slotName(slot);
-
-        if (typed.isEmpty()) {
-            if (container) {
-                SelfFakes.clearContainer(slot, player);
-            } else {
-                SelfFakes.clear(slot, player);
-            }
-            refreshButtons();
-            this.status = Text.literal("Cleared " + where + ".").formatted(Formatting.GREEN);
-            return;
+    private void setVisible(List<ButtonWidget> buttons, boolean visible) {
+        for (ButtonWidget button : buttons) {
+            button.visible = visible;
+            button.active = visible;
         }
+    }
 
-        Item item = SelfFakes.lookupItem(typed);
-        if (item == null) {
-            this.status = Text.literal("No item called '" + typed + "'.").formatted(Formatting.RED);
-            return;
-        }
+    // ------------------------------------------------------------------ actions
+
+    private FakeSpec buildFromFields() {
+        Item item = SelfFakes.lookupItem(this.itemField.getText().trim());
+        if (item == null) return null;
 
         int count = 1;
         try {
@@ -136,65 +167,104 @@ public class FakeItemsScreen extends Screen {
         } catch (NumberFormatException ignored) {
             // an unparseable count just means one
         }
+        return new FakeSpec(item, count, this.enchantField.getText());
+    }
 
-        ItemStack stack = SelfFakes.buildStack(item, count);
-        if (container) {
-            SelfFakes.setContainer(slot, stack);
-        } else {
-            SelfFakes.set(slot, stack);
+    private void onSlotClicked(int slot, Tab owner) {
+        ClientPlayerEntity player = this.client == null ? null : this.client.player;
+        String typed = this.itemField.getText().trim();
+
+        if (typed.isEmpty()) {
+            switch (owner) {
+                case INVENTORY -> SelfFakes.clear(slot, player);
+                case DISPENSER -> SelfFakes.clearContainer(SelfFakes.DISPENSER, slot, player);
+                case ENDER -> SelfFakes.clearContainer(SelfFakes.ENDER_CHEST, slot, player);
+            }
+            this.status = Text.literal("Cleared that slot.").formatted(Formatting.GREEN);
+            return;
         }
 
-        refreshButtons();
-        this.status = Text.literal(stack.getCount() + "x " + typed + " in " + where
-                + (FakeLore.hasPriceFor(stack) ? " (priced)" : " (no price set)"))
+        FakeSpec spec = buildFromFields();
+        if (spec == null) {
+            this.status = Text.literal("No item called '" + typed + "'.").formatted(Formatting.RED);
+            return;
+        }
+
+        switch (owner) {
+            case INVENTORY -> SelfFakes.set(slot, spec);
+            case DISPENSER -> SelfFakes.setContainer(SelfFakes.DISPENSER, slot, spec);
+            case ENDER -> SelfFakes.setContainer(SelfFakes.ENDER_CHEST, slot, spec);
+        }
+        this.status = Text.literal(spec.count + "x " + typed
+                + (FakeLore.hasPriceFor(spec.stack()) ? " (priced)" : " (no price set)"))
                 .formatted(Formatting.GREEN);
     }
 
-    private void refreshButtons() {
-        // The icon is drawn on top in render(); the buttons themselves stay blank.
-        for (ButtonWidget button : this.slotButtons) {
-            if (button != null) button.setMessage(Text.empty());
+    private void setDispenserOutput() {
+        FakeSpec spec = buildFromFields();
+        if (spec == null) {
+            this.status = Text.literal("Type an item first.").formatted(Formatting.RED);
+            return;
         }
-        for (ButtonWidget button : this.containerButtons) {
-            if (button != null) button.setMessage(Text.empty());
-        }
+        ClientDispensers.setResult(spec);
+        SelfFakes.save();
+        this.status = Text.literal("Watched dispensers will appear to fire that.")
+                .formatted(Formatting.GREEN);
     }
+
+    private void watchLookedAt() {
+        HitResult target = this.client == null ? null : this.client.crosshairTarget;
+        if (!(target instanceof BlockHitResult hit)) {
+            this.status = Text.literal("Close this and look at a dispenser first.")
+                    .formatted(Formatting.RED);
+            return;
+        }
+
+        ClientDispensers.watch(hit.getBlockPos());
+        SelfFakes.save();
+        this.status = Text.literal("Watching that block (" + ClientDispensers.watchedCount()
+                + " total).").formatted(Formatting.GREEN);
+    }
+
+    // ------------------------------------------------------------------ drawing
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
 
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 14, 0xFFFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 12, 0xFFFFFFFF);
         context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Type an item, then click a slot. Empty field clears a slot.")
+                Text.literal("Item, count, enchants (sharpness:5, unbreaking:3). Empty item clears a slot.")
                         .formatted(Formatting.GRAY),
                 this.width / 2, 26, 0xFFAAAAAA);
 
-        context.drawTextWithShadow(this.textRenderer,
-                Text.literal("Your inventory").formatted(Formatting.GRAY),
-                this.gridLeft, this.gridTop - 12, 0xFFAAAAAA);
-        context.drawTextWithShadow(this.textRenderer,
-                Text.literal("Dispenser").formatted(Formatting.GRAY),
-                this.dispenserLeft, this.gridTop - 12, 0xFFAAAAAA);
-
-        drawIcons(context, this.slotButtons, false);
-        drawIcons(context, this.containerButtons, true);
+        switch (this.tab) {
+            case INVENTORY -> drawIcons(context, this.inventoryButtons, slot -> SelfFakes.get(indexFor(slot)));
+            case DISPENSER -> drawIcons(context, this.dispenserButtons,
+                    slot -> SelfFakes.getContainer(SelfFakes.DISPENSER, slot));
+            case ENDER -> drawIcons(context, this.enderButtons,
+                    slot -> SelfFakes.getContainer(SelfFakes.ENDER_CHEST, slot));
+        }
 
         if (!this.status.getString().isEmpty()) {
             context.drawCenteredTextWithShadow(this.textRenderer, this.status,
-                    this.width / 2, this.height - 24, 0xFFFFFFFF);
+                    this.width / 2, this.height - 22, 0xFFFFFFFF);
         }
     }
 
-    private void drawIcons(DrawContext context, ButtonWidget[] buttons, boolean container) {
-        for (int slot = 0; slot < buttons.length; slot++) {
-            ButtonWidget button = buttons[slot];
-            if (button == null) continue;
+    /** The inventory tab lists storage first, then the hotbar, so map position to slot. */
+    private int indexFor(int position) {
+        return position < 27 ? 9 + position : position - 27;
+    }
 
-            boolean set = container ? SelfFakes.hasContainer(slot) : SelfFakes.has(slot);
-            if (!set) continue;
+    private void drawIcons(DrawContext context, List<ButtonWidget> buttons,
+                           java.util.function.IntFunction<ItemStack> lookup) {
+        for (int position = 0; position < buttons.size(); position++) {
+            ButtonWidget button = buttons.get(position);
+            if (!button.visible) continue;
 
-            ItemStack stack = container ? SelfFakes.getContainer(slot) : SelfFakes.get(slot);
+            ItemStack stack = lookup.apply(position);
+            if (stack.isEmpty()) continue;
             context.drawItem(stack, button.getX() + 2, button.getY() + 2);
         }
     }

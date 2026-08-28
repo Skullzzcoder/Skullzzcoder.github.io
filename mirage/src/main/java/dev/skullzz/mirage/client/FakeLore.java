@@ -118,24 +118,43 @@ public final class FakeLore {
         return prices.get(Registries.ITEM.getId(stack.getItem()).toString());
     }
 
-    /** Adds the price lore to a stack, if there is a price for it. Returns the same stack. */
     public static ItemStack applyTo(ItemStack stack) {
-        Double unitPrice = priceOf(stack);
-        if (unitPrice == null || loreLines.isEmpty()) return stack;
+        return applyTo(stack, null);
+    }
 
-        // Price scales with the stack, the way a sell-all total would.
-        String formatted = MONEY.format(unitPrice * stack.getCount());
-
+    /**
+     * Writes the enchantment lines and the price lines into the stack's lore, and turns on
+     * the glint if there are enchantments.
+     *
+     * <p>Both kinds of line share the one lore component, so they are composed here and
+     * written once — setting it twice would erase the first set.
+     */
+    public static ItemStack applyTo(ItemStack stack, String enchantSpec) {
         List<Text> lines = new ArrayList<>();
-        for (String line : loreLines) {
-            String text = line.replace("%price%", formatted)
-                    .replace("%unit%", MONEY.format(unitPrice))
-                    .replace('&', '§');
-            // Lore is italic by default; server-formatted items normally are not.
-            lines.add(Text.literal(text).setStyle(Style.EMPTY.withItalic(false)));
+
+        for (String enchant : FakeEnchants.lines(enchantSpec)) {
+            lines.add(Text.literal(enchant).setStyle(Style.EMPTY.withItalic(false)));
         }
 
-        stack.set(DataComponentTypes.LORE, new LoreComponent(lines));
+        Double unitPrice = priceOf(stack);
+        if (unitPrice != null && !loreLines.isEmpty()) {
+            // Price scales with the stack, the way a sell-all total would.
+            String formatted = MONEY.format(unitPrice * stack.getCount());
+            for (String line : loreLines) {
+                String text = line.replace("%price%", formatted)
+                        .replace("%unit%", MONEY.format(unitPrice))
+                        .replace('&', '§');
+                // Lore is italic by default; server-formatted items normally are not.
+                lines.add(Text.literal(text).setStyle(Style.EMPTY.withItalic(false)));
+            }
+        }
+
+        if (!lines.isEmpty()) {
+            stack.set(DataComponentTypes.LORE, new LoreComponent(lines));
+        }
+        if (FakeEnchants.hasAny(enchantSpec)) {
+            stack.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE);
+        }
         return stack;
     }
 }

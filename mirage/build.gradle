@@ -223,7 +223,7 @@ tasks.register('inspectApi') {
                 { ->
                     // Client-side surfaces used by the fake-items GUI.
                     [
-                            'net.minecraft.client.MinecraftClient'          : ['screen', 'execute', 'player'],
+                            'net.minecraft.client.MinecraftClient'          : ['screen', 'execute', 'player', 'crosshair'],
                             'net.minecraft.client.network.ClientPlayerEntity': ['inventory'],
                             'net.minecraft.entity.player.PlayerInventory'   : ['stack'],
                             'net.minecraft.registry.Registries'             : ['item'],
@@ -232,11 +232,13 @@ tasks.register('inspectApi') {
                             'net.minecraft.client.gui.DrawContext'          : ['text', 'item'],
                             'net.minecraft.client.gui.widget.ButtonWidget'  : ['build', 'dimension', 'message'],
                             'net.minecraft.client.gui.widget.TextFieldWidget': ['text', 'placeholder', 'max'],
-                            'net.minecraft.component.DataComponentTypes'    : ['lore', 'name'],
+                            'net.minecraft.component.DataComponentTypes'    : ['lore', 'name', 'glint'],
                             'net.minecraft.component.type.LoreComponent'    : [],
                             'net.minecraft.text.Style'                      : ['italic', 'empty'],
                             'net.minecraft.item.ItemStack'                  : ['set', 'count', 'name'],
                             'net.minecraft.screen.slot.Slot'                : ['stack'],
+                            'net.minecraft.client.world.ClientWorld'        : ['addentity', 'chunk', 'random'],
+                            'net.minecraft.client.gui.widget.ClickableWidget': ['visible', 'active', 'getx', 'gety'],
                     ].each { className, filters ->
                         def type = load(className)
                         if (type != null) dump(type, filters, '')

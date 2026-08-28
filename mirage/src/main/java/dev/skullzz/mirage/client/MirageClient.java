@@ -7,18 +7,19 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.CommandSource;
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 
 import dev.skullzz.mirage.Mirage;
 
@@ -26,8 +27,8 @@ import dev.skullzz.mirage.Mirage;
  * The client half of Mirage: fake items shown only on your own screen.
  *
  * <p>This works on any server, including ones you cannot install mods on, because it never
- * talks to the server. That also means nobody else can see any of it -- for that, the mod
- * has to be installed server-side.
+ * talks to the server. That also means nobody else sees any of it — for that, the mod has to
+ * be installed server-side.
  */
 public class MirageClient implements ClientModInitializer {
     @Override
@@ -35,51 +36,88 @@ public class MirageClient implements ClientModInitializer {
         FakeLore.load();
         SelfFakes.load();
 
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
-            dispatcher.register(ClientCommandManager.literal("fake")
-                    .then(ClientCommandManager.literal("ui")
-                            .executes(MirageClient::openUi))
-                    .then(ClientCommandManager.literal("set")
-                            .then(ClientCommandManager.argument("slot", StringArgumentType.word())
-                                    .suggests((context, builder) ->
-                                            CommandSource.suggestMatching(SelfFakes.slotNames(), builder))
-                                    .then(ClientCommandManager.argument("item", StringArgumentType.word())
-                                            .executes(context -> set(context, 1))
-                                            .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
-                                                    .executes(context -> set(context,
-                                                            IntegerArgumentType.getInteger(context, "count")))))))
-                    .then(ClientCommandManager.literal("clear")
-                            .executes(MirageClient::clearAll)
-                            .then(ClientCommandManager.argument("slot", StringArgumentType.word())
-                                    .suggests((context, builder) ->
-                                            CommandSource.suggestMatching(SelfFakes.slotNames(), builder))
-                                    .executes(MirageClient::clearSlot)))
-                    .then(ClientCommandManager.literal("dispenser")
-                            .then(ClientCommandManager.literal("clear")
-                                    .executes(MirageClient::clearDispenser))
-                            .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(0, 8))
-                                    .then(ClientCommandManager.argument("item", StringArgumentType.word())
-                                            .executes(context -> setDispenser(context, 1))
-                                            .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
-                                                    .executes(context -> setDispenser(context,
-                                                            IntegerArgumentType.getInteger(context, "count")))))))
-                    .then(ClientCommandManager.literal("prices")
-                            .then(ClientCommandManager.literal("reload")
-                                    .executes(MirageClient::reloadPrices)))
-                    .then(ClientCommandManager.literal("list")
-                            .executes(MirageClient::list)));
-        });
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
+                dispatcher.register(ClientCommandManager.literal("fake")
+                        .then(ClientCommandManager.literal("ui").executes(MirageClient::openUi))
+                        .then(inventoryBranch())
+                        .then(enderBranch())
+                        .then(dispenserBranch())
+                        .then(ClientCommandManager.literal("prices")
+                                .then(ClientCommandManager.literal("reload")
+                                        .executes(MirageClient::reloadPrices)))
+                        .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
+                        .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
 
-        // Repaint every tick: the server overwrites a slot whenever the real item changes.
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Repaint every tick: the server overwrites a slot whenever the real item changes.
             if (client.player != null) SelfFakes.apply(client.player);
+            ClientDispensers.tick(client);
         });
 
-        // Leaving a world invalidates what we thought was underneath each fake.
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> SelfFakes.forgetShadows());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            SelfFakes.forgetShadows();
+            ClientDispensers.reset();
+        });
 
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
+
+    // ---------------------------------------------------------------- branches
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> inventoryBranch() {
+        return ClientCommandManager.literal("set")
+                .then(ClientCommandManager.argument("slot", StringArgumentType.word())
+                        .suggests((context, builder) ->
+                                CommandSource.suggestMatching(SelfFakes.slotNames(), builder))
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setInventory(context, 1, ""))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setInventory(context,
+                                                IntegerArgumentType.getInteger(context, "count"), ""))
+                                        .then(ClientCommandManager.argument("enchants", StringArgumentType.greedyString())
+                                                .executes(context -> setInventory(context,
+                                                        IntegerArgumentType.getInteger(context, "count"),
+                                                        StringArgumentType.getString(context, "enchants")))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> enderBranch() {
+        return ClientCommandManager.literal("ender")
+                .then(ClientCommandManager.literal("clear").executes(context -> {
+                    SelfFakes.clearAllContainers(MinecraftClient.getInstance().player);
+                    return feedback(context, "Cleared the fake container contents.");
+                }))
+                .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(0, 26))
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setContainer(context, SelfFakes.ENDER_CHEST, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setContainer(context, SelfFakes.ENDER_CHEST,
+                                                IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> dispenserBranch() {
+        return ClientCommandManager.literal("dispenser")
+                .then(ClientCommandManager.literal("watch").executes(MirageClient::watchDispenser))
+                .then(ClientCommandManager.literal("unwatch").executes(MirageClient::unwatchDispenser))
+                .then(ClientCommandManager.literal("unwatchall").executes(context -> {
+                    ClientDispensers.unwatchAll();
+                    SelfFakes.save();
+                    return feedback(context, "Stopped watching every dispenser.");
+                }))
+                .then(ClientCommandManager.literal("result")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setResult(context, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setResult(context,
+                                                IntegerArgumentType.getInteger(context, "count"))))))
+                .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(0, 8))
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setContainer(context, SelfFakes.DISPENSER, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setContainer(context, SelfFakes.DISPENSER,
+                                                IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    // ------------------------------------------------------------------ actions
 
     private static int openUi(CommandContext<FabricClientCommandSource> context) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -88,108 +126,132 @@ public class MirageClient implements ClientModInitializer {
         return 1;
     }
 
-    private static int set(CommandContext<FabricClientCommandSource> context, int count) {
+    private static int setInventory(CommandContext<FabricClientCommandSource> context, int count, String enchants) {
         String slotName = StringArgumentType.getString(context, "slot");
         int slot = SelfFakes.slotIndex(slotName);
         if (slot < 0) {
-            context.getSource().sendFeedback(Text.literal("Unknown slot '" + slotName
-                    + "'. Use hotbar1-hotbar9 or inv1-inv27.").formatted(Formatting.RED));
-            return 0;
+            return error(context, "Unknown slot '" + slotName + "'. Use hotbar1-hotbar9 or inv1-inv27.");
         }
 
-        String itemName = StringArgumentType.getString(context, "item");
-        Item item = SelfFakes.lookupItem(itemName);
-        if (item == null) {
-            context.getSource().sendFeedback(Text.literal("No item called '" + itemName + "'.")
-                    .formatted(Formatting.RED));
-            return 0;
-        }
+        Item item = resolve(context);
+        if (item == null) return 0;
 
-        SelfFakes.set(slot, SelfFakes.buildStack(item, count));
-        context.getSource().sendFeedback(Text.literal("Showing " + count + "x " + itemName
-                + " in " + slotName + ".").formatted(Formatting.GREEN));
-        return 1;
+        SelfFakes.set(slot, new FakeSpec(item, count, enchants));
+        return feedback(context, "Showing " + count + "x " + itemName(context) + " in " + slotName + ".");
     }
 
-    private static int setDispenser(CommandContext<FabricClientCommandSource> context, int count) {
+    private static int setContainer(CommandContext<FabricClientCommandSource> context, int size, int count) {
         int slot = IntegerArgumentType.getInteger(context, "slot");
-        String itemName = StringArgumentType.getString(context, "item");
+        Item item = resolve(context);
+        if (item == null) return 0;
 
-        Item item = SelfFakes.lookupItem(itemName);
-        if (item == null) {
-            context.getSource().sendFeedback(Text.literal("No item called '" + itemName + "'.")
-                    .formatted(Formatting.RED));
-            return 0;
-        }
-
-        SelfFakes.setContainer(slot, SelfFakes.buildStack(item, count));
-        context.getSource().sendFeedback(Text.literal("Dispensers will show " + count + "x "
-                + itemName + " in slot " + slot + ".").formatted(Formatting.GREEN));
-        return 1;
+        SelfFakes.setContainer(size, slot, new FakeSpec(item, count, ""));
+        String where = size == SelfFakes.DISPENSER ? "dispensers" : "ender chests";
+        return feedback(context, where + " will show " + count + "x " + itemName(context)
+                + " in slot " + slot + ".");
     }
 
-    private static int clearDispenser(CommandContext<FabricClientCommandSource> context) {
-        SelfFakes.clearAllContainer(MinecraftClient.getInstance().player);
-        context.getSource().sendFeedback(Text.literal("Cleared the fake dispenser contents.")
-                .formatted(Formatting.GREEN));
-        return 1;
+    private static int setResult(CommandContext<FabricClientCommandSource> context, int count) {
+        Item item = resolve(context);
+        if (item == null) return 0;
+
+        ClientDispensers.setResult(new FakeSpec(item, count, ""));
+        SelfFakes.save();
+        return feedback(context, "Watched dispensers will appear to fire " + count + "x "
+                + itemName(context) + ".");
+    }
+
+    private static int watchDispenser(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        HitResult target = client.crosshairTarget;
+        if (!(target instanceof BlockHitResult hit)) {
+            return error(context, "Look at a dispenser or dropper first.");
+        }
+
+        ClientDispensers.watch(hit.getBlockPos());
+        SelfFakes.save();
+        return feedback(context, "Watching that block. " + ClientDispensers.watchedCount()
+                + " watched. Set what comes out with /fake dispenser result <item>.");
+    }
+
+    private static int unwatchDispenser(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        HitResult target = client.crosshairTarget;
+        if (!(target instanceof BlockHitResult hit)) {
+            return error(context, "Look at the dispenser you want to stop watching.");
+        }
+
+        if (!ClientDispensers.unwatch(hit.getBlockPos())) {
+            return error(context, "That block was not being watched.");
+        }
+        SelfFakes.save();
+        return feedback(context, "Stopped watching that block.");
     }
 
     private static int reloadPrices(CommandContext<FabricClientCommandSource> context) {
         FakeLore.load();
-        SelfFakes.rebakeLore(MinecraftClient.getInstance().player);
-        context.getSource().sendFeedback(Text.literal("Reloaded prices and refreshed every fake.")
-                .formatted(Formatting.GREEN));
-        return 1;
-    }
-
-    private static int clearSlot(CommandContext<FabricClientCommandSource> context) {
-        String slotName = StringArgumentType.getString(context, "slot");
-        int slot = SelfFakes.slotIndex(slotName);
-        if (slot < 0) {
-            context.getSource().sendFeedback(Text.literal("Unknown slot '" + slotName + "'.")
-                    .formatted(Formatting.RED));
-            return 0;
-        }
-
-        SelfFakes.clear(slot, MinecraftClient.getInstance().player);
-        context.getSource().sendFeedback(Text.literal("Cleared " + slotName + ".")
-                .formatted(Formatting.GREEN));
-        return 1;
+        SelfFakes.rebuildAll();
+        return feedback(context, "Reloaded prices and refreshed every fake.");
     }
 
     private static int clearAll(CommandContext<FabricClientCommandSource> context) {
         SelfFakes.clearAll(MinecraftClient.getInstance().player);
-        SelfFakes.clearAllContainer(MinecraftClient.getInstance().player);
-        context.getSource().sendFeedback(Text.literal("Cleared every fake.")
-                .formatted(Formatting.GREEN));
-        return 1;
+        SelfFakes.clearAllContainers(MinecraftClient.getInstance().player);
+        return feedback(context, "Cleared every fake.");
     }
 
     private static int list(CommandContext<FabricClientCommandSource> context) {
-        Map<Integer, ItemStack> fakes = SelfFakes.all();
-        Map<Integer, ItemStack> container = SelfFakes.allContainer();
-        if (fakes.isEmpty() && container.isEmpty()) {
-            context.getSource().sendFeedback(Text.literal("No fake items set."));
-            return 0;
-        }
+        int total = 0;
+        total += listSection(context, "Inventory", SelfFakes.all(), true);
+        total += listSection(context, "Dispensers", SelfFakes.allContainer(SelfFakes.DISPENSER), false);
+        total += listSection(context, "Ender chests", SelfFakes.allContainer(SelfFakes.ENDER_CHEST), false);
 
-        if (!fakes.isEmpty()) {
-            context.getSource().sendFeedback(Text.literal("Inventory:").formatted(Formatting.AQUA));
-            for (Map.Entry<Integer, ItemStack> entry : fakes.entrySet()) {
-                ItemStack stack = entry.getValue();
-                context.getSource().sendFeedback(Text.literal("  " + SelfFakes.slotName(entry.getKey())
-                        + ": " + stack.getCount() + "x " + stack.getName().getString()));
-            }
+        FakeSpec result = ClientDispensers.result();
+        if (result != null) {
+            context.getSource().sendFeedback(Text.literal("Dispenser output: " + result.count + "x "
+                    + result.stack().getName().getString() + " ("
+                    + ClientDispensers.watchedCount() + " watched)").formatted(Formatting.AQUA));
+            total++;
         }
-        if (!container.isEmpty()) {
-            context.getSource().sendFeedback(Text.literal("Dispensers and droppers:").formatted(Formatting.AQUA));
-            for (Map.Entry<Integer, ItemStack> entry : container.entrySet()) {
-                ItemStack stack = entry.getValue();
-                context.getSource().sendFeedback(Text.literal("  slot " + entry.getKey()
-                        + ": " + stack.getCount() + "x " + stack.getName().getString()));
-            }
+        if (total == 0) context.getSource().sendFeedback(Text.literal("No fakes set."));
+        return total;
+    }
+
+    private static int listSection(CommandContext<FabricClientCommandSource> context, String label,
+                                   Map<Integer, FakeSpec> entries, boolean named) {
+        if (entries.isEmpty()) return 0;
+
+        context.getSource().sendFeedback(Text.literal(label + ":").formatted(Formatting.AQUA));
+        for (Map.Entry<Integer, FakeSpec> entry : entries.entrySet()) {
+            String slot = named ? SelfFakes.slotName(entry.getKey()) : ("slot " + entry.getKey());
+            FakeSpec spec = entry.getValue();
+            context.getSource().sendFeedback(Text.literal("  " + slot + ": " + spec.count + "x "
+                    + spec.stack().getName().getString()
+                    + (spec.enchants.isEmpty() ? "" : " [" + spec.enchants + "]")));
         }
-        return fakes.size() + container.size();
+        return entries.size();
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private static String itemName(CommandContext<FabricClientCommandSource> context) {
+        return StringArgumentType.getString(context, "item");
+    }
+
+    private static Item resolve(CommandContext<FabricClientCommandSource> context) {
+        String name = itemName(context);
+        Item item = SelfFakes.lookupItem(name);
+        if (item == null) error(context, "No item called '" + name + "'.");
+        return item;
+    }
+
+    private static int feedback(CommandContext<FabricClientCommandSource> context, String message) {
+        context.getSource().sendFeedback(Text.literal(message).formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int error(CommandContext<FabricClientCommandSource> context, String message) {
+        context.getSource().sendFeedback(Text.literal(message).formatted(Formatting.RED));
+        return 0;
     }
 }
