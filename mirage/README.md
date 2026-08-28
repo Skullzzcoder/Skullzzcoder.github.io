@@ -169,9 +169,21 @@ For games where an arrow decides an outcome. Look at the exact spot you want it 
 /fake dispenser watch     (looking at the dispenser that fires)
 ```
 
+Both commands report the coordinates they captured, so you can see what they grabbed. If the
+spot is awkward to aim at, give it directly:
+
+```
+/fake arrow target <x> <y> <z>
+```
+
 Every time that dispenser fires, an arrow flies out of it and lands on your chosen point.
 The landing point is the precise spot on the block face you were looking at, not the middle
 of the block, so it can sit on one pad rather than between two.
+
+Aiming uses a raycast out to 128 blocks rather than `crosshairTarget`, which only reaches as
+far as you can touch — past that it reports a miss a few blocks in front of your face instead
+of the thing you were aiming at. A ray that hits nothing is now refused rather than silently
+targeting thin air.
 
 The arrow's path is interpolated along an arc rather than launched ballistically: solving for
 a velocity that hits an exact point through Minecraft's drag is approximate, and the whole

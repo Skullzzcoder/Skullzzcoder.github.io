@@ -226,9 +226,9 @@ public class FakeItemsScreen extends Screen {
     }
 
     private void setArrowTarget() {
-        HitResult target = this.client == null ? null : this.client.crosshairTarget;
-        if (!(target instanceof BlockHitResult hit)) {
-            this.status = Text.literal("Close this and look at the landing spot first.")
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) {
+            this.status = Text.literal("Nothing in front of you within 128 blocks.")
                     .formatted(Formatting.RED);
             return;
         }
@@ -236,13 +236,28 @@ public class FakeItemsScreen extends Screen {
         // The precise point on the block face, so it lands on the pad rather than its middle.
         ClientDispensers.setArrowTarget(hit.getPos());
         SelfFakes.save();
-        this.status = Text.literal("Fake arrows will land there.").formatted(Formatting.GREEN);
+        this.status = Text.literal(String.format("Arrows will land at %.2f %.2f %.2f",
+                hit.getPos().x, hit.getPos().y, hit.getPos().z)).formatted(Formatting.GREEN);
+    }
+
+    /**
+     * Not client.crosshairTarget: that only reaches as far as you can touch, and past it
+     * returns a miss a few blocks in front of your face rather than what you aimed at.
+     */
+    private BlockHitResult lookedAt(double distance) {
+        if (this.client == null || this.client.player == null) return null;
+
+        HitResult hit = this.client.player.raycast(distance, 0.0F, false);
+        if (hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK) {
+            return block;
+        }
+        return null;
     }
 
     private void watchLookedAt() {
-        HitResult target = this.client == null ? null : this.client.crosshairTarget;
-        if (!(target instanceof BlockHitResult hit)) {
-            this.status = Text.literal("Close this and look at a dispenser first.")
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) {
+            this.status = Text.literal("Nothing in front of you within 64 blocks.")
                     .formatted(Formatting.RED);
             return;
         }

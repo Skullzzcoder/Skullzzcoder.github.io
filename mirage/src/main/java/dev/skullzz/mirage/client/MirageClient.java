@@ -2,6 +2,7 @@ package dev.skullzz.mirage.client;
 
 import java.util.Map;
 
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -20,6 +21,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Vec3d;
 
 import dev.skullzz.mirage.Mirage;
 
@@ -122,7 +124,12 @@ public class MirageClient implements ClientModInitializer {
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> arrowBranch() {
         return ClientCommandManager.literal("arrow")
-                .then(ClientCommandManager.literal("target").executes(MirageClient::setArrowTarget))
+                .then(ClientCommandManager.literal("target")
+                        .executes(MirageClient::setArrowTarget)
+                        .then(ClientCommandManager.argument("x", DoubleArgumentType.doubleArg())
+                                .then(ClientCommandManager.argument("y", DoubleArgumentType.doubleArg())
+                                        .then(ClientCommandManager.argument("z", DoubleArgumentType.doubleArg())
+                                                .executes(MirageClient::setArrowTargetExact)))))
                 .then(ClientCommandManager.literal("clear").executes(context -> {
                     ClientDispensers.setArrowTarget(null);
                     SelfFakes.save();
@@ -131,17 +138,28 @@ public class MirageClient implements ClientModInitializer {
     }
 
     private static int setArrowTarget(CommandContext<FabricClientCommandSource> context) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        HitResult target = client.crosshairTarget;
-        if (!(target instanceof BlockHitResult hit)) {
-            return error(context, "Look at the exact spot the arrow should land.");
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) {
+            return error(context, "That ray hit nothing within 128 blocks. Aim at a solid block, "
+                    + "or give the spot directly: /fake arrow target <x> <y> <z>");
         }
 
         // The precise point on the block face, so it lands on the pad rather than its middle.
         ClientDispensers.setArrowTarget(hit.getPos());
         SelfFakes.save();
-        return feedback(context, "Fake arrows will land there. Watch the dispenser that fires them "
-                + "with /fake dispenser watch.");
+        return feedback(context, "Fake arrows will land at " + describe(hit.getPos())
+                + ". Watch the dispenser that fires them with /fake dispenser watch.");
+    }
+
+    private static int setArrowTargetExact(CommandContext<FabricClientCommandSource> context) {
+        Vec3d target = new Vec3d(
+                DoubleArgumentType.getDouble(context, "x"),
+                DoubleArgumentType.getDouble(context, "y"),
+                DoubleArgumentType.getDouble(context, "z"));
+
+        ClientDispensers.setArrowTarget(target);
+        SelfFakes.save();
+        return feedback(context, "Fake arrows will land at " + describe(target) + ".");
     }
 
     // ------------------------------------------------------------------ actions
@@ -189,23 +207,23 @@ public class MirageClient implements ClientModInitializer {
     }
 
     private static int watchDispenser(CommandContext<FabricClientCommandSource> context) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        HitResult target = client.crosshairTarget;
-        if (!(target instanceof BlockHitResult hit)) {
-            return error(context, "Look at a dispenser or dropper first.");
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) {
+            return error(context, "That ray hit nothing within 64 blocks. Aim at the dispenser.");
         }
 
         ClientDispensers.watch(hit.getBlockPos());
         SelfFakes.save();
-        return feedback(context, "Watching that block. " + ClientDispensers.watchedCount()
-                + " watched. Set what comes out with /fake dispenser result <item>.");
+        return feedback(context, "Watching " + hit.getBlockPos().getX() + " "
+                + hit.getBlockPos().getY() + " " + hit.getBlockPos().getZ() + " ("
+                + ClientDispensers.watchedCount() + " watched). Set what comes out with "
+                + "/fake dispenser result <item>.");
     }
 
     private static int unwatchDispenser(CommandContext<FabricClientCommandSource> context) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        HitResult target = client.crosshairTarget;
-        if (!(target instanceof BlockHitResult hit)) {
-            return error(context, "Look at the dispenser you want to stop watching.");
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) {
+            return error(context, "That ray hit nothing within 64 blocks.");
         }
 
         if (!ClientDispensers.unwatch(hit.getBlockPos())) {
@@ -257,6 +275,30 @@ public class MirageClient implements ClientModInitializer {
                     + (spec.enchants.isEmpty() ? "" : " [" + spec.enchants + "]")));
         }
         return entries.size();
+    }
+
+    /**
+     * What the player is actually looking at, out to {@code distance} blocks.
+     *
+     * <p>Deliberately not client.crosshairTarget: that only raycasts as far as your reach, and
+     * past it returns a miss whose position is a few blocks in front of your face rather than
+     * the thing you were aiming at.
+     *
+     * @return the block hit, or null if the ray hit nothing.
+     */
+    private static BlockHitResult lookedAt(double distance) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return null;
+
+        HitResult hit = client.player.raycast(distance, 0.0F, false);
+        if (hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK) {
+            return block;
+        }
+        return null;
+    }
+
+    private static String describe(Vec3d position) {
+        return String.format("%.2f %.2f %.2f", position.x, position.y, position.z);
     }
 
     // ------------------------------------------------------------------ helpers
