@@ -28,21 +28,27 @@ on a version bump — the worst case is that it stops working.
 
 ## Building
 
-1. Open <https://fabricmc.net/develop/> and select **1.21.11**. It prints the exact yarn,
-   loader and Fabric API versions for that release.
-2. Paste those into `gradle.properties` (the four values at the top are placeholders in the
-   right format — I couldn't reach Fabric's servers to verify them from where this was
-   written, so check them before your first build).
-3. Build:
+You need a JDK 21. Then, from the project folder (the one with `gradlew.bat` in it):
 
-   ```
-   ./gradlew build
-   ```
+```
+gradlew fabricVersions
+```
 
-4. The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
+That prints the exact four lines for Minecraft 1.21.11, straight from Fabric's and
+Modrinth's APIs. Paste them over the matching lines in `gradle.properties`. Then:
 
-If Gradle says `Could not find net.fabricmc:yarn:...`, that's step 2 — one wrong line in
-`gradle.properties`, not a code problem.
+```
+gradlew build
+```
+
+On macOS or Linux the commands are `./gradlew fabricVersions` and `./gradlew build`, and
+you may need `chmod +x gradlew` first.
+
+The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
+
+The four version values ship as placeholders, because the machine this was written on
+couldn't reach Fabric's servers to look them up. If any is missing or wrong the build stops
+and names it, and `gradlew fabricVersions` gives you the replacement.
 
 ## Installing
 
