@@ -85,29 +85,46 @@ tasks.register('inspectApi') {
         def urls = compileClasspath.files.collect { it.toURI().toURL() }
         def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
 
-        // Only members whose name contains one of the filters are printed; an empty filter
-        // list prints everything the class declares.
+        // Printing a member resolves the classes in its signature, and some Minecraft
+        // classes fail JVM verification when loaded outside the game. So keep filters
+        // narrow, and let a single unprintable member be skipped rather than aborting.
         def dump = { Class type, List filters, String note ->
             println ""
             println "== ${type.name}${note}"
             def lines = [] as TreeSet
-            type.methods.each { method ->
-                if (method.declaringClass == Object.class) return
-                if (filters.isEmpty() || filters.any { method.name.toLowerCase().contains(it) }) {
-                    def params = method.parameterTypes.collect { it.simpleName }.join(', ')
-                    lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
+            def skipped = 0
+
+            try {
+                type.methods.each { method ->
+                    try {
+                        if (method.declaringClass == Object.class) return
+                        if (filters.isEmpty() || filters.any { method.name.toLowerCase().contains(it) }) {
+                            def params = method.parameterTypes.collect { it.simpleName }.join(', ')
+                            lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
+                        }
+                    } catch (Throwable ignored) {
+                        skipped++
+                    }
                 }
-            }
-            type.fields.each { field ->
-                if (filters.isEmpty() || filters.any { field.name.toLowerCase().contains(it) }) {
-                    lines << "  [field] ${field.type.simpleName} ${field.name}"
+                type.fields.each { field ->
+                    try {
+                        if (filters.isEmpty() || filters.any { field.name.toLowerCase().contains(it) }) {
+                            lines << "  [field] ${field.type.simpleName} ${field.name}"
+                        }
+                    } catch (Throwable ignored) {
+                        skipped++
+                    }
                 }
+            } catch (Throwable failure) {
+                println "  <member listing failed: ${failure}>"
             }
+
             if (lines.isEmpty()) {
                 println "  <nothing matched the filters ${filters}>"
             } else {
                 lines.each { println it }
             }
+            if (skipped > 0) println "  (${skipped} member(s) skipped: signature classes would not load)"
         }
 
         def load = { String name ->
@@ -121,17 +138,22 @@ tasks.register('inspectApi') {
             }
         }
 
-        // Everything ServerCommandSource offers, since the permission API moved and the
-        // replacement is not obvious from the name alone.
         def source = load('net.minecraft.server.command.ServerCommandSource')
         if (source != null) {
-            dump(source, [], '')
+            dump(source, ['permission', 'player', 'entity', 'server'], '')
 
             // Follow the type getPermissions() hands back, whatever it is called, so the
             // real permission check can be read off without knowing its package.
-            def permissions = source.methods.find { it.name == 'getPermissions' }
-            if (permissions != null) {
-                dump(permissions.returnType, [], '  (returned by ServerCommandSource#getPermissions)')
+            try {
+                def permissions = source.methods.find { it.name == 'getPermissions' }
+                if (permissions != null) {
+                    def type = permissions.returnType
+                    println ""
+                    println "   (ServerCommandSource#getPermissions returns ${type.name})"
+                    dump(type, [], '  <- the permission API')
+                }
+            } catch (Throwable failure) {
+                println "  <could not follow getPermissions: ${failure}>"
             }
         }
 
