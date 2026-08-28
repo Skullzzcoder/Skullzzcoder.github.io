@@ -28,32 +28,28 @@ on a version bump — the worst case is that it stops working.
 
 ## Building
 
-You need a JDK 21. From the project folder (the one with `gradlew.bat` in it), first fix
-the four placeholder versions in `gradle.properties`:
-
-```
-powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write
-```
-
-That queries Fabric and Modrinth for the Minecraft version in `gradle.properties` and
-rewrites the four lines. Drop `-Write` to just print them and paste them yourself, or skip
-the script entirely and copy them from <https://fabricmc.net/develop/>.
-
-Then build:
+You need a JDK 21. From the project folder (the one with `gradlew.bat` in it):
 
 ```
 gradlew build
 ```
 
-On macOS or Linux use `./gradlew build` (you may need `chmod +x gradlew` first), and get the
-versions from fabricmc.net/develop or with PowerShell 7.
+On macOS or Linux use `./gradlew build`; you may need `chmod +x gradlew` first.
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
-The versions ship as placeholders because the machine this was written on couldn't reach
-Fabric's servers to look them up. Note that Loom resolves them while Gradle is still
-configuring the project, so until they are right, *no* Gradle task will run -- which is why
-the lookup is a standalone script rather than a Gradle task.
+The toolchain versions in `gradle.properties` are set for Minecraft 1.21.11 and verified
+against Fabric's and Modrinth's APIs. If you retarget to another Minecraft version,
+regenerate them:
+
+```
+powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write
+```
+
+Drop `-Write` to print them instead of editing the file, or copy them from
+<https://fabricmc.net/develop/>. Loom resolves these while Gradle is still configuring the
+project, so if one is wrong the build stops before any Gradle task can run -- which is why
+the lookup is a standalone script and not a Gradle task.
 
 ## Installing
 

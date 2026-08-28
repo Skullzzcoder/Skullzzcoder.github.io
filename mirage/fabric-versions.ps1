@@ -27,6 +27,26 @@ $ErrorActionPreference = 'Stop'
 
 $propsFile = Join-Path $PSScriptRoot 'gradle.properties'
 
+# Property access on a collection member-enumerates, handing back every value rather than
+# one. Peel until we reach a scalar so a lookup always yields a single version.
+function Get-First($Value) {
+    while ($Value -is [array]) {
+        if ($Value.Count -eq 0) { return $null }
+        $Value = $Value[0]
+    }
+    return $Value
+}
+
+# A version must be one whitespace-free token. Anything else means the shape of a response
+# was not what we assumed, and writing it into gradle.properties would only produce a
+# confusing "Could not find" later.
+function Assert-Version([string] $Name, $Value) {
+    $text = [string](Get-First $Value)
+    if (-not $text) { throw "$Name lookup produced nothing." }
+    if ($text -match '\s') { throw "$Name lookup produced multiple values: $text" }
+    return $text
+}
+
 if (-not $MinecraftVersion) {
     if (Test-Path $propsFile) {
         $found = Select-String -Path $propsFile -Pattern '^\s*minecraft_version\s*=\s*(.+)$' |
@@ -49,26 +69,28 @@ $api = $null
 $problems = @()
 
 try {
-    $builds = @(Get-Json "https://meta.fabricmc.net/v2/versions/yarn/$MinecraftVersion")
-    if ($builds.Count -gt 0) {
-        $yarn = $builds[0].version
-    } else {
-        $problems += "Fabric publishes no yarn mappings for $MinecraftVersion."
-    }
+    $builds = Get-Json "https://meta.fabricmc.net/v2/versions/yarn/$MinecraftVersion"
+    # Newest build first.
+    $yarn = Assert-Version 'yarn_mappings' $builds.version
 } catch {
     $problems += "yarn lookup failed: $($_.Exception.Message)"
 }
 
 try {
-    $loaders = @(Get-Json "https://meta.fabricmc.net/v2/versions/loader/$MinecraftVersion")
-    # Prefer the newest stable loader over a prerelease.
-    $pick = $loaders | Where-Object { $_.loader.stable } | Select-Object -First 1
-    if (-not $pick -and $loaders.Count -gt 0) { $pick = $loaders[0] }
-    if ($pick) {
-        $loader = $pick.loader.version
-    } else {
-        $problems += "Fabric publishes no loader for $MinecraftVersion."
+    $loaders = Get-Json "https://meta.fabricmc.net/v2/versions/loader/$MinecraftVersion"
+    # Member-enumerate both fields into parallel arrays and pair them up by index, which
+    # avoids assuming anything about how PowerShell unrolled the response.
+    $loaderVersions = @($loaders.loader.version)
+    $loaderStable = @($loaders.loader.stable)
+
+    $picked = $null
+    for ($i = 0; $i -lt $loaderVersions.Count; $i++) {
+        if ($i -lt $loaderStable.Count -and $loaderStable[$i]) { $picked = $loaderVersions[$i]; break }
     }
+    # Fall back to the newest loader if none is flagged stable.
+    if (-not $picked -and $loaderVersions.Count -gt 0) { $picked = $loaderVersions[0] }
+
+    $loader = Assert-Version 'loader_version' $picked
 } catch {
     $problems += "loader lookup failed: $($_.Exception.Message)"
 }
@@ -77,12 +99,8 @@ try {
     $games = [uri]::EscapeDataString("[""$MinecraftVersion""]")
     $url = "https://api.modrinth.com/v2/project/fabric-api/version" +
            "?game_versions=$games&loaders=%5B%22fabric%22%5D"
-    $releases = @(Get-Json $url)
-    if ($releases.Count -gt 0) {
-        $api = $releases[0].version_number
-    } else {
-        $problems += "Modrinth lists no Fabric API build for $MinecraftVersion."
-    }
+    $releases = Get-Json $url
+    $api = Assert-Version 'fabric_version' $releases.version_number
 } catch {
     $problems += "Fabric API lookup failed: $($_.Exception.Message)"
 }
