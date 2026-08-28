@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "mirage",
+  "version": "${version}",
+  "name": "Mirage",
+  "description": "Server-side prank mod: purely visual ghost items in player inventories, rigged dispenser contents, and fake dispenser results. Vanilla clients need no install.",
+  "authors": ["Skullzzcoder"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["dev.skullzz.mirage.Mirage"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11",
+    "java": ">=21"
+  }
+}
