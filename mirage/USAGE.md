@@ -139,8 +139,12 @@ dispenser fires the selected one.
     /fake preset list
     /fake preset clear
 
-`]` and `[` step through that list. Nothing shows on screen when you do, so you
-can switch mid-game. `/fake dispenser result <item> [count]` overwrites
+`F` and `R` step through that list. Nothing shows on screen when you do, so you
+can switch mid-game.
+
+> `F` is vanilla's swap-with-offhand. Minecraft will mark it as a conflict and
+> run **both**, so clear the vanilla binding: Options → Controls → Gameplay →
+> **Swap Item With Offhand** → set to none. `/fake dispenser result <item> [count]` overwrites
 whichever entry is selected.
 
 **Per dispenser** — one dispenser always fires one thing, whatever is selected.
@@ -258,7 +262,7 @@ Client-only decoration for your base.
 
 | key | does |
 |---|---|
-| `]` / `[` | next / previous item in the current rig |
+| `F` / `R` | next / previous item in the current rig |
 | `\` | next rig |
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |

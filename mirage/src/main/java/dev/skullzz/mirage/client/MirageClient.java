@@ -158,10 +158,10 @@ public class MirageClient implements ClientModInitializer {
 
         nextResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.next_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_BRACKET, category));
+                GLFW.GLFW_KEY_F, category));
         previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.prev_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_LEFT_BRACKET, category));
+                GLFW.GLFW_KEY_R, category));
         armNext = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.arm_next", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_SEMICOLON, category));
