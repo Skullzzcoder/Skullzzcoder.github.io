@@ -47,10 +47,14 @@ public final class ClientDispensers {
     private static final List<PendingFire> pending = new ArrayList<>();
     private static final List<ExpiringItem> spawned = new ArrayList<>();
 
-    /** How long a fake arrow takes to reach its target. */
-    private static final int ARROW_FLIGHT_TICKS = 18;
-    /** How long it stays stuck there afterwards. */
+    /** Downward acceleration per tick squared, matching a vanilla arrow. */
+    private static final double ARROW_GRAVITY = 0.05;
+    /** How long it stays stuck in the target afterwards. */
     private static final int ARROW_LINGER_TICKS = 100;
+
+    /** Results a keybind can flip between, so the choice needs no menu. */
+    private static final List<FakeSpec> presets = new ArrayList<>();
+    private static int presetIndex = -1;
 
     private static FakeSpec result;
     /** Where a fake arrow always lands. Null means don't fire one. */
@@ -66,25 +70,58 @@ public final class ClientDispensers {
     private record ExpiringItem(ItemEntity entity, long removeAt) {
     }
 
-    /** An arrow flown along a fixed arc, so it lands exactly where it was told to. */
+    /**
+     * An arrow on a real ballistic path that happens to land where it was told to.
+     *
+     * <p>Rather than interpolating a shape, the launch velocity is solved for: given a flight
+     * time, there is exactly one velocity that reaches the target under constant gravity. The
+     * arrow then simply falls, so it rises, slows, tips over and comes down like any arrow.
+     */
     private static final class FlyingArrow {
         final ArrowEntity entity;
         final Vec3d from;
         final Vec3d to;
-        final double arcHeight;
+        final double velocityX;
+        final double velocityY;
+        final double velocityZ;
+        final int flightTicks;
         final long startTick;
         final long removeAt;
-        Vec3d previous;
 
         FlyingArrow(ArrowEntity entity, Vec3d from, Vec3d to, long startTick) {
             this.entity = entity;
             this.from = from;
             this.to = to;
-            // A flatter arc over a short distance, a lobbed one over a long shot.
-            this.arcHeight = Math.min(6.0, from.distanceTo(to) * 0.22);
             this.startTick = startTick;
-            this.removeAt = startTick + ARROW_FLIGHT_TICKS + ARROW_LINGER_TICKS;
-            this.previous = from;
+
+            double dx = to.x - from.x;
+            double dy = to.y - from.y;
+            double dz = to.z - from.z;
+
+            // Longer flights arc higher. A short hop still gets enough time to look lobbed
+            // rather than flat, and a long shot goes properly up into the sky.
+            double horizontal = Math.sqrt(dx * dx + dz * dz);
+            this.flightTicks = (int) Math.max(20.0, Math.min(60.0, horizontal * 1.6));
+
+            // Constant-gravity solution: horizontal is linear, vertical carries the arc.
+            this.velocityX = dx / this.flightTicks;
+            this.velocityZ = dz / this.flightTicks;
+            this.velocityY = (dy + 0.5 * ARROW_GRAVITY * this.flightTicks * this.flightTicks)
+                    / this.flightTicks;
+
+            this.removeAt = startTick + this.flightTicks + ARROW_LINGER_TICKS;
+        }
+
+        Vec3d positionAt(double elapsed) {
+            return new Vec3d(
+                    this.from.x + this.velocityX * elapsed,
+                    this.from.y + this.velocityY * elapsed - 0.5 * ARROW_GRAVITY * elapsed * elapsed,
+                    this.from.z + this.velocityZ * elapsed);
+        }
+
+        /** Velocity at a moment, which is what the arrow should be pointing along. */
+        Vec3d velocityAt(double elapsed) {
+            return new Vec3d(this.velocityX, this.velocityY - ARROW_GRAVITY * elapsed, this.velocityZ);
         }
     }
 
@@ -101,6 +138,36 @@ public final class ClientDispensers {
 
     public static void setResult(FakeSpec spec) {
         result = spec;
+    }
+
+    public static List<FakeSpec> presets() {
+        return presets;
+    }
+
+    public static int presetIndex() {
+        return presetIndex;
+    }
+
+    public static void addPreset(FakeSpec spec) {
+        presets.add(spec);
+    }
+
+    public static void clearPresets() {
+        presets.clear();
+        presetIndex = -1;
+    }
+
+    /**
+     * Steps to the next or previous preset and makes it the dispenser's result.
+     *
+     * @return the newly selected spec, or null if there are no presets.
+     */
+    public static FakeSpec cyclePreset(int delta) {
+        if (presets.isEmpty()) return null;
+
+        presetIndex = Math.floorMod(presetIndex + delta, presets.size());
+        result = presets.get(presetIndex);
+        return result;
     }
 
     public static Vec3d arrowTarget() {
@@ -195,27 +262,20 @@ public final class ClientDispensers {
                 continue;
             }
 
-            double progress = (tick - arrow.startTick) / (double) ARROW_FLIGHT_TICKS;
-            Vec3d position;
-            if (progress >= 1.0) {
-                position = arrow.to;
-            } else {
-                position = new Vec3d(
-                        MathHelper.lerp(progress, arrow.from.x, arrow.to.x),
-                        MathHelper.lerp(progress, arrow.from.y, arrow.to.y)
-                                + arrow.arcHeight * Math.sin(Math.PI * progress),
-                        MathHelper.lerp(progress, arrow.from.z, arrow.to.z));
-            }
+            double elapsed = tick - arrow.startTick;
+            boolean landed = elapsed >= arrow.flightTicks;
 
-            Vec3d step = position.subtract(arrow.previous);
-            if (step.lengthSquared() > 1.0E-6) {
-                double flat = Math.sqrt(step.x * step.x + step.z * step.z);
-                arrow.entity.setYaw((float) (MathHelper.atan2(step.z, step.x) * 180.0 / Math.PI) - 90.0F);
-                arrow.entity.setPitch((float) (-(MathHelper.atan2(step.y, flat) * 180.0 / Math.PI)));
+            Vec3d position = landed ? arrow.to : arrow.positionAt(elapsed);
+            if (!landed) {
+                // Point along the current velocity, using vanilla's own arrow convention:
+                // yaw from atan2(x, z), pitch from atan2(y, horizontal), neither negated.
+                Vec3d velocity = arrow.velocityAt(elapsed);
+                double flat = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+                arrow.entity.setYaw((float) (MathHelper.atan2(velocity.x, velocity.z) * 180.0 / Math.PI));
+                arrow.entity.setPitch((float) (MathHelper.atan2(velocity.y, flat) * 180.0 / Math.PI));
             }
 
             arrow.entity.setPosition(position.x, position.y, position.z);
-            arrow.previous = position;
         }
     }
 
@@ -301,6 +361,10 @@ public final class ClientDispensers {
             positions.add(pos.getX() + "," + pos.getY() + "," + pos.getZ());
         }
         root.add("watchedDispensers", positions);
+
+        JsonArray presetJson = new JsonArray();
+        for (FakeSpec spec : presets) presetJson.add(SelfFakes.writeSpec(spec));
+        root.add("dispenserPresets", presetJson);
         if (result != null) root.add("dispenserResult", SelfFakes.writeSpec(result));
         if (arrowTarget != null) {
             root.addProperty("arrowTarget",
@@ -326,6 +390,22 @@ public final class ClientDispensers {
             }
         }
 
+        presets.clear();
+        presetIndex = -1;
+        if (root.has("dispenserPresets")) {
+            for (JsonElement element : root.getAsJsonArray("dispenserPresets")) {
+                FakeSpec spec = readSpec(element.getAsJsonObject());
+                if (spec != null) presets.add(spec);
+            }
+        }
+        if (presets.isEmpty()) {
+            // Sensible defaults for the usual two-way gamble.
+            Item gold = SelfFakes.lookupItem("gold_ingot");
+            Item diamond = SelfFakes.lookupItem("diamond");
+            if (gold != null) presets.add(new FakeSpec(gold, 1, ""));
+            if (diamond != null) presets.add(new FakeSpec(diamond, 1, ""));
+        }
+
         arrowTarget = null;
         if (root.has("arrowTarget")) {
             String[] parts = root.get("arrowTarget").getAsString().split(",");
@@ -340,13 +420,18 @@ public final class ClientDispensers {
         }
 
         if (root.has("dispenserResult")) {
-            JsonObject json = root.getAsJsonObject("dispenserResult");
-            Item item = SelfFakes.lookupItem(json.get("id").getAsString());
-            if (item != null) {
-                int count = json.has("count") ? json.get("count").getAsInt() : 1;
-                String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
-                result = new FakeSpec(item, count, enchants);
-            }
+            result = readSpec(root.getAsJsonObject("dispenserResult"));
         }
+    }
+
+    private static FakeSpec readSpec(JsonObject json) {
+        if (json == null || !json.has("id")) return null;
+
+        Item item = SelfFakes.lookupItem(json.get("id").getAsString());
+        if (item == null) return null;
+
+        int count = json.has("count") ? json.get("count").getAsInt() : 1;
+        String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
+        return new FakeSpec(item, count, enchants);
     }
 }

@@ -1,5 +1,6 @@
 package dev.skullzz.mirage.client;
 
+import java.util.List;
 import java.util.Map;
 
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -12,9 +13,14 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 
+import org.lwjgl.glfw.GLFW;
+
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.CommandSource;
 import net.minecraft.item.Item;
 import net.minecraft.text.Text;
@@ -33,8 +39,14 @@ import dev.skullzz.mirage.Mirage;
  * be installed server-side.
  */
 public class MirageClient implements ClientModInitializer {
+    private static KeyBinding nextResult;
+    private static KeyBinding previousResult;
+    private static KeyBinding openMenu;
+
     @Override
     public void onInitializeClient() {
+        registerKeys();
+
         FakeLore.load();
         SelfFakes.load();
 
@@ -45,6 +57,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(enderBranch())
                         .then(dispenserBranch())
                         .then(arrowBranch())
+                        .then(presetBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(MirageClient::reloadPrices)))
@@ -57,6 +70,10 @@ public class MirageClient implements ClientModInitializer {
             ClientDispensers.tick(client);
             // A price that arrived from the API rebuilds the fakes once, not every tick.
             if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
+
+            while (nextResult.wasPressed()) selectPreset(client, 1);
+            while (previousResult.wasPressed()) selectPreset(client, -1);
+            while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -65,6 +82,38 @@ public class MirageClient implements ClientModInitializer {
         });
 
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
+    }
+
+    private static void registerKeys() {
+        nextResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.next_result", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_RIGHT_BRACKET, "key.categories.mirage"));
+        previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.prev_result", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_LEFT_BRACKET, "key.categories.mirage"));
+        // Unbound by default: the menu has a command, and an accidental clash is worse.
+        openMenu = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.open_menu", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN, "key.categories.mirage"));
+    }
+
+    /** Flips to another preset result without opening anything anyone could see. */
+    private static void selectPreset(MinecraftClient client, int delta) {
+        FakeSpec spec = ClientDispensers.cyclePreset(delta);
+        if (spec == null) {
+            if (client.player != null) {
+                client.player.sendMessage(Text.literal("No dispenser presets set.")
+                        .formatted(Formatting.RED), true);
+            }
+            return;
+        }
+
+        SelfFakes.save();
+        if (client.player != null) {
+            // The action bar rather than chat: small, fades by itself, no scrollback.
+            client.player.sendMessage(Text.literal(spec.count + "x "
+                    + spec.stack().getName().getString()).formatted(Formatting.GRAY), true);
+        }
     }
 
     // ---------------------------------------------------------------- branches
@@ -120,6 +169,50 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setContainer(context, SelfFakes.DISPENSER,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> presetBranch() {
+        return ClientCommandManager.literal("preset")
+                .then(ClientCommandManager.literal("clear").executes(context -> {
+                    ClientDispensers.clearPresets();
+                    SelfFakes.save();
+                    return feedback(context, "Cleared the dispenser presets.");
+                }))
+                .then(ClientCommandManager.literal("list").executes(MirageClient::listPresets))
+                .then(ClientCommandManager.literal("add")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> addPreset(context, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> addPreset(context,
+                                                IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static int addPreset(CommandContext<FabricClientCommandSource> context, int count) {
+        Item item = resolve(context);
+        if (item == null) return 0;
+
+        ClientDispensers.addPreset(new FakeSpec(item, count, ""));
+        SelfFakes.save();
+        return feedback(context, "Added " + count + "x " + itemName(context)
+                + " as preset " + ClientDispensers.presets().size() + ".");
+    }
+
+    private static int listPresets(CommandContext<FabricClientCommandSource> context) {
+        List<FakeSpec> presets = ClientDispensers.presets();
+        if (presets.isEmpty()) {
+            context.getSource().sendFeedback(Text.literal("No dispenser presets set."));
+            return 0;
+        }
+
+        context.getSource().sendFeedback(Text.literal("Dispenser presets ( ] and [ to cycle ):")
+                .formatted(Formatting.AQUA));
+        for (int index = 0; index < presets.size(); index++) {
+            FakeSpec spec = presets.get(index);
+            String marker = index == ClientDispensers.presetIndex() ? " <- active" : "";
+            context.getSource().sendFeedback(Text.literal("  " + (index + 1) + ". " + spec.count
+                    + "x " + spec.stack().getName().getString() + marker));
+        }
+        return presets.size();
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> arrowBranch() {

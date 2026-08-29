@@ -239,6 +239,8 @@ tasks.register('inspectApi') {
                             'net.minecraft.screen.slot.Slot'                : ['stack'],
                             'net.minecraft.client.world.ClientWorld'        : ['addentity', 'chunk', 'random'],
                             'net.minecraft.entity.projectile.ArrowEntity'   : [],
+                            'net.minecraft.client.option.KeyBinding'        : ['pressed', 'category'],
+                            'net.minecraft.client.util.InputUtil'           : ['keysym', 'type'],
                             'net.minecraft.util.math.MathHelper'            : ['lerp', 'atan2'],
                             'net.minecraft.util.hit.BlockHitResult'         : ['pos', 'side'],
                             'net.minecraft.client.gui.widget.ClickableWidget': ['visible', 'active', 'getx', 'gety'],

@@ -185,12 +185,35 @@ far as you can touch — past that it reports a miss a few blocks in front of yo
 of the thing you were aiming at. A ray that hits nothing is now refused rather than silently
 targeting thin air.
 
-The arrow's path is interpolated along an arc rather than launched ballistically: solving for
-a velocity that hits an exact point through Minecraft's drag is approximate, and the whole
-point is that it never misses. `/fake arrow clear` turns it off.
+The arrow flies a real ballistic path: given a flight time there is exactly one launch
+velocity that reaches the target under constant gravity, so it is solved for and the arrow
+then simply falls. It rises, slows, tips over and comes down like any arrow, and still lands
+exactly on the point. Longer shots arc higher. `/fake arrow clear` turns it off.
 
 **This changes nothing about the real outcome.** The arrow exists only on your client; the
 server's arrow, and whatever it pays, are untouched and unaware.
+
+### Switching the result without touching a menu
+
+For a two-way gamble, keep both outcomes as presets and flip between them with a key, so
+nothing visible ever happens on your screen:
+
+| Key | Does |
+| --- | --- |
+| `]` | next dispenser result |
+| `[` | previous dispenser result |
+| unbound | open the Mirage menu |
+
+All three are rebindable under Options then Controls then Mirage. The selected result shows
+briefly in the action bar rather than chat: small, fades on its own, no scrollback.
+
+Presets default to one gold ingot and one diamond. To change them:
+
+```
+/fake preset add <item> [count]
+/fake preset list
+/fake preset clear
+```
 
 ### Price lines
 
