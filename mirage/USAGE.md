@@ -42,10 +42,17 @@ the rig it belongs to:
 |---|---|
 | roulette | 8 blanks in a ring, the loaded item in the middle slot |
 | a dispenser with a fixed answer | nine of that |
-| anything else | the rig's items dealt round the nine slots |
+| anything else | one of each of the rig's items, in order |
 
-A coin flip therefore holds **both** gold and diamond, so flipping which way it
-is rigged does not change what is in the box.
+A coin flip therefore holds one diamond block in slot 0 and one gold block in
+slot 1 — nothing else. Holding both means flipping which way it is rigged does
+not change what is in the box.
+
+The order is your preset order. To swap it round:
+
+    /fake preset clear
+    /fake preset add diamond_block
+    /fake preset add gold_block
 
 **When it fires, the item leaves.** One of the matching slots empties, chosen at
 random the way a real dispenser picks, so opening it afterwards agrees with what

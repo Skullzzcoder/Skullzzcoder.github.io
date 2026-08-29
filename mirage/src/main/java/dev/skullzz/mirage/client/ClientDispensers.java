@@ -514,7 +514,7 @@ public final class ClientDispensers {
      *
      * <p>A roulette rig gets the shape of the real game: the loaded item in the middle with
      * blanks all round it. A dispenser with a fixed answer gets nine of that. Anything else
-     * deals the rig's items across the nine slots, so a coin flip holds both sides and looks
+     * gets one of each of the rig's items, so a coin flip holds one of each side and looks
      * the same whichever way it is currently rigged.
      */
     public static boolean fill(BlockPos pos) {
@@ -533,11 +533,13 @@ public final class ClientDispensers {
                 for (int slot = 0; slot < STOCK_SLOTS; slot++) {
                     slots.put(slot, fixed.withCount(fixed.count));
                 }
-            } else if (!profile.presets.isEmpty()) {
-                // Deal them round: switching which one is rigged must not change what the
-                // dispenser looks like it is holding.
-                for (int slot = 0; slot < STOCK_SLOTS; slot++) {
-                    FakeSpec spec = profile.presets.get(slot % profile.presets.size());
+            } else {
+                // One of each, in order. A coin flip is the two things you could win sat
+                // side by side, not a box full of them, and holding both means switching
+                // which one is rigged never changes what the dispenser looks like.
+                int count = Math.min(profile.presets.size(), STOCK_SLOTS);
+                for (int slot = 0; slot < count; slot++) {
+                    FakeSpec spec = profile.presets.get(slot);
                     slots.put(slot, spec.withCount(spec.count));
                 }
             }
@@ -1110,10 +1112,10 @@ public final class ClientDispensers {
     private static void seedDefaults() {
         if (!profiles.containsKey("5050")) {
             RigProfile coinFlip = new RigProfile("5050");
-            Item gold = SelfFakes.lookupItem("gold_block");
             Item diamond = SelfFakes.lookupItem("diamond_block");
-            if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
+            Item gold = SelfFakes.lookupItem("gold_block");
             if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
+            if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
             coinFlip.setPresetIndex(coinFlip.presets.isEmpty() ? -1 : 0);
             profiles.put(coinFlip.name, coinFlip);
         }
