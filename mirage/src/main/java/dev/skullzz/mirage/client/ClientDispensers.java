@@ -24,6 +24,8 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -50,8 +52,13 @@ public final class ClientDispensers {
     /** How close the player has to get for it to come early. */
     private static final double COLLECT_RANGE_SQUARED = 2.5;
 
+    /** One dispense can show up on more than one signal; ignore the echoes. */
+    private static final int REFIRE_COOLDOWN_TICKS = 8;
+
     private static final Set<BlockPos> watched = new LinkedHashSet<>();
     private static final Map<BlockPos, Boolean> lastTriggered = new HashMap<>();
+    private static final Map<BlockPos, Boolean> lastPowered = new HashMap<>();
+    private static final Map<BlockPos, Long> lastFire = new HashMap<>();
     private static final List<PendingFire> pending = new ArrayList<>();
     private static final List<SpawnedItem> spawned = new ArrayList<>();
     private static final List<FlyingArrow> arrows = new ArrayList<>();
@@ -60,6 +67,8 @@ public final class ClientDispensers {
     private static String activeName = "";
 
     private static long tick;
+    /** Prints what the watcher is seeing, for working out why nothing fired. */
+    private static boolean debug;
     /** Client-only ids, from the top of the range so they miss the server's. */
     private static int nextEntityId = Integer.MAX_VALUE - 4096;
 
@@ -294,13 +303,25 @@ public final class ClientDispensers {
 
     public static boolean unwatch(BlockPos pos) {
         lastTriggered.remove(pos);
+        lastPowered.remove(pos);
+        lastFire.remove(pos);
         return watched.remove(pos);
     }
 
     public static void unwatchAll() {
         watched.clear();
         lastTriggered.clear();
+        lastPowered.clear();
+        lastFire.clear();
         pending.clear();
+    }
+
+    public static boolean debug() {
+        return debug;
+    }
+
+    public static void setDebug(boolean on) {
+        debug = on;
     }
 
     public static int watchedCount() {
@@ -320,25 +341,7 @@ public final class ClientDispensers {
 
         tidySpawned(client);
         flyArrows();
-        if (watched.isEmpty()) return;
-
-        for (BlockPos pos : watched) {
-            // Don't reach into chunks the client has not got.
-            if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
-
-            BlockState state = world.getBlockState(pos);
-            if (!(state.getBlock() instanceof DispenserBlock)) {
-                lastTriggered.remove(pos);
-                continue;
-            }
-
-            boolean triggered = state.get(DispenserBlock.TRIGGERED);
-            Boolean previous = lastTriggered.put(pos, triggered);
-            // Only the rising edge counts, and never the very first observation.
-            if (triggered && previous != null && !previous) {
-                pending.add(new PendingFire(pos, tick + DISPENSE_DELAY_TICKS));
-            }
-        }
+        watchTick(world);
 
         Iterator<PendingFire> iterator = pending.iterator();
         while (iterator.hasNext()) {
@@ -346,15 +349,159 @@ public final class ClientDispensers {
             if (tick < fire.fireAt()) continue;
             iterator.remove();
 
+            // Resolve nothing until we know something can actually come out: in roulette
+            // that call spends a chamber, and spending one on a dispenser that has been
+            // broken or walked away from would quietly desync the count.
+            if (!isDispenser(world, fire.pos())) {
+                note("nothing at " + text(fire.pos()) + " to fire - not loaded, or gone");
+                continue;
+            }
+
             RigProfile profile = active();
             // In roulette the whole rig shares one chamber counter, so which dispenser fired
             // does not matter; otherwise a dispenser's own answer wins.
             FakeSpec result = profile.roulette
                     ? profile.advanceRoulette()
                     : profile.resultFor(fire.pos());
-            if (result != null) spawn(world, fire.pos(), result);
+            if (result == null) {
+                note("rig '" + profile.name + "' has nothing set to fire");
+            } else {
+                spawn(world, fire.pos(), result);
+            }
             if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
+    }
+
+    /** Looks at every watched dispenser for a sign that it just went off. */
+    private static void watchTick(ClientWorld world) {
+        for (BlockPos pos : watched) {
+            // Don't reach into chunks the client has not got.
+            if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
+
+            BlockState state = world.getBlockState(pos);
+            if (!(state.getBlock() instanceof DispenserBlock)) {
+                lastTriggered.remove(pos);
+                lastPowered.remove(pos);
+                continue;
+            }
+
+            // TRIGGERED is set without telling anyone: the server writes it with the
+            // no-redraw flag, which skips the packet, so on a real server this bit never
+            // moves for us. It does in single player, where both sides share one world,
+            // so it stays in as one signal rather than the only one.
+            boolean triggered = state.get(DispenserBlock.TRIGGERED);
+            Boolean wasTriggered = lastTriggered.put(pos, triggered);
+            if (triggered && wasTriggered != null && !wasTriggered) spotFire(pos, "triggered");
+
+            // What the client does get is the redstone around it. Levers, buttons, plates,
+            // wire, repeaters and torches all sync their own state, so the power reaching
+            // the dispenser can be worked out here from blocks we can actually see.
+            boolean powered = world.isReceivingRedstonePower(pos)
+                    || world.isReceivingRedstonePower(pos.up());
+            Boolean wasPowered = lastPowered.put(pos, powered);
+            if (powered && wasPowered != null && !wasPowered) spotFire(pos, "redstone");
+        }
+    }
+
+    private static boolean isDispenser(ClientWorld world, BlockPos pos) {
+        if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) return false;
+        return world.getBlockState(pos).getBlock() instanceof DispenserBlock;
+    }
+
+    /** Queues a dispense, unless the same one has already been spotted another way. */
+    private static boolean spotFire(BlockPos pos, String why) {
+        Long last = lastFire.get(pos);
+        if (last != null && tick - last < REFIRE_COOLDOWN_TICKS) return false;
+
+        BlockPos key = pos.toImmutable();
+        lastFire.put(key, tick);
+        pending.add(new PendingFire(key, tick + DISPENSE_DELAY_TICKS));
+        note("fire spotted at " + text(key) + " (" + why + ")");
+        return true;
+    }
+
+    /**
+     * Fires a dispenser by hand.
+     *
+     * <p>The signals above cover the usual setups, but a dispenser worked by something the
+     * client cannot see still needs to look like it went off, so this is always available.
+     */
+    public static boolean fireNow(BlockPos pos) {
+        BlockPos key = pos.toImmutable();
+        lastFire.put(key, tick);
+        pending.add(new PendingFire(key, tick));
+        return true;
+    }
+
+    /** Fires every watched dispenser, for when you are not looking at one. */
+    public static int fireAllWatched() {
+        for (BlockPos pos : watched) fireNow(pos);
+        return watched.size();
+    }
+
+    /** What the watcher can see right now, so a dead setup can be told apart from a bug. */
+    public static List<String> status(ClientWorld world) {
+        List<String> lines = new ArrayList<>();
+        RigProfile profile = active();
+
+        lines.add("Rig '" + profile.name + "'"
+                + (profile.roulette ? ", roulette" : "")
+                + (profile.roulette && profile.manualTrigger ? ", manual" : "")
+                + (profile.armed ? ", ARMED" : ""));
+        if (profile.roulette) {
+            lines.add("  shot " + profile.shot + " of " + profile.chambers
+                    + ", loaded one at " + profile.bulletAt
+                    + ", bullet " + describeSpec(profile.bullet)
+                    + ", blank " + describeSpec(profile.blank));
+        } else {
+            lines.add("  fires " + describeSpec(profile.selected()));
+        }
+
+        if (watched.isEmpty()) {
+            lines.add("No dispensers watched. Look at one and run /fake dispenser watch.");
+            return lines;
+        }
+
+        for (BlockPos pos : watched) {
+            StringBuilder line = new StringBuilder("  " + text(pos) + ": ");
+            if (world == null) {
+                line.append("no world");
+            } else if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+                line.append("chunk not loaded - go closer");
+            } else {
+                BlockState state = world.getBlockState(pos);
+                if (!(state.getBlock() instanceof DispenserBlock)) {
+                    line.append("not a dispenser any more - rewatch it");
+                } else {
+                    line.append("ok, ")
+                            .append(world.isReceivingRedstonePower(pos)
+                                    || world.isReceivingRedstonePower(pos.up())
+                                    ? "powered now" : "unpowered");
+                    FakeSpec fixed = profile.perDispenser.get(pos);
+                    if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
+                }
+            }
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
+    private static String describeSpec(FakeSpec spec) {
+        return spec == null ? "nothing" : spec.count + "x " + spec.describe();
+    }
+
+    private static String text(BlockPos pos) {
+        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+    }
+
+    /** Debug chatter, in the action bar so it never lands in a screenshot of chat. */
+    private static void note(String message) {
+        if (!debug) return;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return;
+        client.player.sendMessage(Text.literal("[mirage] " + message)
+                .formatted(Formatting.DARK_GRAY), false);
     }
 
     private static void spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
@@ -506,6 +653,8 @@ public final class ClientDispensers {
         spawned.clear();
         pending.clear();
         lastTriggered.clear();
+        lastPowered.clear();
+        lastFire.clear();
     }
 
     public static void invalidateResults() {
@@ -564,6 +713,8 @@ public final class ClientDispensers {
     public static void load(JsonObject root) {
         watched.clear();
         lastTriggered.clear();
+        lastPowered.clear();
+        lastFire.clear();
         profiles.clear();
         activeName = "";
 
@@ -583,7 +734,7 @@ public final class ClientDispensers {
             migrateSingleRig(root);
         }
 
-        if (profiles.isEmpty()) seedDefaults();
+        seedDefaults();
         if (!profiles.containsKey(activeName)) {
             activeName = profiles.keySet().iterator().next();
         }
@@ -648,31 +799,41 @@ public final class ClientDispensers {
         }
     }
 
-    /** A coin-flip rig ready to go, since that is what most of these games are. */
+    /**
+     * Puts the built-in rigs back if they are not in the file.
+     *
+     * <p>This runs on every load rather than only on a fresh one: a config written before a
+     * rig existed has no trace of it, and the rig silently missing looks exactly like the
+     * feature being broken. Rigs already in the file are left completely alone.
+     */
     private static void seedDefaults() {
-        RigProfile coinFlip = new RigProfile("5050");
-        Item gold = SelfFakes.lookupItem("gold_block");
-        Item diamond = SelfFakes.lookupItem("diamond_block");
-        if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
-        if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
+        if (!profiles.containsKey("5050")) {
+            RigProfile coinFlip = new RigProfile("5050");
+            Item gold = SelfFakes.lookupItem("gold_block");
+            Item diamond = SelfFakes.lookupItem("diamond_block");
+            if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
+            if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
+            coinFlip.setPresetIndex(coinFlip.presets.isEmpty() ? -1 : 0);
+            profiles.put(coinFlip.name, coinFlip);
+        }
+        if (!profiles.containsKey("paper")) {
+            profiles.put("paper", new RigProfile("paper"));
+        }
+        if (!profiles.containsKey("roulette")) {
+            // Set up for the usual arrangement: eight obsidian round one crystal, and the
+            // crystal appears only when you arm it, since turn order is decided as you go.
+            RigProfile roulette = new RigProfile("roulette");
+            roulette.roulette = true;
+            roulette.manualTrigger = true;
+            roulette.chambers = 9;
 
-        profiles.put(coinFlip.name, coinFlip);
-        profiles.put("paper", new RigProfile("paper"));
-
-        // Set up for the usual arrangement: eight obsidian round one crystal, and the
-        // crystal appears only when you arm it, since turn order is decided as you go.
-        RigProfile roulette = new RigProfile("roulette");
-        roulette.roulette = true;
-        roulette.manualTrigger = true;
-        roulette.chambers = 9;
-
-        Item crystal = SelfFakes.lookupItem("end_crystal");
-        if (crystal != null) roulette.bullet = new FakeSpec(crystal, 1, "");
-        Item obsidian = SelfFakes.lookupItem("obsidian");
-        if (obsidian != null) roulette.blank = new FakeSpec(obsidian, 1, "");
-        profiles.put(roulette.name, roulette);
-
-        activeName = coinFlip.name;
+            Item crystal = SelfFakes.lookupItem("end_crystal");
+            if (crystal != null) roulette.bullet = new FakeSpec(crystal, 1, "");
+            Item obsidian = SelfFakes.lookupItem("obsidian");
+            if (obsidian != null) roulette.blank = new FakeSpec(obsidian, 1, "");
+            profiles.put(roulette.name, roulette);
+        }
+        if (activeName.isEmpty()) activeName = "5050";
     }
 
     private static FakeSpec readSpec(JsonObject json) {

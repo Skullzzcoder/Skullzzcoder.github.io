@@ -239,6 +239,8 @@ tasks.register('inspectApi') {
                             'net.minecraft.item.ItemStack'                  : ['set', 'count', 'name'],
                             'net.minecraft.screen.slot.Slot'                : ['stack'],
                             'net.minecraft.client.world.ClientWorld'        : ['addentity', 'chunk', 'random'],
+                            'net.minecraft.world.World'                     : ['redstone', 'power',
+                                                                               'blockstate', 'chunk'],
                             'net.minecraft.entity.Entity'                   : ['pos', 'getx', 'gety',
                                                                                'getz', 'velocity', 'setid',
                                                                                'discard', 'raycast',

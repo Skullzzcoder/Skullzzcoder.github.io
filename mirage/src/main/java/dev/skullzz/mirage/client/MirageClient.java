@@ -45,6 +45,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding openMenu;
     private static KeyBinding cycleRig;
     private static KeyBinding armNext;
+    private static KeyBinding fireNow;
 
     @Override
     public void onInitializeClient() {
@@ -75,6 +76,16 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.literal("off").executes(context -> {
                                     SelfFakes.setAutoCollect(false);
                                     return feedback(context, "Fakes will just vanish instead.");
+                                })))
+                        .then(ClientCommandManager.literal("debug")
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    ClientDispensers.setDebug(true);
+                                    return feedback(context, "Watcher debug on. Every fire it "
+                                            + "spots is printed here.");
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    ClientDispensers.setDebug(false);
+                                    return feedback(context, "Watcher debug off.");
                                 })))
                         .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
                         .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
@@ -113,6 +124,8 @@ public class MirageClient implements ClientModInitializer {
             }
 
             while (armNext.wasPressed()) ClientDispensers.armNext();
+            while (fireNow.wasPressed()) fireLookedAtOrAll(client);
+            if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
             while (cycleRig.wasPressed()) {
                 if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
             }
@@ -145,6 +158,9 @@ public class MirageClient implements ClientModInitializer {
         armNext = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.arm_next", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_SEMICOLON, category));
+        fireNow = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.fire_now", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_APOSTROPHE, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -290,6 +306,8 @@ public class MirageClient implements ClientModInitializer {
                     SelfFakes.save();
                     return feedback(context, "Stopped watching every dispenser.");
                 }))
+                .then(ClientCommandManager.literal("fire").executes(MirageClient::fireDispenser))
+                .then(ClientCommandManager.literal("status").executes(MirageClient::dispenserStatus))
                 .then(ClientCommandManager.literal("result")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
                                 .executes(context -> setResult(context, 1))
@@ -689,6 +707,47 @@ public class MirageClient implements ClientModInitializer {
         SelfFakes.save();
         return feedback(context, "Watched dispensers will appear to fire " + count + "x "
                 + itemName(context) + ".");
+    }
+
+    /**
+     * Fires the dispenser being looked at, or every watched one.
+     *
+     * <p>Aiming at a particular one matters when two dispensers are in a game together and
+     * only one of them should appear to go off.
+     */
+    private static void fireLookedAtOrAll(MinecraftClient client) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit != null && ClientDispensers.watchedPositions().contains(hit.getBlockPos())) {
+            ClientDispensers.fireNow(hit.getBlockPos());
+            return;
+        }
+        ClientDispensers.fireAllWatched();
+    }
+
+    private static int fireDispenser(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit != null && ClientDispensers.watchedPositions().contains(hit.getBlockPos())) {
+            ClientDispensers.fireNow(hit.getBlockPos());
+            return feedback(context, "Fired that one.");
+        }
+
+        int count = ClientDispensers.fireAllWatched();
+        if (count == 0) {
+            return error(context, "No dispensers watched. Look at one and run "
+                    + "/fake dispenser watch.");
+        }
+        return feedback(context, "Fired " + count + " watched dispenser"
+                + (count == 1 ? "." : "s."));
+    }
+
+    private static int dispenserStatus(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        List<String> lines = ClientDispensers.status(client.world);
+
+        for (String line : lines) {
+            context.getSource().sendFeedback(Text.literal(line).formatted(Formatting.AQUA));
+        }
+        return lines.size();
     }
 
     private static int watchDispenser(CommandContext<FabricClientCommandSource> context) {

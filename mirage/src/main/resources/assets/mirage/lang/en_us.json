@@ -4,5 +4,6 @@
   "key.mirage.prev_result": "Previous dispenser result",
   "key.mirage.cycle_rig": "Next rig",
   "key.mirage.arm_next": "Arm next spin",
+  "key.mirage.fire_now": "Fire watched dispensers",
   "key.mirage.open_menu": "Open Mirage menu"
 }

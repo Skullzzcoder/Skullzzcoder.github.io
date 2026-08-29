@@ -33,6 +33,9 @@ public final class WebDashboard {
             new java.util.concurrent.atomic.AtomicBoolean(false);
     /** What a browser asked of arming: 1 arm, 0 disarm, -1 nothing. */
     private static final AtomicInteger requestedArm = new AtomicInteger(-1);
+    /** Whether a browser asked to set the watched dispensers off by hand. */
+    private static final java.util.concurrent.atomic.AtomicBoolean requestedFire =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private static HttpServer server;
     private static int boundPort = -1;
@@ -89,6 +92,7 @@ public final class WebDashboard {
             server.createContext("/shot", WebDashboard::handleShot);
             server.createContext("/reset", WebDashboard::handleReset);
             server.createContext("/arm", WebDashboard::handleArm);
+            server.createContext("/fire", WebDashboard::handleFire);
             server.setExecutor(null);
             server.start();
 
@@ -137,6 +141,11 @@ public final class WebDashboard {
     /** @return 1 to arm, 0 to disarm, -1 if nothing was asked. Clears it. */
     public static int pollArm() {
         return requestedArm.getAndSet(-1);
+    }
+
+    /** @return true once if a browser asked to fire the watched dispensers. */
+    public static boolean pollFire() {
+        return requestedFire.getAndSet(false);
     }
 
     // ----------------------------------------------------------------- handlers
@@ -192,6 +201,11 @@ public final class WebDashboard {
             return;
         }
         requestedShot.set(shot);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleFire(HttpExchange exchange) throws IOException {
+        requestedFire.set(true);
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -299,6 +313,7 @@ public final class WebDashboard {
               </div>
               <div class="row" id="buttons"></div>
               <button id="arm" hidden></button>
+              <button id="fire">Fire the watched dispensers</button>
               <div class="row" id="chambers"></div>
               <div id="fixed"></div>
               <div id="none" hidden>Nothing set in this rig.</div>
@@ -389,6 +404,10 @@ public final class WebDashboard {
               });
             }
 
+            function wireFire() {
+              el('fire').onclick = () => post('/fire');
+            }
+
             function renderArm(s) {
               const button = el('arm');
               const r = s.roulette;
@@ -451,6 +470,7 @@ public final class WebDashboard {
               renderFixed(s);
             }
 
+            wireFire();
             refresh();
             setInterval(refresh, 1000);
             </script>
