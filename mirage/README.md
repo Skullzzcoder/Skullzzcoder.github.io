@@ -222,16 +222,27 @@ plain vanilla one. Prices live in `config/mirage-prices.json`:
 
 ```json
 {
-  "lore": ["&7Sell Price: &a$%price%"],
+  "lore": ["&7~ &a$ %short%"],
   "prices": {
-    "minecraft:diamond_block": 4500,
-    "minecraft:netherite_ingot": 32000
+    "minecraft:gold_block": 19100,
+    "minecraft:diamond_block": 44600
   }
 }
 ```
 
-`%price%` is the price times the stack size, `%unit%` is the per-item price, and `&` codes
-are colours. An item with no entry gets no lore line at all.
+Placeholders, all scaled by stack size except the `unit` ones:
+
+| Placeholder | Gives |
+| --- | --- |
+| `%short%` | stack total, abbreviated: `19.1K`, `1.2M` |
+| `%unit_short%` | per item, abbreviated |
+| `%price%` | stack total in full: `19,100` |
+| `%unit%` | per item in full |
+
+`&` codes are colours. An item with no entry gets no lore line at all.
+
+Numbers are formatted in the root locale, so a European system locale still renders `19.1K`
+rather than `19,1K`.
 
 **The shipped values are placeholders, not real server prices.** Nothing is fetched from
 anywhere — put the real numbers in yourself, or the lore will read convincingly and be wrong.

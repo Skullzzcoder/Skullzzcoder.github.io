@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,7 +39,11 @@ import dev.skullzz.mirage.Mirage;
  */
 public final class FakeLore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final DecimalFormat MONEY = new DecimalFormat("#,##0.##");
+    // Locale.ROOT on purpose: a European default locale would render 19,1K.
+    private static final DecimalFormat MONEY =
+            new DecimalFormat("#,##0.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
+    private static final DecimalFormat SHORT =
+            new DecimalFormat("0.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
 
     /** Item id to price. */
     private static final Map<String, Double> prices = new HashMap<>();
@@ -90,17 +96,17 @@ public final class FakeLore {
         JsonObject root = new JsonObject();
 
         JsonArray lore = new JsonArray();
-        lore.add("&7Sell Price: &a$%price%");
+        lore.add("&7~ &a$ %short%");
         root.add("lore", lore);
 
         JsonObject starter = new JsonObject();
-        starter.addProperty("minecraft:diamond_block", 4500);
-        starter.addProperty("minecraft:netherite_ingot", 32000);
-        starter.addProperty("minecraft:diamond", 500);
+        starter.addProperty("minecraft:gold_block", 19100);
+        starter.addProperty("minecraft:diamond_block", 44600);
         root.add("prices", starter);
 
-        root.addProperty("_comment", "Placeholder values -- replace with the real ones. "
-                + "An item with no price here gets no lore line.");
+        root.addProperty("_comment", "An item with no price here gets no lore line. "
+                + "%short% is the stack total as 19.1K, %unit_short% is per item, "
+                + "%price% and %unit% are the same numbers written out in full.");
 
         // Optional live lookup. Off by default, and deliberately generic: fill in the URL,
         // the headers and the path to the number, whatever shape the API returns.
@@ -122,6 +128,20 @@ public final class FakeLore {
         } catch (IOException e) {
             Mirage.LOGGER.error("Mirage could not write {}", file, e);
         }
+    }
+
+    /**
+     * Money the way a server writes it: 19100 becomes 19.1K, 1234567 becomes 1.2M.
+     *
+     * <p>A whole number keeps no decimal, so 20000 is 20K rather than 20.0K.
+     */
+    static String abbreviate(double value) {
+        double magnitude = Math.abs(value);
+
+        if (magnitude >= 1_000_000_000.0) return SHORT.format(value / 1_000_000_000.0) + "B";
+        if (magnitude >= 1_000_000.0) return SHORT.format(value / 1_000_000.0) + "M";
+        if (magnitude >= 1_000.0) return SHORT.format(value / 1_000.0) + "K";
+        return MONEY.format(value);
     }
 
     public static boolean hasPriceFor(ItemStack stack) {
@@ -156,9 +176,11 @@ public final class FakeLore {
         Double unitPrice = priceOf(stack);
         if (unitPrice != null && !loreLines.isEmpty()) {
             // Price scales with the stack, the way a sell-all total would.
-            String formatted = MONEY.format(unitPrice * stack.getCount());
+            double total = unitPrice * stack.getCount();
             for (String line : loreLines) {
-                String text = line.replace("%price%", formatted)
+                String text = line.replace("%short%", abbreviate(total))
+                        .replace("%unit_short%", abbreviate(unitPrice))
+                        .replace("%price%", MONEY.format(total))
                         .replace("%unit%", MONEY.format(unitPrice))
                         .replace('&', '§');
                 // Lore is italic by default; server-formatted items normally are not.
