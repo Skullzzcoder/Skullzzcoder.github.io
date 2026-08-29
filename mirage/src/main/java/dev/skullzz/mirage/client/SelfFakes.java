@@ -335,7 +335,7 @@ public final class SelfFakes {
         Map<Integer, FakeSpec> target = null;
         // A dispenser laid out by its rig knows which block it is, and so empties as that
         // one fires. Anything else falls back to the one set kept per container size.
-        if (size == DISPENSER) target = ClientDispensers.openStock();
+        if (size == DISPENSER) target = ClientDispensers.openStock(player);
         if (target == null) target = containerFakes.get(size);
         if (target == null) target = Map.of();
 

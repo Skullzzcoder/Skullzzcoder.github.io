@@ -51,9 +51,14 @@ is rigged does not change what is in the box.
 random the way a real dispenser picks, so opening it afterwards agrees with what
 everyone just watched come out. This is on for every game, not only roulette.
 
-    /fake dispenser fill      (lay out again — the one you are looking at, or all)
+    /fake dispenser fill      (look straight at it first)
     /fake dispenser unfill    (show its real contents again)
-    /fake dispenser status    (says how many slots each one is holding)
+    /fake dispenser status    (how many slots each holds, and which one a GUI would show)
+
+`fill` uses the dispenser you are **looking at**, watching it if it wasn't
+already, and tells you what went in — `That dispenser now shows 8x Obsidian,
+1x End Crystal.` If it says it laid out the watched ones *instead*, your
+crosshair wasn't on a dispenser.
 
 The dashboard's **Refill them** button does the same as `fill`, mid-game.
 

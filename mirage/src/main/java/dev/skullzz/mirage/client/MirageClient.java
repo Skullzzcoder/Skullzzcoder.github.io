@@ -752,24 +752,34 @@ public class MirageClient implements ClientModInitializer {
     }
 
     private static int fillDispenser(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
         BlockHitResult hit = lookedAt(64.0);
-        if (hit != null && ClientDispensers.watchedPositions().contains(hit.getBlockPos())) {
-            if (!ClientDispensers.fill(hit.getBlockPos())) {
-                return error(context, "This rig has nothing to put in it. Set what it fires "
-                        + "first.");
+
+        // Looking at one means that one, watched or not: filling something behind you while
+        // saying it worked is worse than doing nothing.
+        if (hit != null && client.world != null
+                && client.world.getBlockState(hit.getBlockPos()).getBlock() instanceof DispenserBlock) {
+            BlockPos pos = hit.getBlockPos();
+            if (!ClientDispensers.fill(pos)) {
+                return error(context, "Rig '" + ClientDispensers.activeName() + "' has nothing "
+                        + "to put in it. Give it something to fire first.");
             }
+
+            ClientDispensers.watch(pos);
+            ClientDispensers.setOpenDispenser(pos);
             SelfFakes.save();
-            return feedback(context, "Laid that dispenser out.");
+            return feedback(context, "That dispenser now shows "
+                    + ClientDispensers.describeStock(pos) + ". Open it to check.");
         }
 
         int filled = ClientDispensers.refillWatched();
         if (filled == 0) {
-            return error(context, "Nothing to lay out. Watch a dispenser and give the rig "
-                    + "something to fire.");
+            return error(context, "You are not looking at a dispenser, and no watched one "
+                    + "could be laid out. Look straight at it and try again.");
         }
         SelfFakes.save();
-        return feedback(context, "Laid out " + filled + " dispenser"
-                + (filled == 1 ? "." : "s."));
+        return feedback(context, "Not looking at a dispenser, so laid out the " + filled
+                + " watched one" + (filled == 1 ? "" : "s") + " instead.");
     }
 
     private static int unfillDispenser(CommandContext<FabricClientCommandSource> context) {

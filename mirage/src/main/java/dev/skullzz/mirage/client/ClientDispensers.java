@@ -70,6 +70,8 @@ public final class ClientDispensers {
     /** Slots in a dispenser, and the middle one that a ring is built around. */
     public static final int STOCK_SLOTS = 9;
     private static final int MIDDLE_SLOT = 4;
+    /** No dispenser can be opened from further away than this, squared. */
+    private static final double REACH_SQUARED = 49.0;
 
     private static long tick;
     /** Prints what the watcher is seeing, for working out why nothing fired. */
@@ -470,9 +472,41 @@ public final class ClientDispensers {
     }
 
     /** @return what the open dispenser looks like it holds, or null to fall back. */
-    public static Map<Integer, FakeSpec> openStock() {
-        if (openDispenser == null) return null;
-        return active().stockAt(openDispenser);
+    public static Map<Integer, FakeSpec> openStock(ClientPlayerEntity player) {
+        BlockPos pos = openDispenserPos(player);
+        return pos == null ? null : active().stockAt(pos);
+    }
+
+    /**
+     * Works out which dispenser an open screen belongs to.
+     *
+     * <p>Normally that is the one last looked at. When the look never landed -- opened from
+     * an odd angle, or through a block -- the dispenser still has to be within reach to have
+     * been opened at all, so the nearest one laid out in this rig is the answer. Without that
+     * fallback a single missed raycast leaves the GUI showing the real, empty box.
+     */
+    public static BlockPos openDispenserPos(ClientPlayerEntity player) {
+        RigProfile profile = active();
+        if (openDispenser != null && profile.stock.containsKey(openDispenser)) {
+            return openDispenser;
+        }
+        if (player == null) return null;
+
+        BlockPos best = null;
+        double bestDistance = REACH_SQUARED;
+
+        for (BlockPos pos : profile.stock.keySet()) {
+            double dx = player.getX() - (pos.getX() + 0.5);
+            double dy = player.getY() - (pos.getY() + 0.5);
+            double dz = player.getZ() - (pos.getZ() + 0.5);
+            double distance = dx * dx + dy * dy + dz * dz;
+
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = pos;
+            }
+        }
+        return best;
     }
 
     /**
@@ -602,6 +636,11 @@ public final class ClientDispensers {
             return lines;
         }
 
+        BlockPos open = openDispenserPos(MinecraftClient.getInstance().player);
+        lines.add("  a dispenser GUI here would show: "
+                + (open == null ? "its real contents - nothing laid out within reach"
+                        : text(open)));
+
         for (BlockPos pos : watched) {
             StringBuilder line = new StringBuilder("  " + text(pos) + ": ");
             if (world == null) {
@@ -628,6 +667,24 @@ public final class ClientDispensers {
             lines.add(line.toString());
         }
         return lines;
+    }
+
+    /** Counts a layout up by item, so "8x obsidian, 1x end crystal" can be read back. */
+    public static String describeStock(BlockPos pos) {
+        Map<Integer, FakeSpec> slots = active().stockAt(pos);
+        if (slots == null || slots.isEmpty()) return "nothing";
+
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        for (FakeSpec spec : slots.values()) {
+            totals.merge(spec.describe(), spec.count, Integer::sum);
+        }
+
+        StringBuilder text = new StringBuilder();
+        for (Map.Entry<String, Integer> entry : totals.entrySet()) {
+            if (text.length() > 0) text.append(", ");
+            text.append(entry.getValue()).append("x ").append(entry.getKey());
+        }
+        return text.toString();
     }
 
     private static String describeSpec(FakeSpec spec) {
