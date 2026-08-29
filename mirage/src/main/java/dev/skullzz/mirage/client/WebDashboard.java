@@ -36,6 +36,9 @@ public final class WebDashboard {
     /** Whether a browser asked to set the watched dispensers off by hand. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedFire =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** Whether a browser asked for the watched dispensers to be laid out again. */
+    private static final java.util.concurrent.atomic.AtomicBoolean requestedRefill =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private static HttpServer server;
     private static int boundPort = -1;
@@ -93,6 +96,7 @@ public final class WebDashboard {
             server.createContext("/reset", WebDashboard::handleReset);
             server.createContext("/arm", WebDashboard::handleArm);
             server.createContext("/fire", WebDashboard::handleFire);
+            server.createContext("/refill", WebDashboard::handleRefill);
             server.setExecutor(null);
             server.start();
 
@@ -146,6 +150,11 @@ public final class WebDashboard {
     /** @return true once if a browser asked to fire the watched dispensers. */
     public static boolean pollFire() {
         return requestedFire.getAndSet(false);
+    }
+
+    /** @return true once if a browser asked for the dispensers to be laid out again. */
+    public static boolean pollRefill() {
+        return requestedRefill.getAndSet(false);
     }
 
     // ----------------------------------------------------------------- handlers
@@ -206,6 +215,11 @@ public final class WebDashboard {
 
     private static void handleFire(HttpExchange exchange) throws IOException {
         requestedFire.set(true);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleRefill(HttpExchange exchange) throws IOException {
+        requestedRefill.set(true);
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -314,6 +328,7 @@ public final class WebDashboard {
               <div class="row" id="buttons"></div>
               <button id="arm" hidden></button>
               <button id="fire">Fire the watched dispensers</button>
+              <button id="refill">Refill them</button>
               <div class="row" id="chambers"></div>
               <div id="fixed"></div>
               <div id="none" hidden>Nothing set in this rig.</div>
@@ -404,8 +419,9 @@ public final class WebDashboard {
               });
             }
 
-            function wireFire() {
+            function wireButtons() {
               el('fire').onclick = () => post('/fire');
+              el('refill').onclick = () => post('/refill');
             }
 
             function renderArm(s) {
@@ -470,7 +486,7 @@ public final class WebDashboard {
               renderFixed(s);
             }
 
-            wireFire();
+            wireButtons();
             refresh();
             setInterval(refresh, 1000);
             </script>

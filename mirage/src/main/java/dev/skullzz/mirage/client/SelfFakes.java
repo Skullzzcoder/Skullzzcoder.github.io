@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -52,6 +53,8 @@ public final class SelfFakes {
     private static final Map<Integer, Map<Integer, FakeSpec>> containerFakes = new HashMap<>();
     private static final Map<Integer, ItemStack> containerShadowed = new HashMap<>();
     private static final Map<Integer, ItemStack> containerApplied = new HashMap<>();
+    /** Set when a count changed, since the stack we painted is still the one in the slot. */
+    private static boolean containerDirty;
 
     private static Map<Identifier, Item> itemsById;
     /** Whether cycling a preset prints anything. Off by default. */
@@ -264,6 +267,16 @@ public final class SelfFakes {
         save();
     }
 
+    /**
+     * Forces the open container to be painted again next tick.
+     *
+     * <p>Needed when a count changes rather than a slot: the stack in the slot is still the
+     * very one we wrote, so the identity check below would see nothing to do.
+     */
+    public static void repaintContainer() {
+        containerDirty = true;
+    }
+
     public static void clearAllContainers(ClientPlayerEntity player) {
         containerFakes.clear();
         containerShadowed.clear();
@@ -312,26 +325,63 @@ public final class SelfFakes {
             // Nothing is open, so anything we painted went with the screen.
             containerApplied.clear();
             containerShadowed.clear();
+            containerDirty = false;
             return;
         }
 
         int size = handler.slots.size() - PLAYER_SLOTS;
         if (size <= 0) return;
 
-        Map<Integer, FakeSpec> target = containerFakes.get(size);
-        if (target == null || target.isEmpty()) return;
+        Map<Integer, FakeSpec> target = null;
+        // A dispenser laid out by its rig knows which block it is, and so empties as that
+        // one fires. Anything else falls back to the one set kept per container size.
+        if (size == DISPENSER) target = ClientDispensers.openStock();
+        if (target == null) target = containerFakes.get(size);
+        if (target == null) target = Map.of();
 
         for (Map.Entry<Integer, FakeSpec> entry : target.entrySet()) {
             int slot = entry.getKey();
             if (slot < 0 || slot >= size) continue;
 
             ItemStack current = handler.getSlot(slot).getStack();
-            if (current != containerApplied.get(slot)) {
-                containerShadowed.put(slot, current.copy());
+            // Identity, not equality: if this is not the very stack we wrote, the server has
+            // since replaced it, so that is the real item now hiding underneath.
+            boolean ours = current == containerApplied.get(slot);
+            if (!ours) containerShadowed.put(slot, current.copy());
+
+            if (!ours || containerDirty) {
                 ItemStack copy = entry.getValue().stack().copy();
                 handler.setStackInSlot(slot, handler.getRevision(), copy);
                 containerApplied.put(slot, copy);
             }
+        }
+
+        restoreUnpainted(handler, size, target);
+        containerDirty = false;
+    }
+
+    /**
+     * Puts back the real contents of a slot we no longer fake.
+     *
+     * <p>Without this a depleted slot would keep showing the item that just left, which is
+     * the exact thing the depletion is there to avoid.
+     */
+    private static void restoreUnpainted(ScreenHandler handler, int size,
+                                         Map<Integer, FakeSpec> target) {
+        Iterator<Map.Entry<Integer, ItemStack>> painted = containerApplied.entrySet().iterator();
+
+        while (painted.hasNext()) {
+            Map.Entry<Integer, ItemStack> entry = painted.next();
+            int slot = entry.getKey();
+            if (target.containsKey(slot)) continue;
+
+            if (slot >= 0 && slot < size && handler.getSlot(slot).getStack() == entry.getValue()) {
+                ItemStack real = containerShadowed.get(slot);
+                handler.setStackInSlot(slot, handler.getRevision(),
+                        real == null ? ItemStack.EMPTY : real);
+            }
+            containerShadowed.remove(slot);
+            painted.remove();
         }
     }
 

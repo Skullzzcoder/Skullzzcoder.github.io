@@ -23,6 +23,14 @@ public final class RigProfile {
     /** What a particular dispenser fires, overriding the cycled item. */
     public final Map<BlockPos, FakeSpec> perDispenser = new LinkedHashMap<>();
 
+    /**
+     * What each dispenser appears to hold: position to (slot to fake).
+     *
+     * <p>Kept per dispenser rather than per container size, because two dispensers in the
+     * same game hold different things and both have to empty separately.
+     */
+    public final Map<BlockPos, Map<Integer, FakeSpec>> stock = new LinkedHashMap<>();
+
     /** Where this game's fake arrow lands, if it uses one. */
     public Vec3d arrowTarget;
 
@@ -114,8 +122,13 @@ public final class RigProfile {
         if (this.shot > this.chambers) this.shot = 0;
     }
 
+    /** What a dispenser looks like it is holding, or null if nothing has been laid out. */
+    public Map<Integer, FakeSpec> stockAt(BlockPos pos) {
+        return this.stock.get(pos);
+    }
+
     public boolean isEmpty() {
         return this.presets.isEmpty() && this.perDispenser.isEmpty()
-                && this.arrowTarget == null && !this.roulette;
+                && this.arrowTarget == null && !this.roulette && this.stock.isEmpty();
     }
 }

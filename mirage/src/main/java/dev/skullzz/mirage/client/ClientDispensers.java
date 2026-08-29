@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import com.google.gson.JsonArray;
@@ -66,9 +67,17 @@ public final class ClientDispensers {
     private static final Map<String, RigProfile> profiles = new LinkedHashMap<>();
     private static String activeName = "";
 
+    /** Slots in a dispenser, and the middle one that a ring is built around. */
+    public static final int STOCK_SLOTS = 9;
+    private static final int MIDDLE_SLOT = 4;
+
     private static long tick;
     /** Prints what the watcher is seeing, for working out why nothing fired. */
     private static boolean debug;
+    /** The dispenser last looked at, which is the one whose GUI is open if one is. */
+    private static BlockPos openDispenser;
+    /** Which of several matching slots empties, so a ring does not drain left to right. */
+    private static final Random random = new Random();
     /** Client-only ids, from the top of the range so they miss the server's. */
     private static int nextEntityId = Integer.MAX_VALUE - 4096;
 
@@ -191,6 +200,10 @@ public final class ClientDispensers {
     public static boolean use(String name) {
         if (!profiles.containsKey(name)) return false;
         activeName = name;
+        // Each rig owns its own layouts, so switching game changes what the dispensers
+        // appear to hold as well as what they fire.
+        fillEmptyWatched();
+        SelfFakes.repaintContainer();
         return true;
     }
 
@@ -285,6 +298,8 @@ public final class ClientDispensers {
     public static void setDispenserResult(BlockPos pos, FakeSpec spec) {
         active().perDispenser.put(pos.toImmutable(), spec);
         watched.add(pos.toImmutable());
+        // It now fires something different, so what it looks like it holds has to follow.
+        fill(pos);
     }
 
     public static boolean clearDispenserResult(BlockPos pos) {
@@ -298,10 +313,15 @@ public final class ClientDispensers {
     // ----------------------------------------------------------------- watching
 
     public static boolean watch(BlockPos pos) {
-        return watched.add(pos.toImmutable());
+        boolean added = watched.add(pos.toImmutable());
+        // Lay it out straight away: a watched dispenser that opens empty gives the whole
+        // thing away before it has fired once.
+        if (added) fill(pos);
+        return added;
     }
 
     public static boolean unwatch(BlockPos pos) {
+        active().stock.remove(pos);
         lastTriggered.remove(pos);
         lastPowered.remove(pos);
         lastFire.remove(pos);
@@ -367,6 +387,9 @@ public final class ClientDispensers {
                 note("rig '" + profile.name + "' has nothing set to fire");
             } else {
                 spawn(world, fire.pos(), result);
+                // Take it out of what the dispenser looks like it is holding, so opening
+                // the thing afterwards agrees with what everyone just watched come out.
+                deplete(profile, fire.pos(), result);
             }
             if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
@@ -439,6 +462,123 @@ public final class ClientDispensers {
         return watched.size();
     }
 
+    // ------------------------------------------------------------------- stock
+
+    /** Remembers the dispenser being looked at, so an open GUI can be tied to a position. */
+    public static void setOpenDispenser(BlockPos pos) {
+        openDispenser = pos == null ? null : pos.toImmutable();
+    }
+
+    /** @return what the open dispenser looks like it holds, or null to fall back. */
+    public static Map<Integer, FakeSpec> openStock() {
+        if (openDispenser == null) return null;
+        return active().stockAt(openDispenser);
+    }
+
+    /**
+     * Lays out what a dispenser appears to hold, from the rig it belongs to.
+     *
+     * <p>A roulette rig gets the shape of the real game: the loaded item in the middle with
+     * blanks all round it. A dispenser with a fixed answer gets nine of that. Anything else
+     * deals the rig's items across the nine slots, so a coin flip holds both sides and looks
+     * the same whichever way it is currently rigged.
+     */
+    public static boolean fill(BlockPos pos) {
+        RigProfile profile = active();
+        Map<Integer, FakeSpec> slots = new LinkedHashMap<>();
+
+        if (profile.roulette) {
+            for (int slot = 0; slot < STOCK_SLOTS; slot++) {
+                FakeSpec spec = slot == MIDDLE_SLOT ? profile.bullet : profile.blank;
+                // Each slot needs its own copy: they empty one at a time.
+                if (spec != null) slots.put(slot, spec.withCount(1));
+            }
+        } else {
+            FakeSpec fixed = profile.perDispenser.get(pos);
+            if (fixed != null) {
+                for (int slot = 0; slot < STOCK_SLOTS; slot++) {
+                    slots.put(slot, fixed.withCount(fixed.count));
+                }
+            } else if (!profile.presets.isEmpty()) {
+                // Deal them round: switching which one is rigged must not change what the
+                // dispenser looks like it is holding.
+                for (int slot = 0; slot < STOCK_SLOTS; slot++) {
+                    FakeSpec spec = profile.presets.get(slot % profile.presets.size());
+                    slots.put(slot, spec.withCount(spec.count));
+                }
+            }
+        }
+
+        BlockPos key = pos.toImmutable();
+        if (slots.isEmpty()) {
+            profile.stock.remove(key);
+            return false;
+        }
+        profile.stock.put(key, slots);
+        SelfFakes.repaintContainer();
+        return true;
+    }
+
+    /** Fills every watched dispenser that has not been laid out yet. */
+    public static int fillEmptyWatched() {
+        RigProfile profile = active();
+        int filled = 0;
+        for (BlockPos pos : watched) {
+            if (profile.stock.containsKey(pos)) continue;
+            if (fill(pos)) filled++;
+        }
+        return filled;
+    }
+
+    /** Lays every watched dispenser out again, including ones already emptied. */
+    public static int refillWatched() {
+        int filled = 0;
+        for (BlockPos pos : watched) {
+            if (fill(pos)) filled++;
+        }
+        return filled;
+    }
+
+    public static boolean unfill(BlockPos pos) {
+        if (active().stock.remove(pos) == null) return false;
+        SelfFakes.repaintContainer();
+        return true;
+    }
+
+    /**
+     * Takes one fired item back out of what the dispenser appears to hold.
+     *
+     * <p>Falls back to the one shared nine-slot set for dispensers laid out by hand, so this
+     * works whether or not the rig owns the layout.
+     */
+    private static void deplete(RigProfile profile, BlockPos pos, FakeSpec fired) {
+        Map<Integer, FakeSpec> slots = profile.stockAt(pos);
+        if (slots == null) slots = SelfFakes.allContainer(SelfFakes.DISPENSER);
+        if (slots.isEmpty()) return;
+
+        List<Integer> matching = new ArrayList<>();
+        for (Map.Entry<Integer, FakeSpec> entry : slots.entrySet()) {
+            if (entry.getValue().stacksWith(fired)) matching.add(entry.getKey());
+        }
+        // Nothing of that kind in there. Taking some other item out would be a bigger
+        // giveaway than the count simply not moving, so leave it alone.
+        if (matching.isEmpty()) {
+            note("nothing matching " + fired.describe() + " to take out of the dispenser");
+            return;
+        }
+
+        int slot = matching.get(random.nextInt(matching.size()));
+        FakeSpec held = slots.get(slot);
+        int left = held.count - fired.count;
+
+        if (left > 0) {
+            slots.put(slot, held.withCount(left));
+        } else {
+            slots.remove(slot);
+        }
+        SelfFakes.repaintContainer();
+    }
+
     /** What the watcher can see right now, so a dead setup can be told apart from a bug. */
     public static List<String> status(ClientWorld world) {
         List<String> lines = new ArrayList<>();
@@ -479,6 +619,10 @@ public final class ClientDispensers {
                                     ? "powered now" : "unpowered");
                     FakeSpec fixed = profile.perDispenser.get(pos);
                     if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
+
+                    Map<Integer, FakeSpec> slots = profile.stockAt(pos);
+                    line.append(slots == null ? ", not laid out"
+                            : ", holding " + slots.size() + "/" + STOCK_SLOTS);
                 }
             }
             lines.add(line.toString());
@@ -661,6 +805,9 @@ public final class ClientDispensers {
         for (RigProfile profile : profiles.values()) {
             for (FakeSpec spec : profile.presets) spec.invalidate();
             for (FakeSpec spec : profile.perDispenser.values()) spec.invalidate();
+            for (Map<Integer, FakeSpec> slots : profile.stock.values()) {
+                for (FakeSpec spec : slots.values()) spec.invalidate();
+            }
             if (profile.bullet != null) profile.bullet.invalidate();
             if (profile.blank != null) profile.blank.invalidate();
         }
@@ -688,6 +835,16 @@ public final class ClientDispensers {
                 perDispenser.add(writePos(entry.getKey()), SelfFakes.writeSpec(entry.getValue()));
             }
             json.add("perDispenser", perDispenser);
+
+            JsonObject stock = new JsonObject();
+            for (Map.Entry<BlockPos, Map<Integer, FakeSpec>> entry : profile.stock.entrySet()) {
+                JsonObject slots = new JsonObject();
+                for (Map.Entry<Integer, FakeSpec> held : entry.getValue().entrySet()) {
+                    slots.add(String.valueOf(held.getKey()), SelfFakes.writeSpec(held.getValue()));
+                }
+                stock.add(writePos(entry.getKey()), slots);
+            }
+            json.add("stock", stock);
 
             if (profile.arrowTarget != null) {
                 json.addProperty("arrowTarget", profile.arrowTarget.x + ","
@@ -756,6 +913,25 @@ public final class ClientDispensers {
                 BlockPos pos = readPos(entry.getKey());
                 FakeSpec spec = readSpec(entry.getValue().getAsJsonObject());
                 if (pos != null && spec != null) profile.perDispenser.put(pos, spec);
+            }
+        }
+        if (json.has("stock")) {
+            for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject("stock").entrySet()) {
+                BlockPos pos = readPos(entry.getKey());
+                if (pos == null) continue;
+
+                Map<Integer, FakeSpec> slots = new LinkedHashMap<>();
+                for (Map.Entry<String, JsonElement> held
+                        : entry.getValue().getAsJsonObject().entrySet()) {
+                    FakeSpec spec = readSpec(held.getValue().getAsJsonObject());
+                    if (spec == null) continue;
+                    try {
+                        slots.put(Integer.parseInt(held.getKey()), spec);
+                    } catch (NumberFormatException ignored) {
+                        // a slot key that is not a number is not a slot
+                    }
+                }
+                if (!slots.isEmpty()) profile.stock.put(pos, slots);
             }
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());

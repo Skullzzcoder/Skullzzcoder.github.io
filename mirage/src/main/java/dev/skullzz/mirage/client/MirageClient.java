@@ -18,6 +18,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 
 import org.lwjgl.glfw.GLFW;
 
+import net.minecraft.block.DispenserBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
@@ -123,9 +124,15 @@ public class MirageClient implements ClientModInitializer {
                 SelfFakes.save();
             }
 
+            rememberOpenDispenser(client);
+
             while (armNext.wasPressed()) ClientDispensers.armNext();
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
+            if (WebDashboard.pollRefill()) {
+                ClientDispensers.refillWatched();
+                SelfFakes.save();
+            }
             while (cycleRig.wasPressed()) {
                 if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
             }
@@ -307,6 +314,8 @@ public class MirageClient implements ClientModInitializer {
                     return feedback(context, "Stopped watching every dispenser.");
                 }))
                 .then(ClientCommandManager.literal("fire").executes(MirageClient::fireDispenser))
+                .then(ClientCommandManager.literal("fill").executes(MirageClient::fillDispenser))
+                .then(ClientCommandManager.literal("unfill").executes(MirageClient::unfillDispenser))
                 .then(ClientCommandManager.literal("status").executes(MirageClient::dispenserStatus))
                 .then(ClientCommandManager.literal("result")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
@@ -722,6 +731,56 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.fireAllWatched();
+    }
+
+    /**
+     * Keeps track of which dispenser a container screen belongs to.
+     *
+     * <p>The screen itself does not say where it came from, but the block being looked at
+     * when it opened does, and the view cannot move while a screen is up. So the last block
+     * seen before the screen appeared is the one whose GUI is now open.
+     */
+    private static void rememberOpenDispenser(MinecraftClient client) {
+        if (client.currentScreen != null || client.world == null) return;
+
+        BlockHitResult hit = lookedAt(6.0);
+        if (hit == null) return;
+        if (!(client.world.getBlockState(hit.getBlockPos()).getBlock() instanceof DispenserBlock)) {
+            return;
+        }
+        ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    private static int fillDispenser(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit != null && ClientDispensers.watchedPositions().contains(hit.getBlockPos())) {
+            if (!ClientDispensers.fill(hit.getBlockPos())) {
+                return error(context, "This rig has nothing to put in it. Set what it fires "
+                        + "first.");
+            }
+            SelfFakes.save();
+            return feedback(context, "Laid that dispenser out.");
+        }
+
+        int filled = ClientDispensers.refillWatched();
+        if (filled == 0) {
+            return error(context, "Nothing to lay out. Watch a dispenser and give the rig "
+                    + "something to fire.");
+        }
+        SelfFakes.save();
+        return feedback(context, "Laid out " + filled + " dispenser"
+                + (filled == 1 ? "." : "s."));
+    }
+
+    private static int unfillDispenser(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the dispenser to empty.");
+
+        if (!ClientDispensers.unfill(hit.getBlockPos())) {
+            return error(context, "That dispenser was not laid out in this rig.");
+        }
+        SelfFakes.save();
+        return feedback(context, "That dispenser shows its real contents again.");
     }
 
     private static int fireDispenser(CommandContext<FabricClientCommandSource> context) {

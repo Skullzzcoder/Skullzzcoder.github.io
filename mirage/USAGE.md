@@ -33,11 +33,40 @@ yours can be lost or hidden.
     /fake ender 0 shulker_box 64
     /fake ender clear
 
-## 3. Fake dispenser contents
+## 3. What a dispenser looks like it is holding
 
-What the dispenser's own GUI appears to hold, slots 0–8.
+**This happens by itself.** Watch a dispenser and it is laid out at once, from
+the rig it belongs to:
+
+| rig | the GUI shows |
+|---|---|
+| roulette | 8 blanks in a ring, the loaded item in the middle slot |
+| a dispenser with a fixed answer | nine of that |
+| anything else | the rig's items dealt round the nine slots |
+
+A coin flip therefore holds **both** gold and diamond, so flipping which way it
+is rigged does not change what is in the box.
+
+**When it fires, the item leaves.** One of the matching slots empties, chosen at
+random the way a real dispenser picks, so opening it afterwards agrees with what
+everyone just watched come out. This is on for every game, not only roulette.
+
+    /fake dispenser fill      (lay out again — the one you are looking at, or all)
+    /fake dispenser unfill    (show its real contents again)
+    /fake dispenser status    (says how many slots each one is holding)
+
+The dashboard's **Refill them** button does the same as `fill`, mid-game.
+
+If a slot is emptied down to nothing, its real contents come back — so an empty
+real dispenser reads as empty, which is what it should look like once the game
+has been played out.
+
+### Setting slots by hand instead
 
     /fake dispenser 4 end_crystal 1
+
+That is one shared nine-slot layout used for any dispenser the rig has not laid
+out itself. It empties on firing too.
 
 ---
 
@@ -137,15 +166,23 @@ obsidian blank, manual.
     (look at the dropper)
     /fake dispenser watch
 
-From then on **every spin comes out obsidian**, until you arm it:
+The dropper now opens showing **eight obsidian in a ring with one end crystal in
+the middle**, exactly like the real game.
+
+From then on **every spin comes out obsidian** — and one obsidian leaves the
+ring each time — until you arm it:
 
 - press `;`, or
 - press **Arm next spin** on the dashboard, or
 - `/fake rig arm`
 
-The next spin — only the next one — is the crystal. Arming clears itself when
-it fires, and is never written to disk, so a restart is never left armed.
-`/fake rig disarm` cancels it, and `/fake dispenser status` shows `ARMED`.
+The next spin — only the next one — is the crystal. It flies out, lands in your
+inventory, and **the middle slot empties**, so the dropper afterwards shows the
+crystal gone. Arming clears itself when it fires and is never written to disk,
+so a restart is never left armed. `/fake rig disarm` cancels it, and
+`/fake dispenser status` shows `ARMED`.
+
+`/fake dispenser fill` puts the ring back for the next round.
 
 ### Counted instead of armed
 
