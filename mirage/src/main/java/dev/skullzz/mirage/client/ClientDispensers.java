@@ -460,7 +460,9 @@ public final class ClientDispensers {
                     finishCollect(player, item);
                     iterator.remove();
                 } else {
-                    Vec3d target = player.getPos().add(0.0, 0.4, 0.0);
+                    // Built from the component accessors: Entity.getPos is gone in this
+                    // version, while getX/getY/getZ have been there since 1.14.
+                    Vec3d target = new Vec3d(player.getX(), player.getY() + 0.4, player.getZ());
                     item.entity.setPosition(
                             MathHelper.lerp(progress, item.collectFrom.x, target.x),
                             MathHelper.lerp(progress, item.collectFrom.y, target.y),
@@ -473,7 +475,8 @@ public final class ClientDispensers {
                     && player.squaredDistanceTo(item.entity) < COLLECT_RANGE_SQUARED;
             if (SelfFakes.autoCollect() && player != null && (nearby || tick >= item.collectAt)) {
                 item.collectStart = tick;
-                item.collectFrom = item.entity.getPos();
+                item.collectFrom = new Vec3d(item.entity.getX(), item.entity.getY(),
+                        item.entity.getZ());
                 continue;
             }
 
