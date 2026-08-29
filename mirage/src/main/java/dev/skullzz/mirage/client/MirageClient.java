@@ -27,6 +27,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import dev.skullzz.mirage.Mirage;
@@ -42,6 +43,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding nextResult;
     private static KeyBinding previousResult;
     private static KeyBinding openMenu;
+    private static KeyBinding cycleRig;
 
     @Override
     public void onInitializeClient() {
@@ -59,6 +61,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(arrowBranch())
                         .then(presetBranch())
                         .then(decorBranch())
+                        .then(rigBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(MirageClient::reloadPrices)))
@@ -77,6 +80,12 @@ public class MirageClient implements ClientModInitializer {
             int picked = WebDashboard.pollSelection();
             if (picked >= 0) applyDashboardSelection(client, picked);
 
+            String pickedRig = WebDashboard.pollRig();
+            if (pickedRig != null && ClientDispensers.use(pickedRig)) SelfFakes.save();
+
+            while (cycleRig.wasPressed()) {
+                if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
+            }
             while (nextResult.wasPressed()) selectPreset(client, 1);
             while (previousResult.wasPressed()) selectPreset(client, -1);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
@@ -103,6 +112,9 @@ public class MirageClient implements ClientModInitializer {
         previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.prev_result", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_LEFT_BRACKET, category));
+        cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_BACKSLASH, category));
         // Unbound by default: the menu has a command, and an accidental clash is worse.
         openMenu = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.open_menu", InputUtil.Type.KEYSYM,
@@ -115,10 +127,20 @@ public class MirageClient implements ClientModInitializer {
     private static void publishDashboard() {
         if (!WebDashboard.isRunning()) return;
 
-        List<FakeSpec> presets = ClientDispensers.presets();
-        StringBuilder json = new StringBuilder("{\"presets\":[");
-        for (int index = 0; index < presets.size(); index++) {
-            FakeSpec spec = presets.get(index);
+        RigProfile profile = ClientDispensers.active();
+        StringBuilder json = new StringBuilder("{\"rig\":\"")
+                .append(WebDashboard.escape(profile.name)).append("\",\"rigs\":[");
+
+        boolean first = true;
+        for (String name : ClientDispensers.profiles().keySet()) {
+            if (!first) json.append(',');
+            first = false;
+            json.append('"').append(WebDashboard.escape(name)).append('"');
+        }
+
+        json.append("],\"presets\":[");
+        for (int index = 0; index < profile.presets.size(); index++) {
+            FakeSpec spec = profile.presets.get(index);
             if (index > 0) json.append(',');
             json.append("{\"name\":\"")
                     .append(WebDashboard.escape(spec.stack().getName().getString()))
@@ -126,7 +148,22 @@ public class MirageClient implements ClientModInitializer {
                     .append(WebDashboard.escape(FakeLore.priceLabel(spec.stack(), spec.price)))
                     .append("\"}");
         }
-        json.append("],\"active\":").append(ClientDispensers.presetIndex()).append('}');
+
+        json.append("],\"active\":").append(profile.presetIndex()).append(",\"fixed\":[");
+        first = true;
+        for (Map.Entry<BlockPos, FakeSpec> entry : profile.perDispenser.entrySet()) {
+            if (!first) json.append(',');
+            first = false;
+
+            BlockPos pos = entry.getKey();
+            FakeSpec spec = entry.getValue();
+            json.append("{\"pos\":\"")
+                    .append(pos.getX()).append(' ').append(pos.getY()).append(' ').append(pos.getZ())
+                    .append("\",\"name\":\"")
+                    .append(WebDashboard.escape(spec.count + "x " + spec.stack().getName().getString()))
+                    .append("\"}");
+        }
+        json.append("]}");
 
         String built = json.toString();
         if (!built.equals(lastPublished)) {
@@ -218,6 +255,98 @@ public class MirageClient implements ClientModInitializer {
                                                 IntegerArgumentType.getInteger(context, "count"))))));
     }
 
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> rigBranch() {
+        return ClientCommandManager.literal("rig")
+                .then(ClientCommandManager.literal("list").executes(MirageClient::listRigs))
+                .then(ClientCommandManager.literal("new")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    ClientDispensers.create(name);
+                                    ClientDispensers.use(name);
+                                    SelfFakes.save();
+                                    return feedback(context, "Created rig '" + name + "' and switched to it.");
+                                })))
+                .then(ClientCommandManager.literal("use")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        ClientDispensers.profiles().keySet(), builder))
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    if (!ClientDispensers.use(name)) {
+                                        return error(context, "No rig called '" + name + "'.");
+                                    }
+                                    SelfFakes.save();
+                                    return feedback(context, "Now using rig '" + name + "'.");
+                                })))
+                .then(ClientCommandManager.literal("delete")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        ClientDispensers.profiles().keySet(), builder))
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    if (!ClientDispensers.delete(name)) {
+                                        return error(context, "No rig called '" + name + "'.");
+                                    }
+                                    SelfFakes.save();
+                                    return feedback(context, "Deleted rig '" + name + "'.");
+                                })))
+                .then(ClientCommandManager.literal("unset").executes(MirageClient::unsetDispenserResult))
+                .then(ClientCommandManager.literal("set")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setDispenserResult(context, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setDispenserResult(context,
+                                                IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    /** Fixes what the dispenser you are looking at fires, in the active rig. */
+    private static int setDispenserResult(CommandContext<FabricClientCommandSource> context, int count) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the dispenser you want to fix.");
+
+        FakeSpec spec = specFrom(context, count);
+        if (spec == null) return 0;
+
+        ClientDispensers.setDispenserResult(hit.getBlockPos(), spec);
+        SelfFakes.save();
+        return feedback(context, "That dispenser will fire " + spec.count + "x " + spec.describe()
+                + " in rig '" + ClientDispensers.activeName() + "'.");
+    }
+
+    private static int unsetDispenserResult(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the dispenser to unfix.");
+
+        if (!ClientDispensers.clearDispenserResult(hit.getBlockPos())) {
+            return error(context, "That dispenser had nothing fixed in this rig.");
+        }
+        SelfFakes.save();
+        return feedback(context, "That dispenser is back to the cycled item.");
+    }
+
+    private static int listRigs(CommandContext<FabricClientCommandSource> context) {
+        context.getSource().sendFeedback(Text.literal("Rigs:").formatted(Formatting.AQUA));
+
+        for (RigProfile profile : ClientDispensers.profiles().values()) {
+            String marker = profile.name.equals(ClientDispensers.activeName()) ? " <- active" : "";
+            context.getSource().sendFeedback(Text.literal("  " + profile.name + marker));
+
+            FakeSpec selected = profile.selected();
+            if (selected != null) {
+                context.getSource().sendFeedback(Text.literal("      cycles to: "
+                        + selected.count + "x " + selected.describe()));
+            }
+            for (Map.Entry<BlockPos, FakeSpec> entry : profile.perDispenser.entrySet()) {
+                BlockPos pos = entry.getKey();
+                context.getSource().sendFeedback(Text.literal("      " + pos.getX() + " " + pos.getY()
+                        + " " + pos.getZ() + " fires " + entry.getValue().count + "x "
+                        + entry.getValue().describe()));
+            }
+        }
+        return ClientDispensers.profiles().size();
+    }
+
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> decorBranch() {
         return ClientCommandManager.literal("decor")
                 .then(ClientCommandManager.literal("frame")
@@ -298,10 +427,10 @@ public class MirageClient implements ClientModInitializer {
     }
 
     private static int addPreset(CommandContext<FabricClientCommandSource> context, int count) {
-        Item item = resolve(context);
-        if (item == null) return 0;
+        FakeSpec spec = specFrom(context, count);
+        if (spec == null) return 0;
 
-        ClientDispensers.addPreset(new FakeSpec(item, count, ""));
+        ClientDispensers.addPreset(spec);
         SelfFakes.save();
         return feedback(context, "Added " + count + "x " + itemName(context)
                 + " as preset " + ClientDispensers.presets().size() + ".");
@@ -390,20 +519,20 @@ public class MirageClient implements ClientModInitializer {
 
     private static int setContainer(CommandContext<FabricClientCommandSource> context, int size, int count) {
         int slot = IntegerArgumentType.getInteger(context, "slot");
-        Item item = resolve(context);
-        if (item == null) return 0;
+        FakeSpec spec = specFrom(context, count);
+        if (spec == null) return 0;
 
-        SelfFakes.setContainer(size, slot, new FakeSpec(item, count, ""));
+        SelfFakes.setContainer(size, slot, spec);
         String where = size == SelfFakes.DISPENSER ? "dispensers" : "ender chests";
         return feedback(context, where + " will show " + count + "x " + itemName(context)
                 + " in slot " + slot + ".");
     }
 
     private static int setResult(CommandContext<FabricClientCommandSource> context, int count) {
-        Item item = resolve(context);
-        if (item == null) return 0;
+        FakeSpec spec = specFrom(context, count);
+        if (spec == null) return 0;
 
-        ClientDispensers.setResult(new FakeSpec(item, count, ""));
+        ClientDispensers.setResult(spec);
         SelfFakes.save();
         return feedback(context, "Watched dispensers will appear to fire " + count + "x "
                 + itemName(context) + ".");
@@ -515,6 +644,16 @@ public class MirageClient implements ClientModInitializer {
         Item item = SelfFakes.lookupItem(name);
         if (item == null) error(context, "No item called '" + name + "'.");
         return item;
+    }
+
+    /** Builds a fake from the command's item argument, reporting the failure itself. */
+    private static FakeSpec specFrom(CommandContext<FabricClientCommandSource> context, int count) {
+        String name = itemName(context);
+        FakeSpec spec = SelfFakes.buildSpec(name, count, "", null);
+        if (spec == null) {
+            error(context, "No item called '" + name + "'. For a map art use filled_map#<id>.");
+        }
+        return spec;
     }
 
     private static int feedback(CommandContext<FabricClientCommandSource> context, String message) {

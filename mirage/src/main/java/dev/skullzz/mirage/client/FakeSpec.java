@@ -14,26 +14,40 @@ public final class FakeSpec {
     public final String enchants;
     /** Per-item price for this fake alone. Null falls back to the price file. */
     public final Double price;
+    /** Which map a filled_map shows. Null for anything else. */
+    public final Integer mapId;
 
     private ItemStack built;
 
     public FakeSpec(Item item, int count, String enchants) {
-        this(item, count, enchants, null);
+        this(item, count, enchants, null, null);
     }
 
     public FakeSpec(Item item, int count, String enchants, Double price) {
+        this(item, count, enchants, price, null);
+    }
+
+    public FakeSpec(Item item, int count, String enchants, Double price, Integer mapId) {
         this.item = item;
         this.count = Math.max(1, Math.min(count, 127));
         this.enchants = enchants == null ? "" : enchants.trim();
         this.price = price;
+        this.mapId = mapId;
     }
 
     public ItemStack stack() {
         if (this.built == null) {
-            this.built = FakeLore.applyTo(
-                    new ItemStack(this.item, this.count), this.enchants, this.price);
+            ItemStack stack = new ItemStack(this.item, this.count);
+            FakeLore.applyMapId(stack, this.mapId);
+            this.built = FakeLore.applyTo(stack, this.enchants, this.price);
         }
         return this.built;
+    }
+
+    /** How this was typed, so it can be shown back and re-parsed. */
+    public String describe() {
+        String id = net.minecraft.registry.Registries.ITEM.getId(this.item).getPath();
+        return this.mapId != null ? id + "#" + this.mapId : id;
     }
 
     public void invalidate() {

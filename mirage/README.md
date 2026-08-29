@@ -218,6 +218,47 @@ These are client-only entities, so they cost the server nothing and nobody else 
 The client discards entities in chunks it unloads, so they are respawned automatically when
 their chunk comes back.
 
+### Rigs: one setup per game
+
+Each game gets its own rig, so a coin flip using gold and diamond does not disturb a game
+played with map arts. Two rigs exist out of the box: `5050`, holding a gold block and a
+diamond block, and an empty `paper`.
+
+```
+/fake rig list
+/fake rig new <name>
+/fake rig use <name>
+/fake rig delete <name>
+```
+
+A rig holds two kinds of answer:
+
+- **Cycled items** — what `]` and `[` flip between. Right for a game with one dispenser and
+  two outcomes. Managed with `/fake preset add`, which applies to the rig in use.
+- **A fixed answer per dispenser** — right for a game where two dispensers each fire something
+  and they get compared. Look at a dispenser and:
+
+```
+/fake rig set <item> [count]     this dispenser always fires that
+/fake rig unset                  back to the cycled item
+```
+
+A dispenser with a fixed answer ignores the cycled one, and `/fake rig set` starts watching
+that dispenser for you.
+
+### Map arts
+
+Anywhere an item is asked for, `filled_map#42` means the map with id 42:
+
+```
+/fake rig set filled_map#7       looking at the left dispenser
+/fake rig set filled_map#3       looking at the right one
+```
+
+A map's picture belongs to the server, so this only draws something if your client has
+already been sent that map — ids you saw in an earlier round will render, a made-up one stays
+blank. Watch a real round, note which ids came out, then use those.
+
 ### Switching the result without touching a menu
 
 For a two-way gamble, keep both outcomes as presets and flip between them with a key, so
@@ -225,8 +266,9 @@ nothing visible ever happens on your screen:
 
 | Key | Does |
 | --- | --- |
-| `]` | next dispenser result |
-| `[` | previous dispenser result |
+| `]` | next item in the current rig |
+| `[` | previous item |
+| `\` | next rig |
 | unbound | open the Mirage menu |
 
 All three are rebindable under Options then Controls then Mirage. Cycling prints nothing at
@@ -243,7 +285,8 @@ Presets default to one gold ingot and one diamond. To change them:
 
 ### Browser dashboard
 
-A page showing which preset is currently selected, and buttons to change it:
+A page showing which rig is in use, what it is currently rigged toward, and any fixed
+per-dispenser answers, with buttons to switch either:
 
 ```
 http://localhost:25599

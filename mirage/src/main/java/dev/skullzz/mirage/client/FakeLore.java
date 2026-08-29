@@ -22,6 +22,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LoreComponent;
+import net.minecraft.component.type.MapIdComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Style;
@@ -164,6 +165,23 @@ public final class FakeLore {
         // The local table wins, so a value you set by hand is never overwritten by the API.
         Double local = prices.get(id);
         return local != null ? local : PriceApi.lookup(id);
+    }
+
+    /**
+     * Points a filled map at a particular map.
+     *
+     * <p>A map's picture belongs to the server, so this only shows something if the client has
+     * already been sent that map. Ids seen in an earlier round will render; a made-up one
+     * stays blank.
+     */
+    public static void applyMapId(ItemStack stack, Integer mapId) {
+        if (mapId == null) return;
+
+        try {
+            stack.set(DataComponentTypes.MAP_ID, new MapIdComponent(mapId));
+        } catch (RuntimeException e) {
+            Mirage.LOGGER.warn("Mirage could not set map id {}: {}", mapId, e.toString());
+        }
     }
 
     public static ItemStack applyTo(ItemStack stack) {

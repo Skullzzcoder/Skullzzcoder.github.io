@@ -21,9 +21,11 @@ import dev.skullzz.mirage.Mirage;
  */
 public final class WebDashboard {
     private static final AtomicReference<String> snapshot =
-            new AtomicReference<>("{\"presets\":[],\"active\":-1}");
+            new AtomicReference<>("{\"rig\":\"\",\"rigs\":[],\"presets\":[],\"active\":-1,\"fixed\":[]}");
     /** Index a browser asked for, or -1. Consumed by the client tick. */
     private static final AtomicInteger requested = new AtomicInteger(-1);
+    /** Rig a browser asked for, or null. Consumed by the client tick. */
+    private static final AtomicReference<String> requestedRig = new AtomicReference<>(null);
 
     private static HttpServer server;
     private static int boundPort = -1;
@@ -76,6 +78,7 @@ public final class WebDashboard {
             server.createContext("/", WebDashboard::handlePage);
             server.createContext("/state", WebDashboard::handleState);
             server.createContext("/select", WebDashboard::handleSelect);
+            server.createContext("/rig", WebDashboard::handleRig);
             server.setExecutor(null);
             server.start();
 
@@ -106,6 +109,11 @@ public final class WebDashboard {
         return requested.getAndSet(-1);
     }
 
+    /** @return a rig name a browser picked, or null. Clears it. */
+    public static String pollRig() {
+        return requestedRig.getAndSet(null);
+    }
+
     // ----------------------------------------------------------------- handlers
 
     private static void handleState(HttpExchange exchange) throws IOException {
@@ -128,6 +136,18 @@ public final class WebDashboard {
             return;
         }
         requested.set(index);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleRig(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || !query.startsWith("name=")) {
+            respond(exchange, 400, "text/plain", "bad rig");
+            return;
+        }
+
+        String name = java.net.URLDecoder.decode(query.substring(5), StandardCharsets.UTF_8);
+        requestedRig.set(name);
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -202,16 +222,22 @@ public final class WebDashboard {
               button:hover { background: #262a31; }
               button[aria-pressed="true"] { border-color: currentColor; }
               #none { color: #9aa0a6; font-size: 14px; }
+              #fixed { color: #9aa0a6; font-size: 13px; text-align: center; line-height: 1.7;
+                       font-variant-numeric: tabular-nums; }
+              #rigs button { flex: 0 0 auto; min-width: 0; padding: 8px 16px; font-size: 14px;
+                             border-radius: 999px; }
             </style>
             </head>
             <body>
+              <div class="row" id="rigs"></div>
               <div id="card">
                 <div id="label">Rigged toward</div>
                 <div id="name">--</div>
                 <div id="price"></div>
               </div>
               <div class="row" id="buttons"></div>
-              <div id="none" hidden>No presets set. Use /fake preset add in game.</div>
+              <div id="fixed"></div>
+              <div id="none" hidden>No presets in this rig. Use /fake preset add in game.</div>
             <script>
             const tint = name => {
               const n = name.toLowerCase();
@@ -248,6 +274,21 @@ public final class WebDashboard {
                 document.getElementById('price').textContent = '';
               }
 
+              const rigs = document.getElementById('rigs');
+              rigs.replaceChildren();
+              (s.rigs || []).forEach(name => {
+                const b = document.createElement('button');
+                b.textContent = name;
+                b.setAttribute('aria-pressed', String(name === s.rig));
+                if (name === s.rig) b.style.color = '#e8eaed';
+                b.onclick = async () => {
+                  await fetch('/rig?name=' + encodeURIComponent(name));
+                  last = '';
+                  refresh();
+                };
+                rigs.append(b);
+              });
+
               const row = document.getElementById('buttons');
               row.replaceChildren();
               s.presets.forEach((p, i) => {
@@ -262,6 +303,13 @@ public final class WebDashboard {
                 };
                 row.append(b);
               });
+
+              document.getElementById('fixed').replaceChildren(
+                ...(s.fixed || []).map(f => {
+                  const d = document.createElement('div');
+                  d.textContent = f.pos + '  fires  ' + f.name;
+                  return d;
+                }));
             }
             refresh();
             setInterval(refresh, 1000);

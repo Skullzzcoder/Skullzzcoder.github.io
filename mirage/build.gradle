@@ -234,6 +234,7 @@ tasks.register('inspectApi') {
                             'net.minecraft.client.gui.widget.TextFieldWidget': ['text', 'placeholder', 'max'],
                             'net.minecraft.component.DataComponentTypes'    : ['lore', 'name', 'glint'],
                             'net.minecraft.component.type.LoreComponent'    : [],
+                            'net.minecraft.component.type.MapIdComponent'   : [],
                             'net.minecraft.text.Style'                      : ['italic', 'empty'],
                             'net.minecraft.item.ItemStack'                  : ['set', 'count', 'name'],
                             'net.minecraft.screen.slot.Slot'                : ['stack'],

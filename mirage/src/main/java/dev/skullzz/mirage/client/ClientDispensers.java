@@ -3,6 +3,7 @@ package dev.skullzz.mirage.client;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,41 +28,31 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Makes a watched dispenser appear to fire something of your choosing.
+ * Makes watched dispensers appear to fire something of your choosing, and optionally shoot a
+ * fake arrow at a fixed point.
  *
- * <p>The item is an entity added to the client world only — it is never sent anywhere and no
- * one else sees it. Firing is spotted from the vanilla TRIGGERED blockstate, which the client
- * already receives, so nothing here needs the server's cooperation.
- *
- * <p>Only dispensers you explicitly watch are polled, so this costs a handful of blockstate
- * reads per tick rather than a scan of everything around you.
+ * <p>What comes out is decided by the active {@link RigProfile}, so different games can be set
+ * up separately and switched between. Firing is spotted from the vanilla TRIGGERED blockstate,
+ * which the client already receives, and everything spawned is a client-only entity.
  */
 public final class ClientDispensers {
+    private static final double ARROW_GRAVITY = 0.05;
+    private static final int ARROW_LINGER_TICKS = 100;
     /** Vanilla schedules the real dispense four ticks after TRIGGERED flips. */
     private static final int DISPENSE_DELAY_TICKS = 4;
-    /** How long the fake item hangs around before vanishing. */
     private static final int LIFETIME_TICKS = 60;
 
     private static final Set<BlockPos> watched = new LinkedHashSet<>();
     private static final Map<BlockPos, Boolean> lastTriggered = new HashMap<>();
     private static final List<PendingFire> pending = new ArrayList<>();
     private static final List<ExpiringItem> spawned = new ArrayList<>();
+    private static final List<FlyingArrow> arrows = new ArrayList<>();
 
-    /** Downward acceleration per tick squared, matching a vanilla arrow. */
-    private static final double ARROW_GRAVITY = 0.05;
-    /** How long it stays stuck in the target afterwards. */
-    private static final int ARROW_LINGER_TICKS = 100;
+    private static final Map<String, RigProfile> profiles = new LinkedHashMap<>();
+    private static String activeName = "";
 
-    /** Results a keybind can flip between, so the choice needs no menu. */
-    private static final List<FakeSpec> presets = new ArrayList<>();
-    private static int presetIndex = -1;
-
-    private static FakeSpec result;
-    /** Where a fake arrow always lands. Null means don't fire one. */
-    private static Vec3d arrowTarget;
     private static long tick;
-
-    /** Client-only ids, taken from the top of the range so they miss the server's. */
+    /** Client-only ids, from the top of the range so they miss the server's. */
     private static int nextEntityId = Integer.MAX_VALUE - 4096;
 
     private record PendingFire(BlockPos pos, long fireAt) {
@@ -125,62 +116,135 @@ public final class ClientDispensers {
         }
     }
 
-    private static final List<FlyingArrow> arrows = new ArrayList<>();
-
     private ClientDispensers() {
     }
 
-    // ------------------------------------------------------------------ config
+    // ---------------------------------------------------------------- profiles
 
-    public static FakeSpec result() {
-        return result;
+    public static Map<String, RigProfile> profiles() {
+        return profiles;
     }
 
-    public static void setResult(FakeSpec spec) {
-        result = spec;
+    public static String activeName() {
+        return activeName;
     }
+
+    /** @return the active rig, creating a default one if none exists yet. */
+    public static RigProfile active() {
+        if (profiles.isEmpty()) {
+            RigProfile fallback = new RigProfile("default");
+            profiles.put(fallback.name, fallback);
+            activeName = fallback.name;
+        }
+        RigProfile profile = profiles.get(activeName);
+        if (profile == null) {
+            profile = profiles.values().iterator().next();
+            activeName = profile.name;
+        }
+        return profile;
+    }
+
+    public static RigProfile create(String name) {
+        RigProfile profile = new RigProfile(name);
+        profiles.put(name, profile);
+        return profile;
+    }
+
+    public static boolean use(String name) {
+        if (!profiles.containsKey(name)) return false;
+        activeName = name;
+        return true;
+    }
+
+    public static boolean delete(String name) {
+        if (profiles.remove(name) == null) return false;
+        if (activeName.equals(name) && !profiles.isEmpty()) {
+            activeName = profiles.keySet().iterator().next();
+        }
+        return true;
+    }
+
+    /** Steps to the next or previous rig, for switching games without a menu. */
+    public static RigProfile cycleProfile(int delta) {
+        if (profiles.size() < 2) return null;
+
+        List<String> names = new ArrayList<>(profiles.keySet());
+        int index = Math.max(0, names.indexOf(activeName));
+        activeName = names.get(Math.floorMod(index + delta, names.size()));
+        return profiles.get(activeName);
+    }
+
+    public static FakeSpec cyclePreset(int delta) {
+        return active().cycle(delta);
+    }
+
+    // Convenience over the active rig, so callers that only care about "the current game"
+    // do not each have to reach through active().
 
     public static List<FakeSpec> presets() {
-        return presets;
+        return active().presets;
     }
 
     public static int presetIndex() {
-        return presetIndex;
+        return active().presetIndex();
+    }
+
+    public static FakeSpec result() {
+        return active().selected();
     }
 
     public static void addPreset(FakeSpec spec) {
-        presets.add(spec);
+        RigProfile profile = active();
+        profile.presets.add(spec);
+        if (profile.presetIndex() < 0) profile.setPresetIndex(0);
     }
 
     public static void clearPresets() {
-        presets.clear();
-        presetIndex = -1;
+        RigProfile profile = active();
+        profile.presets.clear();
+        profile.setPresetIndex(-1);
     }
 
-    /**
-     * Steps to the next or previous preset and makes it the dispenser's result.
-     *
-     * @return the newly selected spec, or null if there are no presets.
-     */
-    public static FakeSpec cyclePreset(int delta) {
-        if (presets.isEmpty()) return null;
+    /** Replaces whatever is selected, or adds one if nothing is. */
+    public static void setSelected(FakeSpec spec) {
+        RigProfile profile = active();
+        int index = profile.presetIndex();
 
-        presetIndex = Math.floorMod(presetIndex + delta, presets.size());
-        result = presets.get(presetIndex);
-        return result;
+        if (index >= 0 && index < profile.presets.size()) {
+            profile.presets.set(index, spec);
+        } else {
+            profile.presets.add(spec);
+            profile.setPresetIndex(profile.presets.size() - 1);
+        }
+    }
+
+    public static void setResult(FakeSpec spec) {
+        setSelected(spec);
     }
 
     public static Vec3d arrowTarget() {
-        return arrowTarget;
+        return active().arrowTarget;
     }
 
     public static void setArrowTarget(Vec3d target) {
-        arrowTarget = target;
+        active().arrowTarget = target;
+    }
+
+    /** Fixes what one particular dispenser fires, regardless of the cycled item. */
+    public static void setDispenserResult(BlockPos pos, FakeSpec spec) {
+        active().perDispenser.put(pos.toImmutable(), spec);
+        watched.add(pos.toImmutable());
+    }
+
+    public static boolean clearDispenserResult(BlockPos pos) {
+        return active().perDispenser.remove(pos) != null;
     }
 
     public static void invalidateResult() {
-        if (result != null) result.invalidate();
+        invalidateResults();
     }
+
+    // ----------------------------------------------------------------- watching
 
     public static boolean watch(BlockPos pos) {
         return watched.add(pos.toImmutable());
@@ -201,6 +265,10 @@ public final class ClientDispensers {
         return watched.size();
     }
 
+    public static Set<BlockPos> watchedPositions() {
+        return watched;
+    }
+
     // -------------------------------------------------------------------- tick
 
     public static void tick(MinecraftClient client) {
@@ -210,7 +278,7 @@ public final class ClientDispensers {
 
         expire();
         flyArrows();
-        if ((result == null && arrowTarget == null) || watched.isEmpty()) return;
+        if (watched.isEmpty()) return;
 
         for (BlockPos pos : watched) {
             // Don't reach into chunks the client has not got.
@@ -235,18 +303,39 @@ public final class ClientDispensers {
             PendingFire fire = iterator.next();
             if (tick < fire.fireAt()) continue;
             iterator.remove();
-            if (result != null) spawn(world, fire.pos());
-            if (arrowTarget != null) launchArrow(world, fire.pos());
+
+            RigProfile profile = active();
+            FakeSpec result = profile.resultFor(fire.pos());
+            if (result != null) spawn(world, fire.pos(), result);
+            if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
     }
 
-    /**
-     * Flies each arrow along its arc and parks it on the target.
-     *
-     * <p>The path is interpolated rather than launched ballistically: solving for a velocity
-     * that lands on an exact point through Minecraft's drag is fiddly and approximate, and
-     * the whole point is that it never misses.
-     */
+    private static void spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof DispenserBlock)) return;
+
+        Direction facing = state.get(DispenserBlock.FACING);
+        double x = pos.getX() + 0.5 + facing.getOffsetX() * 0.7;
+        double y = pos.getY() + 0.35 + facing.getOffsetY() * 0.7;
+        double z = pos.getZ() + 0.5 + facing.getOffsetZ() * 0.7;
+
+        ItemEntity entity = new ItemEntity(world, x, y, z, result.stack().copy());
+        entity.setId(nextId());
+        entity.setPickupDelayInfinite();
+
+        var random = world.getRandom();
+        double spread = 0.06;
+        entity.setVelocity(
+                facing.getOffsetX() * 0.22 + (random.nextDouble() - 0.5) * spread,
+                facing.getOffsetY() * 0.22 + 0.10 + (random.nextDouble() - 0.5) * spread,
+                facing.getOffsetZ() * 0.22 + (random.nextDouble() - 0.5) * spread);
+        entity.velocityDirty = true;
+
+        world.addEntity(entity);
+        spawned.add(new ExpiringItem(entity, tick + LIFETIME_TICKS));
+    }
+
     private static void flyArrows() {
         Iterator<FlyingArrow> iterator = arrows.iterator();
         while (iterator.hasNext()) {
@@ -279,7 +368,7 @@ public final class ClientDispensers {
         }
     }
 
-    private static void launchArrow(ClientWorld world, BlockPos pos) {
+    private static void launchArrow(ClientWorld world, BlockPos pos, Vec3d target) {
         BlockState state = world.getBlockState(pos);
         Direction facing = state.getBlock() instanceof DispenserBlock
                 ? state.get(DispenserBlock.FACING) : Direction.UP;
@@ -299,32 +388,7 @@ public final class ClientDispensers {
         arrow.setPosition(from.x, from.y, from.z);
 
         world.addEntity(arrow);
-        arrows.add(new FlyingArrow(arrow, from, arrowTarget, tick));
-    }
-
-    private static void spawn(ClientWorld world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DispenserBlock)) return;
-
-        Direction facing = state.get(DispenserBlock.FACING);
-        double x = pos.getX() + 0.5 + facing.getOffsetX() * 0.7;
-        double y = pos.getY() + 0.35 + facing.getOffsetY() * 0.7;
-        double z = pos.getZ() + 0.5 + facing.getOffsetZ() * 0.7;
-
-        ItemEntity entity = new ItemEntity(world, x, y, z, result.stack().copy());
-        entity.setId(nextId());
-        entity.setPickupDelayInfinite();
-
-        var random = world.getRandom();
-        double spread = 0.06;
-        entity.setVelocity(
-                facing.getOffsetX() * 0.22 + (random.nextDouble() - 0.5) * spread,
-                facing.getOffsetY() * 0.22 + 0.10 + (random.nextDouble() - 0.5) * spread,
-                facing.getOffsetZ() * 0.22 + (random.nextDouble() - 0.5) * spread);
-        entity.velocityDirty = true;
-
-        world.addEntity(entity);
-        spawned.add(new ExpiringItem(entity, tick + LIFETIME_TICKS));
+        arrows.add(new FlyingArrow(arrow, from, target, tick));
     }
 
     private static int nextId() {
@@ -353,75 +417,130 @@ public final class ClientDispensers {
         lastTriggered.clear();
     }
 
+    public static void invalidateResults() {
+        for (RigProfile profile : profiles.values()) {
+            for (FakeSpec spec : profile.presets) spec.invalidate();
+            for (FakeSpec spec : profile.perDispenser.values()) spec.invalidate();
+        }
+    }
+
     // -------------------------------------------------------------- persistence
 
     public static void save(JsonObject root) {
         JsonArray positions = new JsonArray();
-        for (BlockPos pos : watched) {
-            positions.add(pos.getX() + "," + pos.getY() + "," + pos.getZ());
-        }
+        for (BlockPos pos : watched) positions.add(writePos(pos));
         root.add("watchedDispensers", positions);
 
-        JsonArray presetJson = new JsonArray();
-        for (FakeSpec spec : presets) presetJson.add(SelfFakes.writeSpec(spec));
-        root.add("dispenserPresets", presetJson);
-        if (result != null) root.add("dispenserResult", SelfFakes.writeSpec(result));
-        if (arrowTarget != null) {
-            root.addProperty("arrowTarget",
-                    arrowTarget.x + "," + arrowTarget.y + "," + arrowTarget.z);
+        JsonArray profileJson = new JsonArray();
+        for (RigProfile profile : profiles.values()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("name", profile.name);
+            json.addProperty("presetIndex", profile.presetIndex());
+
+            JsonArray presets = new JsonArray();
+            for (FakeSpec spec : profile.presets) presets.add(SelfFakes.writeSpec(spec));
+            json.add("presets", presets);
+
+            JsonObject perDispenser = new JsonObject();
+            for (Map.Entry<BlockPos, FakeSpec> entry : profile.perDispenser.entrySet()) {
+                perDispenser.add(writePos(entry.getKey()), SelfFakes.writeSpec(entry.getValue()));
+            }
+            json.add("perDispenser", perDispenser);
+
+            if (profile.arrowTarget != null) {
+                json.addProperty("arrowTarget", profile.arrowTarget.x + ","
+                        + profile.arrowTarget.y + "," + profile.arrowTarget.z);
+            }
+            profileJson.add(json);
         }
+        root.add("profiles", profileJson);
+        root.addProperty("activeProfile", activeName);
     }
 
     public static void load(JsonObject root) {
         watched.clear();
         lastTriggered.clear();
-        result = null;
+        profiles.clear();
+        activeName = "";
 
         if (root.has("watchedDispensers")) {
             for (JsonElement element : root.getAsJsonArray("watchedDispensers")) {
-                String[] parts = element.getAsString().split(",");
-                if (parts.length != 3) continue;
-                try {
-                    watched.add(new BlockPos(Integer.parseInt(parts[0]),
-                            Integer.parseInt(parts[1]), Integer.parseInt(parts[2])));
-                } catch (NumberFormatException ignored) {
-                    // skip an unreadable position
-                }
+                BlockPos pos = readPos(element.getAsString());
+                if (pos != null) watched.add(pos);
             }
         }
 
-        presets.clear();
-        presetIndex = -1;
+        if (root.has("profiles")) {
+            for (JsonElement element : root.getAsJsonArray("profiles")) {
+                readProfile(element.getAsJsonObject());
+            }
+            if (root.has("activeProfile")) activeName = root.get("activeProfile").getAsString();
+        } else {
+            migrateSingleRig(root);
+        }
+
+        if (profiles.isEmpty()) seedDefaults();
+        if (!profiles.containsKey(activeName)) {
+            activeName = profiles.keySet().iterator().next();
+        }
+    }
+
+    private static void readProfile(JsonObject json) {
+        RigProfile profile = new RigProfile(json.get("name").getAsString());
+
+        if (json.has("presets")) {
+            for (JsonElement element : json.getAsJsonArray("presets")) {
+                FakeSpec spec = readSpec(element.getAsJsonObject());
+                if (spec != null) profile.presets.add(spec);
+            }
+        }
+        if (json.has("presetIndex")) profile.setPresetIndex(json.get("presetIndex").getAsInt());
+
+        if (json.has("perDispenser")) {
+            for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject("perDispenser").entrySet()) {
+                BlockPos pos = readPos(entry.getKey());
+                FakeSpec spec = readSpec(entry.getValue().getAsJsonObject());
+                if (pos != null && spec != null) profile.perDispenser.put(pos, spec);
+            }
+        }
+        if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
+
+        profiles.put(profile.name, profile);
+    }
+
+    /** Files written before rigs existed held one set of presets and one result. */
+    private static void migrateSingleRig(JsonObject root) {
+        RigProfile profile = new RigProfile("default");
+
         if (root.has("dispenserPresets")) {
             for (JsonElement element : root.getAsJsonArray("dispenserPresets")) {
                 FakeSpec spec = readSpec(element.getAsJsonObject());
-                if (spec != null) presets.add(spec);
+                if (spec != null) profile.presets.add(spec);
             }
         }
-        if (presets.isEmpty()) {
-            // Sensible defaults for the usual two-way gamble.
-            Item gold = SelfFakes.lookupItem("gold_ingot");
-            Item diamond = SelfFakes.lookupItem("diamond");
-            if (gold != null) presets.add(new FakeSpec(gold, 1, ""));
-            if (diamond != null) presets.add(new FakeSpec(diamond, 1, ""));
-        }
-
-        arrowTarget = null;
-        if (root.has("arrowTarget")) {
-            String[] parts = root.get("arrowTarget").getAsString().split(",");
-            if (parts.length == 3) {
-                try {
-                    arrowTarget = new Vec3d(Double.parseDouble(parts[0]),
-                            Double.parseDouble(parts[1]), Double.parseDouble(parts[2]));
-                } catch (NumberFormatException ignored) {
-                    // skip an unreadable target
-                }
-            }
-        }
-
         if (root.has("dispenserResult")) {
-            result = readSpec(root.getAsJsonObject("dispenserResult"));
+            FakeSpec spec = readSpec(root.getAsJsonObject("dispenserResult"));
+            if (spec != null && profile.presets.isEmpty()) profile.presets.add(spec);
         }
+        if (root.has("arrowTarget")) profile.arrowTarget = readVec(root.get("arrowTarget").getAsString());
+
+        if (!profile.isEmpty()) {
+            profiles.put(profile.name, profile);
+            activeName = profile.name;
+        }
+    }
+
+    /** A coin-flip rig ready to go, since that is what most of these games are. */
+    private static void seedDefaults() {
+        RigProfile coinFlip = new RigProfile("5050");
+        Item gold = SelfFakes.lookupItem("gold_block");
+        Item diamond = SelfFakes.lookupItem("diamond_block");
+        if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
+        if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
+
+        profiles.put(coinFlip.name, coinFlip);
+        profiles.put("paper", new RigProfile("paper"));
+        activeName = coinFlip.name;
     }
 
     private static FakeSpec readSpec(JsonObject json) {
@@ -433,6 +552,33 @@ public final class ClientDispensers {
         int count = json.has("count") ? json.get("count").getAsInt() : 1;
         String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
         Double price = json.has("price") ? json.get("price").getAsDouble() : null;
-        return new FakeSpec(item, count, enchants, price);
+        Integer mapId = json.has("mapId") ? json.get("mapId").getAsInt() : null;
+        return new FakeSpec(item, count, enchants, price, mapId);
+    }
+
+    private static String writePos(BlockPos pos) {
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private static BlockPos readPos(String text) {
+        String[] parts = text.split(",");
+        if (parts.length != 3) return null;
+        try {
+            return new BlockPos(Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()), Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Vec3d readVec(String text) {
+        String[] parts = text.split(",");
+        if (parts.length != 3) return null;
+        try {
+            return new Vec3d(Double.parseDouble(parts[0].trim()),
+                    Double.parseDouble(parts[1].trim()), Double.parseDouble(parts[2].trim()));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
