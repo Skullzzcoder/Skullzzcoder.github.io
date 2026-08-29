@@ -833,7 +833,10 @@ public class MirageClient implements ClientModInitializer {
             ClientDispensers.fireNow(hit.getBlockPos());
             return;
         }
-        ClientDispensers.fireAllWatched();
+
+        if (ClientDispensers.fireAllWatched() == 0) {
+            say(client, "No dispensers watched. Look at one and run /fake dispenser watch.");
+        }
     }
 
     /**

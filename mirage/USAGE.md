@@ -45,15 +45,16 @@ the rig it belongs to:
 | a dispenser with a fixed answer | nine of that |
 | anything else | one of each of the rig's items, in order |
 
-A coin flip therefore holds one diamond block in slot 0 and one gold block in
+A coin flip therefore holds one gold block in slot 0 and one diamond block in
 slot 1 — nothing else. Holding both means flipping which way it is rigged does
 not change what is in the box.
 
-The order is your preset order. To swap it round:
+The order is your preset order. To set it, or swap it round:
 
     /fake preset clear
-    /fake preset add diamond_block
     /fake preset add gold_block
+    /fake preset add diamond_block
+    /fake dispenser fill
 
 **When it fires, the item leaves.** One of the matching slots empties, chosen at
 random the way a real dispenser picks, so opening it afterwards agrees with what

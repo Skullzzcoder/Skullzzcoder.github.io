@@ -11,6 +11,12 @@ SIDES   = re.findall(r'"(\w+)"', re.search(r"DEFAULT_SIDES = \{([^}]*)\}", rig).
 assert 'this.numbers - random.nextInt(span)' in rig, "high roll formula changed"
 assert 'int span = Math.max(1, this.numbers / 2)' in rig, "span formula changed"
 
+MARKER = int(re.search(r"public long roundTick = (.+);", rig).group(1)
+             .replace("Long.MIN_VALUE", str(-2**63)))
+
+def as_long(v):
+    return (v + 2**63) % 2**64 - 2**63
+
 def slip_name(n, side): return "%d (%s)" % (n, side) if side else str(n)
 
 class Rig:
@@ -54,6 +60,16 @@ for rigged in SIDES:
         check("names carry the side", left.endswith("(%s)" % SIDES[0]))
         if fails: break
     if fails: break
+
+# The no-round-yet marker is the most negative long there is, so the round test must add
+# to the older side rather than subtract from the newer: subtracting overflows and reads as
+# "same round" forever, leaving every draw on its starting value.
+guard = re.search(r"if \((.+?)\) profile\.startRound", disp).group(1)
+check("the round test does not subtract the marker", "tick - profile.roundTick" not in guard)
+for t in (1, 100, 5000, 20 * 60 * 20):
+    check("a first fire at tick %d starts a round" % t, t > MARKER + ROUND)
+    check("subtracting the marker at tick %d would have failed" % t,
+          not as_long(t - MARKER) > ROUND)
 
 # a fresh round must be drawn once the machines have been idle
 r = Rig(SIDES[0]); fire(r, SIDES[0], 0, rnd); first = r.high

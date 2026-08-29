@@ -78,6 +78,10 @@ public final class ClientDispensers {
     private static long tick;
     /** Prints what the watcher is seeing, for working out why nothing fired. */
     private static boolean debug;
+    /** How long a complaint about an empty rig keeps quiet for. */
+    private static final int WARN_GAP_TICKS = 60;
+    private static long lastWarn = Long.MIN_VALUE / 2;
+
     /** The dispenser last looked at, which is the one whose GUI is open if one is. */
     private static BlockPos openDispenser;
     /** Which of several matching slots empties, so a ring does not drain left to right. */
@@ -377,7 +381,7 @@ public final class ClientDispensers {
             // that call spends a chamber, and spending one on a dispenser that has been
             // broken or walked away from would quietly desync the count.
             if (!isDispenser(world, fire.pos())) {
-                note("nothing at " + text(fire.pos()) + " to fire - not loaded, or gone");
+                warn("No dispenser at " + text(fire.pos()) + " - moved, or too far away.");
                 continue;
             }
 
@@ -393,7 +397,7 @@ public final class ClientDispensers {
                 result = profile.resultFor(fire.pos());
             }
             if (result == null) {
-                note("rig '" + profile.name + "' has nothing set to fire");
+                warn("Rig '" + profile.name + "' has nothing to fire.");
             } else {
                 spawn(world, fire.pos(), result);
                 // Take it out of what the dispenser looks like it is holding, so opening
@@ -443,7 +447,10 @@ public final class ClientDispensers {
      * side always has the higher one.
      */
     private static FakeSpec paperSlip(RigProfile profile, BlockPos pos) {
-        if (tick - profile.roundTick > ROUND_TICKS) profile.startRound(random, tick);
+        // Added to the older side, never subtracted from the newer: the no-round-yet marker
+        // is Long.MIN_VALUE, and subtracting that overflows to a huge negative, which reads
+        // as "still the same round" forever and leaves every draw on its starting value.
+        if (tick > profile.roundTick + ROUND_TICKS) profile.startRound(random, tick);
 
         String side = profile.sideAt(pos);
         boolean wins = !profile.roundWinner.isEmpty() && profile.roundWinner.equals(side);
@@ -831,6 +838,22 @@ public final class ClientDispensers {
                 .formatted(Formatting.DARK_GRAY), false);
     }
 
+    /**
+     * Says why a dispense produced nothing, whether or not debug is on.
+     *
+     * <p>A fire that quietly does nothing is indistinguishable from the mod not being
+     * loaded, which has now cost more than one evening. Throttled, since a jammed setup
+     * can go off repeatedly.
+     */
+    private static void warn(String message) {
+        if (tick - lastWarn < WARN_GAP_TICKS) return;
+        lastWarn = tick;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return;
+        client.player.sendMessage(Text.literal(message).formatted(Formatting.GRAY), true);
+    }
+
     private static void spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
         BlockState state = world.getBlockState(pos);
         if (!(state.getBlock() instanceof DispenserBlock)) return;
@@ -1198,10 +1221,10 @@ public final class ClientDispensers {
     private static void seedDefaults() {
         if (needsSeeding("5050")) {
             RigProfile coinFlip = new RigProfile("5050");
-            Item diamond = SelfFakes.lookupItem("diamond_block");
             Item gold = SelfFakes.lookupItem("gold_block");
-            if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
+            Item diamond = SelfFakes.lookupItem("diamond_block");
             if (gold != null) coinFlip.presets.add(new FakeSpec(gold, 1, ""));
+            if (diamond != null) coinFlip.presets.add(new FakeSpec(diamond, 1, ""));
             coinFlip.setPresetIndex(coinFlip.presets.isEmpty() ? -1 : 0);
             profiles.put(coinFlip.name, coinFlip);
         }
