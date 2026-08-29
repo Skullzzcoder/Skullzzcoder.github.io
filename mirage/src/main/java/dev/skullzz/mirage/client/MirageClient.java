@@ -85,16 +85,21 @@ public class MirageClient implements ClientModInitializer {
     }
 
     private static void registerKeys() {
+        // A key binding's category is an object rather than a string in this version, so
+        // reuse a vanilla one instead of registering our own. The keys land under
+        // Miscellaneous in Controls, which costs a heading and risks nothing.
+        KeyBinding.Category category = KeyBinding.Category.MISC;
+
         nextResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.next_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_BRACKET, "key.categories.mirage"));
+                GLFW.GLFW_KEY_RIGHT_BRACKET, category));
         previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.prev_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_LEFT_BRACKET, "key.categories.mirage"));
+                GLFW.GLFW_KEY_LEFT_BRACKET, category));
         // Unbound by default: the menu has a command, and an accidental clash is worse.
         openMenu = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.open_menu", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN, "key.categories.mirage"));
+                GLFW.GLFW_KEY_UNKNOWN, category));
     }
 
     /** Flips to another preset result without opening anything anyone could see. */
