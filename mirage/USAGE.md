@@ -82,6 +82,9 @@ that is. Real items are untouched and still click normally.
     /fake dispenser unfill    (show its real contents again)
     /fake dispenser status    (how many slots each holds, and which one a GUI would show)
 
+`H` does the same thing on a key. It is silent when it works and says why when
+it does not — "not looking at a dispenser", or "rig 'x' has nothing to put in".
+
 `fill` uses the dispenser you are **looking at**, watching it if it wasn't
 already, and tells you what went in — `That dispenser now shows 8x Obsidian,
 1x End Crystal.` If it says it laid out the watched ones *instead*, your

@@ -1196,7 +1196,7 @@ public final class ClientDispensers {
      * feature being broken. Rigs already in the file are left completely alone.
      */
     private static void seedDefaults() {
-        if (!profiles.containsKey("5050")) {
+        if (needsSeeding("5050")) {
             RigProfile coinFlip = new RigProfile("5050");
             Item diamond = SelfFakes.lookupItem("diamond_block");
             Item gold = SelfFakes.lookupItem("gold_block");
@@ -1205,14 +1205,19 @@ public final class ClientDispensers {
             coinFlip.setPresetIndex(coinFlip.presets.isEmpty() ? -1 : 0);
             profiles.put(coinFlip.name, coinFlip);
         }
-        if (!profiles.containsKey("paper")) {
+        if (needsSeeding("paper")) {
             // Two machines of numbered slips, the higher one winning. Sides are handed out
             // as the dispensers are watched: first the player's, then the host's.
             RigProfile paper = new RigProfile("paper");
             paper.paper = true;
             profiles.put(paper.name, paper);
+        } else {
+            // A file written before the paper game existed holds a rig with the name but
+            // not the mode, which lays out nothing and looks like the game being broken.
+            RigProfile paper = profiles.get("paper");
+            if (!paper.roulette && paper.presets.isEmpty()) paper.paper = true;
         }
-        if (!profiles.containsKey("roulette")) {
+        if (needsSeeding("roulette")) {
             // Set up for the usual arrangement: eight obsidian round one crystal, and the
             // crystal appears only when you arm it, since turn order is decided as you go.
             RigProfile roulette = new RigProfile("roulette");
@@ -1227,6 +1232,19 @@ public final class ClientDispensers {
             profiles.put(roulette.name, roulette);
         }
         if (activeName.isEmpty()) activeName = "5050";
+    }
+
+    /**
+     * Whether a built-in rig has to be laid down again.
+     *
+     * <p>Missing is the obvious case. Present but empty is the one that bites: a config
+     * written before a game existed carries the rig's name and nothing else, and a rig that
+     * holds nothing behaves exactly like a broken feature. A rig with anything in it is
+     * somebody's setup and is never touched.
+     */
+    private static boolean needsSeeding(String name) {
+        RigProfile existing = profiles.get(name);
+        return existing == null || existing.isEmpty();
     }
 
     private static FakeSpec readSpec(JsonObject json) {

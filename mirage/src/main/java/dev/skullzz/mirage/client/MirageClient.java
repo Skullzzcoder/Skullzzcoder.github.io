@@ -894,17 +894,36 @@ public class MirageClient implements ClientModInitializer {
     private static void refillLookedAt(MinecraftClient client) {
         BlockPos pos = null;
 
-        BlockHitResult hit = lookedAt(6.0);
+        BlockHitResult hit = lookedAt(24.0);
         if (hit != null && client.world != null
                 && client.world.getBlockState(hit.getBlockPos()).getBlock() instanceof DispenserBlock) {
             pos = hit.getBlockPos();
         }
         if (pos == null) pos = ClientDispensers.openDispenserPos(client.player);
-        if (pos == null || !ClientDispensers.fill(pos)) return;
+
+        if (pos == null) {
+            say(client, "Not looking at a dispenser.");
+            return;
+        }
+        if (!ClientDispensers.fill(pos)) {
+            say(client, "Rig '" + ClientDispensers.activeName() + "' has nothing to put in.");
+            return;
+        }
 
         ClientDispensers.watch(pos);
         ClientDispensers.setOpenDispenser(pos);
         SelfFakes.save();
+    }
+
+    /**
+     * Says why a key did nothing.
+     *
+     * <p>Only ever on failure. A key that works in silence is the whole point of having it,
+     * but one that fails in silence is what sent the last two evenings sideways.
+     */
+    private static void say(MinecraftClient client, String message) {
+        if (client.player == null) return;
+        client.player.sendMessage(Text.literal(message).formatted(Formatting.GRAY), true);
     }
 
     private static int fillDispenser(CommandContext<FabricClientCommandSource> context) {
