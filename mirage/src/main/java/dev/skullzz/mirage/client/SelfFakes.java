@@ -116,6 +116,37 @@ public final class SelfFakes {
         return itemsById.get(identifier);
     }
 
+    /**
+     * Parses what someone typed into a fake.
+     *
+     * <p>Accepts {@code filled_map#42} to name a particular map, which is how a map art with a
+     * number on it is picked out.
+     *
+     * @return null if the item is not recognised.
+     */
+    public static FakeSpec buildSpec(String itemText, int count, String enchants, Double price) {
+        return buildSpec(itemText, count, enchants, price, "");
+    }
+
+    public static FakeSpec buildSpec(String itemText, int count, String enchants, Double price,
+                                     String name) {
+        String text = itemText == null ? "" : itemText.trim();
+        Integer mapId = null;
+
+        int hash = text.indexOf('#');
+        if (hash > 0) {
+            try {
+                mapId = Integer.parseInt(text.substring(hash + 1).trim());
+            } catch (NumberFormatException ignored) {
+                // a bad suffix just means no map
+            }
+            text = text.substring(0, hash);
+        }
+
+        Item item = lookupItem(text);
+        return item == null ? null : new FakeSpec(item, count, enchants, price, mapId, name);
+    }
+
     // --------------------------------------------------------- inventory fakes
 
     public static Map<Integer, FakeSpec> all() {

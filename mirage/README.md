@@ -42,6 +42,20 @@ all — hence the pinned distribution in `gradle/wrapper/gradle-wrapper.properti
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
+### Checking calls without a build
+
+Minecraft is not on the classpath outside a Loom build, so `javac` reports a call to a method
+that was never written exactly as it reports a missing Minecraft class: `cannot find symbol`.
+That makes a real mistake easy to lose among the noise. This checks the mod's own classes
+against each other, and needs no classpath:
+
+```
+python3 tools/check-calls.py
+```
+
+It reports a call to a method that does not exist, and a call made with the wrong number of
+arguments.
+
 ### Toolchain versions
 
 `gradle.properties` is set for Minecraft 1.21.11 and verified against Fabric's and
