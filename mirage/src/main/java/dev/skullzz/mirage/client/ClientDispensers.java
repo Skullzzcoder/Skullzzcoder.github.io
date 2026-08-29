@@ -305,7 +305,11 @@ public final class ClientDispensers {
             iterator.remove();
 
             RigProfile profile = active();
-            FakeSpec result = profile.resultFor(fire.pos());
+            // In roulette the whole rig shares one chamber counter, so which dispenser fired
+            // does not matter; otherwise a dispenser's own answer wins.
+            FakeSpec result = profile.roulette
+                    ? profile.advanceRoulette()
+                    : profile.resultFor(fire.pos());
             if (result != null) spawn(world, fire.pos(), result);
             if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
@@ -421,6 +425,8 @@ public final class ClientDispensers {
         for (RigProfile profile : profiles.values()) {
             for (FakeSpec spec : profile.presets) spec.invalidate();
             for (FakeSpec spec : profile.perDispenser.values()) spec.invalidate();
+            if (profile.bullet != null) profile.bullet.invalidate();
+            if (profile.blank != null) profile.blank.invalidate();
         }
     }
 
@@ -450,6 +456,16 @@ public final class ClientDispensers {
             if (profile.arrowTarget != null) {
                 json.addProperty("arrowTarget", profile.arrowTarget.x + ","
                         + profile.arrowTarget.y + "," + profile.arrowTarget.z);
+            }
+
+            if (profile.roulette) {
+                JsonObject roulette = new JsonObject();
+                roulette.addProperty("chambers", profile.chambers);
+                roulette.addProperty("bulletAt", profile.bulletAt);
+                roulette.addProperty("shot", profile.shot);
+                if (profile.bullet != null) roulette.add("bullet", SelfFakes.writeSpec(profile.bullet));
+                if (profile.blank != null) roulette.add("blank", SelfFakes.writeSpec(profile.blank));
+                json.add("roulette", roulette);
             }
             profileJson.add(json);
         }
@@ -505,6 +521,17 @@ public final class ClientDispensers {
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
+        if (json.has("roulette")) {
+            JsonObject roulette = json.getAsJsonObject("roulette");
+            profile.roulette = true;
+            if (roulette.has("chambers")) profile.chambers = roulette.get("chambers").getAsInt();
+            if (roulette.has("bulletAt")) profile.bulletAt = roulette.get("bulletAt").getAsInt();
+            if (roulette.has("shot")) profile.shot = roulette.get("shot").getAsInt();
+            if (roulette.has("bullet")) profile.bullet = readSpec(roulette.getAsJsonObject("bullet"));
+            if (roulette.has("blank")) profile.blank = readSpec(roulette.getAsJsonObject("blank"));
+            profile.tidyRoulette();
+        }
+
         profiles.put(profile.name, profile);
     }
 
@@ -540,6 +567,13 @@ public final class ClientDispensers {
 
         profiles.put(coinFlip.name, coinFlip);
         profiles.put("paper", new RigProfile("paper"));
+
+        RigProfile roulette = new RigProfile("roulette");
+        roulette.roulette = true;
+        Item crystal = SelfFakes.lookupItem("end_crystal");
+        if (crystal != null) roulette.bullet = new FakeSpec(crystal, 1, "");
+        profiles.put(roulette.name, roulette);
+
         activeName = coinFlip.name;
     }
 
@@ -553,7 +587,8 @@ public final class ClientDispensers {
         String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
         Double price = json.has("price") ? json.get("price").getAsDouble() : null;
         Integer mapId = json.has("mapId") ? json.get("mapId").getAsInt() : null;
-        return new FakeSpec(item, count, enchants, price, mapId);
+        String name = json.has("name") ? json.get("name").getAsString() : "";
+        return new FakeSpec(item, count, enchants, price, mapId, name);
     }
 
     private static String writePos(BlockPos pos) {

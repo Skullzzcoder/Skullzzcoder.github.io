@@ -16,6 +16,8 @@ public final class FakeSpec {
     public final Double price;
     /** Which map a filled_map shows. Null for anything else. */
     public final Integer mapId;
+    /** Display name shown instead of the item's own. Empty for the default. */
+    public final String name;
 
     private ItemStack built;
 
@@ -28,17 +30,23 @@ public final class FakeSpec {
     }
 
     public FakeSpec(Item item, int count, String enchants, Double price, Integer mapId) {
+        this(item, count, enchants, price, mapId, "");
+    }
+
+    public FakeSpec(Item item, int count, String enchants, Double price, Integer mapId, String name) {
         this.item = item;
         this.count = Math.max(1, Math.min(count, 127));
         this.enchants = enchants == null ? "" : enchants.trim();
         this.price = price;
         this.mapId = mapId;
+        this.name = name == null ? "" : name.trim();
     }
 
     public ItemStack stack() {
         if (this.built == null) {
             ItemStack stack = new ItemStack(this.item, this.count);
             FakeLore.applyMapId(stack, this.mapId);
+            FakeLore.applyName(stack, this.name);
             this.built = FakeLore.applyTo(stack, this.enchants, this.price);
         }
         return this.built;
@@ -47,7 +55,13 @@ public final class FakeSpec {
     /** How this was typed, so it can be shown back and re-parsed. */
     public String describe() {
         String id = net.minecraft.registry.Registries.ITEM.getId(this.item).getPath();
-        return this.mapId != null ? id + "#" + this.mapId : id;
+        if (this.mapId != null) id = id + "#" + this.mapId;
+        return this.name.isEmpty() ? id : id + " \"" + this.name + "\"";
+    }
+
+    /** What to call this in a list: the custom name if there is one. */
+    public String label() {
+        return this.name.isEmpty() ? stack().getName().getString() : this.name;
     }
 
     public void invalidate() {

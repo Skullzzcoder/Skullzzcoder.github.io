@@ -221,8 +221,8 @@ their chunk comes back.
 ### Rigs: one setup per game
 
 Each game gets its own rig, so a coin flip using gold and diamond does not disturb a game
-played with map arts. Two rigs exist out of the box: `5050`, holding a gold block and a
-diamond block, and an empty `paper`.
+played with map arts. Three rigs exist out of the box: `5050`, holding a gold block and a
+diamond block; an empty `paper`; and `roulette`, set to fire an end crystal.
 
 ```
 /fake rig list
@@ -235,6 +235,8 @@ A rig holds two kinds of answer:
 
 - **Cycled items** — what `]` and `[` flip between. Right for a game with one dispenser and
   two outcomes. Managed with `/fake preset add`, which applies to the rig in use.
+- **A chamber count** — right for a game that fires repeatedly and one shot matters. See
+  Russian roulette below.
 - **A fixed answer per dispenser** — right for a game where two dispensers each fire something
   and they get compared. Look at a dispenser and:
 
@@ -245,6 +247,41 @@ A rig holds two kinds of answer:
 
 A dispenser with a fixed answer ignores the cycled one, and `/fake rig set` starts watching
 that dispenser for you.
+
+### Russian roulette
+
+A rig can count chambers instead of holding one answer: the dispenser fires a set number of
+times and the loaded shot lands where you put it.
+
+```
+/fake rig use roulette
+/fake rig roulette on
+/fake rig roulette chambers 6
+/fake rig roulette shot 4          the fourth shot is the loaded one
+/fake rig roulette bullet end_crystal
+/fake rig roulette blank none      other shots fire nothing at all
+/fake rig reset                    chamber count back to zero
+```
+
+The **Rigs** tab has all of it as buttons, and the dashboard shows the chamber strip: spent
+chambers dim, the loaded one is marked, and clicking any number moves the loaded shot. The
+card turns amber on the shot that fires.
+
+The count is shared across every watched dispenser in the rig and wraps once the cycle is
+spent. It survives a restart, so reset it before a fresh round.
+
+### Named items
+
+Anywhere an item is asked for, the menu's **name** field renames it — a stack of paper called
+`7`, say. On the command line the name goes last:
+
+```
+/fake rig set paper 1 7
+/fake preset add paper 1 Round 2
+```
+
+`&` codes work in a name, and the name is written non-italic, as a server-named item usually
+is.
 
 ### Map arts
 

@@ -184,6 +184,18 @@ public final class FakeLore {
         }
     }
 
+    /** Names an item. Non-italic, since a server-named item usually is. */
+    public static void applyName(ItemStack stack, String name) {
+        if (name == null || name.isEmpty()) return;
+
+        try {
+            stack.set(DataComponentTypes.CUSTOM_NAME,
+                    Text.literal(name.replace('&', '§')).setStyle(Style.EMPTY.withItalic(false)));
+        } catch (RuntimeException e) {
+            Mirage.LOGGER.warn("Mirage could not name an item: {}", e.toString());
+        }
+    }
+
     public static ItemStack applyTo(ItemStack stack) {
         return applyTo(stack, null, null);
     }

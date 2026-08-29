@@ -26,6 +26,11 @@ public final class WebDashboard {
     private static final AtomicInteger requested = new AtomicInteger(-1);
     /** Rig a browser asked for, or null. Consumed by the client tick. */
     private static final AtomicReference<String> requestedRig = new AtomicReference<>(null);
+    /** Loaded shot a browser asked for, or -1. */
+    private static final AtomicInteger requestedShot = new AtomicInteger(-1);
+    /** Whether a browser asked to reset the chamber count. */
+    private static final java.util.concurrent.atomic.AtomicBoolean requestedReset =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private static HttpServer server;
     private static int boundPort = -1;
@@ -79,6 +84,8 @@ public final class WebDashboard {
             server.createContext("/state", WebDashboard::handleState);
             server.createContext("/select", WebDashboard::handleSelect);
             server.createContext("/rig", WebDashboard::handleRig);
+            server.createContext("/shot", WebDashboard::handleShot);
+            server.createContext("/reset", WebDashboard::handleReset);
             server.setExecutor(null);
             server.start();
 
@@ -112,6 +119,16 @@ public final class WebDashboard {
     /** @return a rig name a browser picked, or null. Clears it. */
     public static String pollRig() {
         return requestedRig.getAndSet(null);
+    }
+
+    /** @return a loaded-shot number a browser picked, or -1. Clears it. */
+    public static int pollShot() {
+        return requestedShot.getAndSet(-1);
+    }
+
+    /** @return true once if a browser asked for the chamber count to be reset. */
+    public static boolean pollReset() {
+        return requestedReset.getAndSet(false);
     }
 
     // ----------------------------------------------------------------- handlers
@@ -148,6 +165,30 @@ public final class WebDashboard {
 
         String name = java.net.URLDecoder.decode(query.substring(5), StandardCharsets.UTF_8);
         requestedRig.set(name);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleShot(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        int shot = -1;
+        if (query != null && query.startsWith("n=")) {
+            try {
+                shot = Integer.parseInt(query.substring(2));
+            } catch (NumberFormatException ignored) {
+                shot = -1;
+            }
+        }
+
+        if (shot < 1) {
+            respond(exchange, 400, "text/plain", "bad shot");
+            return;
+        }
+        requestedShot.set(shot);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleReset(HttpExchange exchange) throws IOException {
+        requestedReset.set(true);
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -204,28 +245,32 @@ public final class WebDashboard {
               :root { color-scheme: dark; }
               * { box-sizing: border-box; }
               body { margin: 0; min-height: 100vh; display: flex; flex-direction: column;
-                     align-items: center; justify-content: center; gap: 24px;
+                     align-items: center; justify-content: center; gap: 20px; padding: 24px;
                      background: #14161a; color: #e8eaed;
                      font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
-              #card { width: min(90vw, 420px); border-radius: 18px; padding: 40px 24px;
+              #card { width: min(90vw, 420px); border-radius: 18px; padding: 36px 24px;
                       text-align: center; background: #1e2127; border: 2px solid #2b2f37;
                       transition: background .18s, border-color .18s; }
-              #name { font-size: 34px; font-weight: 650; letter-spacing: -.02em; }
-              #price { margin-top: 6px; font-size: 20px; color: #9aa0a6; font-variant-numeric: tabular-nums; }
+              #name { font-size: 34px; font-weight: 650; letter-spacing: -.02em;
+                      font-variant-numeric: tabular-nums; }
+              #price { margin-top: 6px; font-size: 17px; color: #9aa0a6; }
               #label { font-size: 13px; text-transform: uppercase; letter-spacing: .1em;
-                       color: #9aa0a6; margin-bottom: 14px; }
-              .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
-                     width: min(90vw, 420px); }
-              button { flex: 1 1 auto; min-width: 120px; padding: 14px 18px; border-radius: 12px;
+                       color: #9aa0a6; margin-bottom: 12px; }
+              .row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+                     width: min(92vw, 460px); }
+              button { flex: 1 1 auto; min-width: 110px; padding: 13px 16px; border-radius: 12px;
                        border: 1px solid #343a44; background: #1e2127; color: #e8eaed;
                        font: inherit; font-weight: 550; cursor: pointer; }
               button:hover { background: #262a31; }
               button[aria-pressed="true"] { border-color: currentColor; }
-              #none { color: #9aa0a6; font-size: 14px; }
-              #fixed { color: #9aa0a6; font-size: 13px; text-align: center; line-height: 1.7;
-                       font-variant-numeric: tabular-nums; }
               #rigs button { flex: 0 0 auto; min-width: 0; padding: 8px 16px; font-size: 14px;
                              border-radius: 999px; }
+              #chambers button { flex: 0 0 auto; min-width: 46px; padding: 10px 0; }
+              #chambers button.loaded { background: #3a2416; border-color: #ff7043; color: #ff7043; }
+              #chambers button.spent { opacity: .4; }
+              #fixed { color: #9aa0a6; font-size: 13px; text-align: center; line-height: 1.7;
+                       font-variant-numeric: tabular-nums; }
+              #none { color: #9aa0a6; font-size: 14px; }
             </style>
             </head>
             <body>
@@ -236,81 +281,133 @@ public final class WebDashboard {
                 <div id="price"></div>
               </div>
               <div class="row" id="buttons"></div>
+              <div class="row" id="chambers"></div>
               <div id="fixed"></div>
-              <div id="none" hidden>No presets in this rig. Use /fake preset add in game.</div>
+              <div id="none" hidden>Nothing set in this rig.</div>
             <script>
+            const el = id => document.getElementById(id);
+
             const tint = name => {
-              const n = name.toLowerCase();
+              const n = (name || '').toLowerCase();
               if (n.includes('gold')) return ['#3a2f12', '#f0b429'];
               if (n.includes('diamond')) return ['#123437', '#4dd0e1'];
               if (n.includes('emerald')) return ['#12331d', '#4caf50'];
               if (n.includes('netherite')) return ['#241f1d', '#a1887f'];
               return ['#1e2127', '#e8eaed'];
             };
-            let last = '';
-            async function refresh() {
-              let s;
-              try { s = await (await fetch('/state')).json(); } catch { return; }
-              const key = JSON.stringify(s);
-              if (key === last) return;
-              last = key;
 
-              const active = s.presets[s.active];
-              const card = document.getElementById('card');
-              document.getElementById('none').hidden = s.presets.length > 0;
+            const post = async url => { await fetch(url); last = ''; refresh(); };
 
-              if (active) {
-                const [bg, fg] = tint(active.name);
-                card.style.background = bg;
-                card.style.borderColor = fg;
-                document.getElementById('name').textContent = active.name;
-                document.getElementById('name').style.color = fg;
-                document.getElementById('price').textContent = active.price || '';
-              } else {
-                card.style.background = '#1e2127';
-                card.style.borderColor = '#2b2f37';
-                document.getElementById('name').textContent = '--';
-                document.getElementById('name').style.color = '#e8eaed';
-                document.getElementById('price').textContent = '';
-              }
-
-              const rigs = document.getElementById('rigs');
+            function renderRigs(s) {
+              const rigs = el('rigs');
               rigs.replaceChildren();
               (s.rigs || []).forEach(name => {
                 const b = document.createElement('button');
                 b.textContent = name;
                 b.setAttribute('aria-pressed', String(name === s.rig));
-                if (name === s.rig) b.style.color = '#e8eaed';
-                b.onclick = async () => {
-                  await fetch('/rig?name=' + encodeURIComponent(name));
-                  last = '';
-                  refresh();
-                };
+                b.onclick = () => post('/rig?name=' + encodeURIComponent(name));
                 rigs.append(b);
               });
+            }
 
-              const row = document.getElementById('buttons');
+            function renderCard(s) {
+              const card = el('card');
+              const r = s.roulette;
+
+              if (r && r.on) {
+                const armed = r.shot === r.bulletAt;
+                card.style.background = armed ? '#2a1a14' : '#1e2127';
+                card.style.borderColor = armed ? '#ff7043' : '#2b2f37';
+                el('label').textContent = 'Chamber';
+                el('name').textContent = r.shot + ' / ' + r.chambers;
+                el('name').style.color = armed ? '#ff7043' : '#e8eaed';
+                el('price').textContent = 'loaded on ' + r.bulletAt + ' \u2014 ' + (r.bullet || 'nothing');
+                return;
+              }
+
+              const active = s.presets[s.active];
+              el('label').textContent = 'Rigged toward';
+              if (active) {
+                const [bg, fg] = tint(active.name);
+                card.style.background = bg;
+                card.style.borderColor = fg;
+                el('name').textContent = active.name;
+                el('name').style.color = fg;
+                el('price').textContent = active.price || '';
+              } else {
+                card.style.background = '#1e2127';
+                card.style.borderColor = '#2b2f37';
+                el('name').textContent = '--';
+                el('name').style.color = '#e8eaed';
+                el('price').textContent = '';
+              }
+            }
+
+            function renderPresets(s) {
+              const row = el('buttons');
               row.replaceChildren();
+              const roulette = s.roulette && s.roulette.on;
+              if (roulette) return;
+
               s.presets.forEach((p, i) => {
                 const b = document.createElement('button');
                 b.textContent = p.name;
                 b.setAttribute('aria-pressed', String(i === s.active));
                 b.style.color = tint(p.name)[1];
-                b.onclick = async () => {
-                  await fetch('/select?i=' + i);
-                  last = '';
-                  refresh();
-                };
+                b.onclick = () => post('/select?i=' + i);
                 row.append(b);
               });
-
-              document.getElementById('fixed').replaceChildren(
-                ...(s.fixed || []).map(f => {
-                  const d = document.createElement('div');
-                  d.textContent = f.pos + '  fires  ' + f.name;
-                  return d;
-                }));
             }
+
+            function renderChambers(s) {
+              const chambers = el('chambers');
+              chambers.replaceChildren();
+              const r = s.roulette;
+              if (!r || !r.on) return;
+
+              for (let n = 1; n <= r.chambers; n++) {
+                const b = document.createElement('button');
+                b.textContent = n;
+                if (n === r.bulletAt) b.classList.add('loaded');
+                if (n <= r.shot) b.classList.add('spent');
+                b.title = n === r.bulletAt ? 'loaded' : 'blank';
+                b.onclick = () => post('/shot?n=' + n);
+                chambers.append(b);
+              }
+
+              const reset = document.createElement('button');
+              reset.textContent = 'Reset';
+              reset.onclick = () => post('/reset');
+              chambers.append(reset);
+            }
+
+            function renderFixed(s) {
+              el('fixed').replaceChildren(...(s.fixed || []).map(f => {
+                const d = document.createElement('div');
+                d.textContent = f.pos + '  fires  ' + f.name;
+                return d;
+              }));
+            }
+
+            let last = '';
+            async function refresh() {
+              let s;
+              try { s = await (await fetch('/state')).json(); } catch (e) { return; }
+
+              const key = JSON.stringify(s);
+              if (key === last) return;
+              last = key;
+
+              const roulette = s.roulette && s.roulette.on;
+              el('none').hidden = roulette || s.presets.length > 0;
+
+              renderRigs(s);
+              renderCard(s);
+              renderPresets(s);
+              renderChambers(s);
+              renderFixed(s);
+            }
+
             refresh();
             setInterval(refresh, 1000);
             </script>

@@ -341,7 +341,8 @@ public final class SelfFakes {
                 String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
                 Double price = json.has("price") ? json.get("price").getAsDouble() : null;
                 Integer mapId = json.has("mapId") ? json.get("mapId").getAsInt() : null;
-                target.put(slot, new FakeSpec(item, count, enchants, price, mapId));
+                String name = json.has("name") ? json.get("name").getAsString() : "";
+                target.put(slot, new FakeSpec(item, count, enchants, price, mapId, name));
             } catch (RuntimeException ignored) {
                 // one unreadable entry should not lose the rest
             }
@@ -379,6 +380,7 @@ public final class SelfFakes {
         if (!spec.enchants.isEmpty()) json.addProperty("enchants", spec.enchants);
         if (spec.price != null) json.addProperty("price", spec.price);
         if (spec.mapId != null) json.addProperty("mapId", spec.mapId);
+        if (!spec.name.isEmpty()) json.addProperty("name", spec.name);
         return json;
     }
 

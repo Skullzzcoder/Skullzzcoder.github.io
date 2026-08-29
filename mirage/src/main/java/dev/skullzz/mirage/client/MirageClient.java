@@ -83,6 +83,18 @@ public class MirageClient implements ClientModInitializer {
             String pickedRig = WebDashboard.pollRig();
             if (pickedRig != null && ClientDispensers.use(pickedRig)) SelfFakes.save();
 
+            int pickedShot = WebDashboard.pollShot();
+            if (pickedShot > 0) {
+                RigProfile profile = ClientDispensers.active();
+                profile.bulletAt = pickedShot;
+                profile.tidyRoulette();
+                SelfFakes.save();
+            }
+            if (WebDashboard.pollReset()) {
+                ClientDispensers.active().resetShots();
+                SelfFakes.save();
+            }
+
             while (cycleRig.wasPressed()) {
                 if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
             }
@@ -123,7 +135,7 @@ public class MirageClient implements ClientModInitializer {
 
     private static String lastPublished = "";
 
-    /** Pushes the current selection to the dashboard, only when it has actually changed. */
+    /** Pushes the current state to the dashboard, only when it has actually changed. */
     private static void publishDashboard() {
         if (!WebDashboard.isRunning()) return;
 
@@ -163,7 +175,21 @@ public class MirageClient implements ClientModInitializer {
                     .append(WebDashboard.escape(spec.count + "x " + spec.stack().getName().getString()))
                     .append("\"}");
         }
-        json.append("]}");
+        json.append(']');
+
+        RigProfile shown = profile;
+        json.append(",\"roulette\":{\"on\":").append(shown.roulette);
+        if (shown.roulette) {
+            json.append(",\"chambers\":").append(shown.chambers)
+                    .append(",\"bulletAt\":").append(shown.bulletAt)
+                    .append(",\"shot\":").append(shown.shot)
+                    .append(",\"bullet\":\"")
+                    .append(WebDashboard.escape(shown.bullet == null ? "nothing" : shown.bullet.label()))
+                    .append("\",\"blank\":\"")
+                    .append(WebDashboard.escape(shown.blank == null ? "nothing" : shown.blank.label()))
+                    .append('"');
+        }
+        json.append("}}");
 
         String built = json.toString();
         if (!built.equals(lastPublished)) {
@@ -292,12 +318,91 @@ public class MirageClient implements ClientModInitializer {
                                     return feedback(context, "Deleted rig '" + name + "'.");
                                 })))
                 .then(ClientCommandManager.literal("unset").executes(MirageClient::unsetDispenserResult))
+                .then(ClientCommandManager.literal("reset").executes(context -> {
+                    ClientDispensers.active().resetShots();
+                    SelfFakes.save();
+                    return feedback(context, "Chamber count back to zero.");
+                }))
+                .then(rouletteBranch())
                 .then(ClientCommandManager.literal("set")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
                                 .executes(context -> setDispenserResult(context, 1))
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setDispenserResult(context,
+                                                IntegerArgumentType.getInteger(context, "count")))
+                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                                .executes(context -> setDispenserResult(context,
+                                                        IntegerArgumentType.getInteger(context, "count")))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> rouletteBranch() {
+        return ClientCommandManager.literal("roulette")
+                .then(ClientCommandManager.literal("on").executes(context -> {
+                    RigProfile profile = ClientDispensers.active();
+                    profile.roulette = true;
+                    profile.tidyRoulette();
+                    SelfFakes.save();
+                    return feedback(context, "Rig '" + profile.name + "' now fires on shot "
+                            + profile.bulletAt + " of " + profile.chambers + ".");
+                }))
+                .then(ClientCommandManager.literal("off").executes(context -> {
+                    ClientDispensers.active().roulette = false;
+                    SelfFakes.save();
+                    return feedback(context, "Roulette off for this rig.");
+                }))
+                .then(ClientCommandManager.literal("shot")
+                        .then(ClientCommandManager.argument("number", IntegerArgumentType.integer(1, 64))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.bulletAt = IntegerArgumentType.getInteger(context, "number");
+                                    profile.tidyRoulette();
+                                    SelfFakes.save();
+                                    return feedback(context, "Loaded shot is now number "
+                                            + profile.bulletAt + " of " + profile.chambers + ".");
+                                })))
+                .then(ClientCommandManager.literal("chambers")
+                        .then(ClientCommandManager.argument("number", IntegerArgumentType.integer(1, 64))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.chambers = IntegerArgumentType.getInteger(context, "number");
+                                    profile.tidyRoulette();
+                                    SelfFakes.save();
+                                    return feedback(context, "Cycle is now " + profile.chambers
+                                            + " shots, loaded on " + profile.bulletAt + ".");
+                                })))
+                .then(ClientCommandManager.literal("bullet")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setRouletteItem(context, true, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setRouletteItem(context, true,
+                                                IntegerArgumentType.getInteger(context, "count"))))))
+                .then(ClientCommandManager.literal("blank")
+                        .then(ClientCommandManager.literal("none").executes(context -> {
+                            ClientDispensers.active().blank = null;
+                            SelfFakes.save();
+                            return feedback(context, "Other shots will fire nothing at all.");
+                        }))
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> setRouletteItem(context, false, 1))
+                                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
+                                        .executes(context -> setRouletteItem(context, false,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static int setRouletteItem(CommandContext<FabricClientCommandSource> context,
+                                       boolean loaded, int count) {
+        FakeSpec spec = specFrom(context, count);
+        if (spec == null) return 0;
+
+        RigProfile profile = ClientDispensers.active();
+        if (loaded) {
+            profile.bullet = spec;
+        } else {
+            profile.blank = spec;
+        }
+        SelfFakes.save();
+        return feedback(context, (loaded ? "Loaded shot" : "Other shots") + " will fire "
+                + spec.count + "x " + spec.describe() + ".");
     }
 
     /** Fixes what the dispenser you are looking at fires, in the active rig. */
@@ -305,7 +410,7 @@ public class MirageClient implements ClientModInitializer {
         BlockHitResult hit = lookedAt(64.0);
         if (hit == null) return error(context, "Look at the dispenser you want to fix.");
 
-        FakeSpec spec = specFrom(context, count);
+        FakeSpec spec = specFrom(context, count, displayNameArg(context));
         if (spec == null) return 0;
 
         ClientDispensers.setDispenserResult(hit.getBlockPos(), spec);
@@ -423,11 +528,14 @@ public class MirageClient implements ClientModInitializer {
                                 .executes(context -> addPreset(context, 1))
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> addPreset(context,
-                                                IntegerArgumentType.getInteger(context, "count"))))));
+                                                IntegerArgumentType.getInteger(context, "count")))
+                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                                .executes(context -> addPreset(context,
+                                                        IntegerArgumentType.getInteger(context, "count")))))));
     }
 
     private static int addPreset(CommandContext<FabricClientCommandSource> context, int count) {
-        FakeSpec spec = specFrom(context, count);
+        FakeSpec spec = specFrom(context, count, displayNameArg(context));
         if (spec == null) return 0;
 
         ClientDispensers.addPreset(spec);
@@ -648,12 +756,26 @@ public class MirageClient implements ClientModInitializer {
 
     /** Builds a fake from the command's item argument, reporting the failure itself. */
     private static FakeSpec specFrom(CommandContext<FabricClientCommandSource> context, int count) {
+        return specFrom(context, count, "");
+    }
+
+    private static FakeSpec specFrom(CommandContext<FabricClientCommandSource> context, int count,
+                                     String displayName) {
         String name = itemName(context);
-        FakeSpec spec = SelfFakes.buildSpec(name, count, "", null);
+        FakeSpec spec = SelfFakes.buildSpec(name, count, "", null, displayName);
         if (spec == null) {
             error(context, "No item called '" + name + "'. For a map art use filled_map#<id>.");
         }
         return spec;
+    }
+
+    /** The optional trailing name argument, when the command has one. */
+    private static String displayNameArg(CommandContext<FabricClientCommandSource> context) {
+        try {
+            return StringArgumentType.getString(context, "name");
+        } catch (IllegalArgumentException absent) {
+            return "";
+        }
     }
 
     private static int feedback(CommandContext<FabricClientCommandSource> context, String message) {
