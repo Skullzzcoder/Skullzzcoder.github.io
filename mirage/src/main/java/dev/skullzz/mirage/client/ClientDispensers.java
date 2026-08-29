@@ -16,12 +16,14 @@ import com.google.gson.JsonObject;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DispenserBlock;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -41,11 +43,17 @@ public final class ClientDispensers {
     /** Vanilla schedules the real dispense four ticks after TRIGGERED flips. */
     private static final int DISPENSE_DELAY_TICKS = 4;
     private static final int LIFETIME_TICKS = 60;
+    /** How long a fake waits to be walked over before coming to the player by itself. */
+    private static final int COLLECT_AFTER_TICKS = 30;
+    /** How long the flight into the player takes, matching vanilla's pickup. */
+    private static final int COLLECT_TICKS = 4;
+    /** How close the player has to get for it to come early. */
+    private static final double COLLECT_RANGE_SQUARED = 2.5;
 
     private static final Set<BlockPos> watched = new LinkedHashSet<>();
     private static final Map<BlockPos, Boolean> lastTriggered = new HashMap<>();
     private static final List<PendingFire> pending = new ArrayList<>();
-    private static final List<ExpiringItem> spawned = new ArrayList<>();
+    private static final List<SpawnedItem> spawned = new ArrayList<>();
     private static final List<FlyingArrow> arrows = new ArrayList<>();
 
     private static final Map<String, RigProfile> profiles = new LinkedHashMap<>();
@@ -58,7 +66,28 @@ public final class ClientDispensers {
     private record PendingFire(BlockPos pos, long fireAt) {
     }
 
-    private record ExpiringItem(ItemEntity entity, long removeAt) {
+    /**
+     * A fake that came out of a dispenser, and how it gets tidied away.
+     *
+     * <p>Left alone it simply vanishes. With collection on it flies to the player and lands in
+     * the inventory instead, so the illusion finishes the way a real dispense would.
+     */
+    private static final class SpawnedItem {
+        final ItemEntity entity;
+        final FakeSpec spec;
+        /** When it gives up waiting to be walked over and comes to the player anyway. */
+        final long collectAt;
+        final long removeAt;
+
+        long collectStart = -1;
+        Vec3d collectFrom;
+
+        SpawnedItem(ItemEntity entity, FakeSpec spec, long now) {
+            this.entity = entity;
+            this.spec = spec;
+            this.collectAt = now + COLLECT_AFTER_TICKS;
+            this.removeAt = now + LIFETIME_TICKS;
+        }
     }
 
     /**
@@ -276,7 +305,7 @@ public final class ClientDispensers {
         if (world == null) return;
         tick++;
 
-        expire();
+        tidySpawned(client);
         flyArrows();
         if (watched.isEmpty()) return;
 
@@ -337,7 +366,7 @@ public final class ClientDispensers {
         entity.velocityDirty = true;
 
         world.addEntity(entity);
-        spawned.add(new ExpiringItem(entity, tick + LIFETIME_TICKS));
+        spawned.add(new SpawnedItem(entity, result, tick));
     }
 
     private static void flyArrows() {
@@ -400,17 +429,59 @@ public final class ClientDispensers {
         return nextEntityId--;
     }
 
-    private static void expire() {
-        Iterator<ExpiringItem> iterator = spawned.iterator();
+    private static void tidySpawned(MinecraftClient client) {
+        ClientPlayerEntity player = client.player;
+        Iterator<SpawnedItem> iterator = spawned.iterator();
+
         while (iterator.hasNext()) {
-            ExpiringItem item = iterator.next();
-            if (item.entity().isRemoved()) {
+            SpawnedItem item = iterator.next();
+            if (item.entity.isRemoved()) {
                 iterator.remove();
-            } else if (tick >= item.removeAt()) {
-                item.entity().discard();
+                continue;
+            }
+
+            // Already on its way in.
+            if (item.collectStart >= 0) {
+                double progress = (tick - item.collectStart) / (double) COLLECT_TICKS;
+                if (player == null || progress >= 1.0) {
+                    finishCollect(player, item);
+                    iterator.remove();
+                } else {
+                    Vec3d target = player.getPos().add(0.0, 0.4, 0.0);
+                    item.entity.setPosition(
+                            MathHelper.lerp(progress, item.collectFrom.x, target.x),
+                            MathHelper.lerp(progress, item.collectFrom.y, target.y),
+                            MathHelper.lerp(progress, item.collectFrom.z, target.z));
+                }
+                continue;
+            }
+
+            boolean nearby = player != null
+                    && player.squaredDistanceTo(item.entity) < COLLECT_RANGE_SQUARED;
+            if (SelfFakes.autoCollect() && player != null && (nearby || tick >= item.collectAt)) {
+                item.collectStart = tick;
+                item.collectFrom = item.entity.getPos();
+                continue;
+            }
+
+            if (tick >= item.removeAt) {
+                item.entity.discard();
                 iterator.remove();
             }
         }
+    }
+
+    /** Ends the flight: the entity goes, the fake lands in the inventory, the sound plays. */
+    private static void finishCollect(ClientPlayerEntity player, SpawnedItem item) {
+        item.entity.discard();
+        if (player == null) return;
+
+        if (!SelfFakes.collect(item.spec, player)) return;
+
+        // Vanilla's own pickup pitch, so it does not stand out against real ones.
+        float pitch = ((player.getRandom().nextFloat() - player.getRandom().nextFloat()) * 0.7F
+                + 1.0F) * 2.0F;
+        player.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 0.2F, pitch);
     }
 
     /** Leaving a world takes the client entities with it. */

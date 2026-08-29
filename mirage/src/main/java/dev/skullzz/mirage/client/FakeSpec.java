@@ -52,6 +52,21 @@ public final class FakeSpec {
         return this.built;
     }
 
+    /** Whether two fakes are the same thing, and so would land in one stack. */
+    public boolean stacksWith(FakeSpec other) {
+        return other != null
+                && this.item == other.item
+                && this.name.equals(other.name)
+                && this.enchants.equals(other.enchants)
+                && java.util.Objects.equals(this.mapId, other.mapId)
+                && java.util.Objects.equals(this.price, other.price);
+    }
+
+    /** The same fake with a different stack size. */
+    public FakeSpec withCount(int newCount) {
+        return new FakeSpec(this.item, newCount, this.enchants, this.price, this.mapId, this.name);
+    }
+
     /** How this was typed, so it can be shown back and re-parsed. */
     public String describe() {
         String id = net.minecraft.registry.Registries.ITEM.getId(this.item).getPath();

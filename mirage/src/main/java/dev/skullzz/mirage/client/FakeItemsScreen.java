@@ -43,6 +43,7 @@ public class FakeItemsScreen extends Screen {
     private final ButtonWidget[] rigButtons = new ButtonWidget[MAX_RIG_BUTTONS];
     private final ButtonWidget[] shotButtons = new ButtonWidget[MAX_SHOT_BUTTONS];
     private ButtonWidget rouletteToggle;
+    private ButtonWidget collectToggle;
     private ButtonWidget fewerChambers;
     private ButtonWidget moreChambers;
 
@@ -166,6 +167,13 @@ public class FakeItemsScreen extends Screen {
             SelfFakes.save();
             this.status = Text.literal("Fake arrows off for this rig.").formatted(Formatting.GREEN);
         });
+
+        this.collectToggle = ButtonWidget.builder(Text.empty(), button -> {
+            SelfFakes.setAutoCollect(!SelfFakes.autoCollect());
+            refresh();
+        }).dimensions(this.width / 2 - 152, y + 48, 304, 20).build();
+        this.dispenserExtras.add(this.collectToggle);
+        this.addDrawableChild(this.collectToggle);
     }
 
     private void buildRigsTab() {
@@ -281,6 +289,9 @@ public class FakeItemsScreen extends Screen {
                 button.setMessage(Text.literal(name.equals(profile.name) ? "> " + name : name));
             }
         }
+
+        this.collectToggle.setMessage(Text.literal(SelfFakes.autoCollect()
+                ? "Fired fakes land in your inventory" : "Fired fakes just vanish"));
 
         show(this.rouletteToggle, this.tab == Tab.RIGS);
         this.rouletteToggle.setMessage(Text.literal(

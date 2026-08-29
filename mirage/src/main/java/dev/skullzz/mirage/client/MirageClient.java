@@ -65,6 +65,16 @@ public class MirageClient implements ClientModInitializer {
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(MirageClient::reloadPrices)))
+                        .then(ClientCommandManager.literal("collect")
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    SelfFakes.setAutoCollect(true);
+                                    return feedback(context, "Fakes fired from a dispenser will "
+                                            + "land in your inventory.");
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    SelfFakes.setAutoCollect(false);
+                                    return feedback(context, "Fakes will just vanish instead.");
+                                })))
                         .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
                         .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
 

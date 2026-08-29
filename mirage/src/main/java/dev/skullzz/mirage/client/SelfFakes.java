@@ -56,6 +56,8 @@ public final class SelfFakes {
     private static Map<Identifier, Item> itemsById;
     /** Whether cycling a preset prints anything. Off by default. */
     private static boolean announceSwitching = false;
+    /** Whether a fake fired from a dispenser ends up in the inventory afterwards. */
+    private static boolean autoCollect = true;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private SelfFakes() {
@@ -162,6 +164,15 @@ public final class SelfFakes {
         return spec == null ? ItemStack.EMPTY : spec.stack();
     }
 
+    public static boolean autoCollect() {
+        return autoCollect;
+    }
+
+    public static void setAutoCollect(boolean collect) {
+        autoCollect = collect;
+        save();
+    }
+
     public static boolean announceSwitching() {
         return announceSwitching;
     }
@@ -193,6 +204,36 @@ public final class SelfFakes {
             if (player != null && real != null) player.getInventory().setStack(slot, real);
         }
         save();
+    }
+
+    /**
+     * Puts a fake into the inventory the way a pickup would: onto a matching stack if there is
+     * one, otherwise into the first slot that is genuinely empty.
+     *
+     * <p>Slots holding a real item are left alone, so nothing the player actually owns is
+     * covered up by walking past a dispenser.
+     *
+     * @return false if there was nowhere to put it.
+     */
+    public static boolean collect(FakeSpec spec, ClientPlayerEntity player) {
+        for (Map.Entry<Integer, FakeSpec> entry : fakes.entrySet()) {
+            FakeSpec existing = entry.getValue();
+            if (existing.stacksWith(spec) && existing.count < 64) {
+                entry.setValue(existing.withCount(Math.min(64, existing.count + spec.count)));
+                applied.remove(entry.getKey());
+                save();
+                return true;
+            }
+        }
+
+        for (int slot = 0; slot < SLOT_COUNT; slot++) {
+            if (fakes.containsKey(slot)) continue;
+            if (player != null && !player.getInventory().getStack(slot).isEmpty()) continue;
+
+            set(slot, spec);
+            return true;
+        }
+        return false;
     }
 
     // --------------------------------------------------------- container fakes
@@ -349,6 +390,7 @@ public final class SelfFakes {
             }
             announceSwitching = root.has("announceSwitching")
                     && root.get("announceSwitching").getAsBoolean();
+            autoCollect = !root.has("autoCollect") || root.get("autoCollect").getAsBoolean();
             ClientDispensers.load(root);
             ClientDecor.load(root);
             WebDashboard.configure(root);
@@ -391,6 +433,7 @@ public final class SelfFakes {
         }
         root.add("containers", containers);
         root.addProperty("announceSwitching", announceSwitching);
+        root.addProperty("autoCollect", autoCollect);
         WebDashboard.writeConfig(root);
         ClientDecor.save(root);
         ClientDispensers.save(root);

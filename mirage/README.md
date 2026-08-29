@@ -174,6 +174,25 @@ visible and only your fake item comes out.
 /fake dispenser unwatchall
 ```
 
+### Picking up what a dispenser fires
+
+By default a fake fired from a dispenser finishes the way a real one would: it waits to be
+walked over, or comes to you after a second and a half, flies in over four ticks with the
+usual pickup sound, and lands in your inventory as a ghost. Without this the illusion stops
+half-finished, with an item that flies out and evaporates.
+
+```
+/fake collect off      fired fakes just vanish
+/fake collect on
+```
+
+The Dispenser tab has the same toggle.
+
+It stacks the way a pickup does: a second identical fake joins the first rather than taking
+another slot. **Slots holding a real item are never touched** — if there is no genuinely empty
+slot, the fake is dropped instead of covering something up. Clear them with `/fake clear` like
+any other ghost.
+
 ### Fake arrows that always land where you say
 
 For games where an arrow decides an outcome. Look at the exact spot you want it to land:
