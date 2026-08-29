@@ -48,6 +48,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding armNext;
     private static KeyBinding fireNow;
     private static KeyBinding refill;
+    private static KeyBinding clearFakes;
 
     @Override
     public void onInitializeClient() {
@@ -130,6 +131,7 @@ public class MirageClient implements ClientModInitializer {
             while (armNext.wasPressed()) ClientDispensers.armNext();
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);
             while (refill.wasPressed()) refillLookedAt(client);
+            while (clearFakes.wasPressed()) clearInventoryFakes(client);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
             if (WebDashboard.pollRefill()) {
                 ClientDispensers.refillWatched();
@@ -174,6 +176,9 @@ public class MirageClient implements ClientModInitializer {
         refill = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.refill", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_H, category));
+        clearFakes = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.clear_fakes", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_K, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -755,6 +760,25 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /**
+     * Takes every fake back out of the inventory, on one key.
+     *
+     * <p>Silent unless switching messages are turned on: the point of a key for this is
+     * getting the inventory clean before anyone looks at it, which a line of chat undoes.
+     * Dispenser layouts are left alone, since they are part of the setup rather than the
+     * thing being carried around.
+     */
+    private static void clearInventoryFakes(MinecraftClient client) {
+        if (client.player == null) return;
+
+        int cleared = SelfFakes.all().size();
+        SelfFakes.clearAll(client.player);
+        if (cleared == 0 || !SelfFakes.announceSwitching()) return;
+
+        client.player.sendMessage(Text.literal("Cleared " + cleared + " fake"
+                + (cleared == 1 ? "" : "s") + ".").formatted(Formatting.GRAY), true);
     }
 
     /** Lays out the dispenser being looked at, or the one just used, on a single key. */

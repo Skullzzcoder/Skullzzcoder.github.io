@@ -6,5 +6,6 @@
   "key.mirage.arm_next": "Arm next spin",
   "key.mirage.fire_now": "Fire watched dispensers",
   "key.mirage.open_menu": "Open Mirage menu",
-  "key.mirage.refill": "Refill the dispenser"
+  "key.mirage.refill": "Refill the dispenser",
+  "key.mirage.clear_fakes": "Clear fakes from inventory"
 }

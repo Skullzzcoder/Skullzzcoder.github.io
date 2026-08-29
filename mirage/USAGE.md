@@ -291,6 +291,7 @@ Client-only decoration for your base.
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
+| `K` | clear every fake out of your inventory |
 | — | open the menu (unbound by default) |
 
 Rebindable in Options → Controls → Miscellaneous.
