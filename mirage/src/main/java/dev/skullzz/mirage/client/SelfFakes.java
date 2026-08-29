@@ -111,7 +111,9 @@ public final class SelfFakes {
         Identifier identifier = Identifier.tryParse(cleaned);
         if (identifier == null) return null;
 
-        if (itemsById == null) {
+        // Rebuilt if it came out empty: an index built before the registry was populated
+        // would otherwise make every lookup fail for the rest of the session.
+        if (itemsById == null || itemsById.isEmpty()) {
             Map<Identifier, Item> index = new HashMap<>();
             for (Item candidate : Registries.ITEM) {
                 index.put(Registries.ITEM.getId(candidate), candidate);

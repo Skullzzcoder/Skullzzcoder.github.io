@@ -42,6 +42,12 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class ClientDispensers {
     private static final double ARROW_GRAVITY = 0.05;
+    /** An arrow keeps this much of its speed each tick. */
+    private static final double ARROW_DRAG = 0.99;
+    /** Ticks of flight per block of ground covered, which sets how high it arcs. */
+    private static final double ARROW_TICKS_PER_BLOCK = 1.3;
+    /** Ticks of not having moved before we accept vanilla is not going to move it. */
+    private static final int ARROW_STALL_TICKS = 3;
     private static final int ARROW_LINGER_TICKS = 100;
     /** Vanilla schedules the real dispense four ticks after TRIGGERED flips. */
     private static final int DISPENSE_DELAY_TICKS = 4;
@@ -117,57 +123,44 @@ public final class ClientDispensers {
     }
 
     /**
-     * An arrow on a real ballistic path that happens to land where it was told to.
+     * An arrow flown by vanilla, steered so that it happens to land where it was told to.
      *
-     * <p>Rather than interpolating a shape, the launch velocity is solved for: given a flight
-     * time, there is exactly one velocity that reaches the target under constant gravity. The
-     * arrow then simply falls, so it rises, slows, tips over and comes down like any arrow.
+     * <p>The earlier version placed the arrow itself every tick with its velocity zeroed,
+     * which made vanilla decide it had already landed: it went into its stuck-in-a-block
+     * wobble while being teleported along a path, which is what looked so wrong. Now the
+     * arrow gets a real velocity and vanilla does the moving, so it rises, slows, tips over
+     * and falls exactly like any other arrow, and turns to face its own flight.
+     *
+     * <p>Landing on the mark then only needs the velocity re-solved each tick from where the
+     * arrow actually is. Each correction is a fraction of a block, so nothing shows, and it
+     * absorbs whatever the real physics differ from the model by.
      */
     private static final class FlyingArrow {
         final ArrowEntity entity;
-        final Vec3d from;
         final Vec3d to;
-        final double velocityX;
-        final double velocityY;
-        final double velocityZ;
         final int flightTicks;
         final long startTick;
         final long removeAt;
 
+        boolean landed;
+        /** Set if vanilla turns out not to be ticking it, so we move it ourselves. */
+        boolean selfDriven;
+        int stalledTicks;
+        Vec3d lastSeen;
+
         FlyingArrow(ArrowEntity entity, Vec3d from, Vec3d to, long startTick) {
             this.entity = entity;
-            this.from = from;
             this.to = to;
             this.startTick = startTick;
 
             double dx = to.x - from.x;
-            double dy = to.y - from.y;
             double dz = to.z - from.z;
+            double flat = Math.sqrt(dx * dx + dz * dz);
 
-            // Longer flights arc higher. A short hop still gets enough time to look lobbed
-            // rather than flat, and a long shot goes properly up into the sky.
-            double horizontal = Math.sqrt(dx * dx + dz * dz);
-            this.flightTicks = (int) Math.max(20.0, Math.min(60.0, horizontal * 1.6));
-
-            // Constant-gravity solution: horizontal is linear, vertical carries the arc.
-            this.velocityX = dx / this.flightTicks;
-            this.velocityZ = dz / this.flightTicks;
-            this.velocityY = (dy + 0.5 * ARROW_GRAVITY * this.flightTicks * this.flightTicks)
-                    / this.flightTicks;
-
+            // Longer shots take proportionally longer, which is what makes them arc higher.
+            this.flightTicks = (int) Math.max(20.0,
+                    Math.min(60.0, flat * ARROW_TICKS_PER_BLOCK));
             this.removeAt = startTick + this.flightTicks + ARROW_LINGER_TICKS;
-        }
-
-        Vec3d positionAt(double elapsed) {
-            return new Vec3d(
-                    this.from.x + this.velocityX * elapsed,
-                    this.from.y + this.velocityY * elapsed - 0.5 * ARROW_GRAVITY * elapsed * elapsed,
-                    this.from.z + this.velocityZ * elapsed);
-        }
-
-        /** Velocity at a moment, which is what the arrow should be pointing along. */
-        Vec3d velocityAt(double elapsed) {
-            return new Vec3d(this.velocityX, this.velocityY - ARROW_GRAVITY * elapsed, this.velocityZ);
         }
     }
 
@@ -267,6 +260,14 @@ public final class ClientDispensers {
 
     public static void addPreset(FakeSpec spec) {
         RigProfile profile = active();
+
+        // A rig is the set of things it could fire, so the same item twice is not a second
+        // option: it is one more press of the switch key that appears to do nothing, and one
+        // more slot of the dispenser holding the same block.
+        for (FakeSpec existing : profile.presets) {
+            if (existing.stacksWith(spec)) return;
+        }
+
         profile.presets.add(spec);
         if (profile.presetIndex() < 0) profile.setPresetIndex(0);
     }
@@ -881,34 +882,76 @@ public final class ClientDispensers {
 
     private static void flyArrows() {
         Iterator<FlyingArrow> iterator = arrows.iterator();
+
         while (iterator.hasNext()) {
             FlyingArrow arrow = iterator.next();
+            ArrowEntity entity = arrow.entity;
 
-            if (arrow.entity.isRemoved()) {
+            if (entity.isRemoved()) {
                 iterator.remove();
                 continue;
             }
             if (tick >= arrow.removeAt) {
-                arrow.entity.discard();
+                entity.discard();
                 iterator.remove();
                 continue;
             }
 
-            double elapsed = tick - arrow.startTick;
-            boolean landed = elapsed >= arrow.flightTicks;
-
-            Vec3d position = landed ? arrow.to : arrow.positionAt(elapsed);
-            if (!landed) {
-                // Point along the current velocity, using vanilla's own arrow convention:
-                // yaw from atan2(x, z), pitch from atan2(y, horizontal), neither negated.
-                Vec3d velocity = arrow.velocityAt(elapsed);
-                double flat = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
-                arrow.entity.setYaw((float) (MathHelper.atan2(velocity.x, velocity.z) * 180.0 / Math.PI));
-                arrow.entity.setPitch((float) (MathHelper.atan2(velocity.y, flat) * 180.0 / Math.PI));
+            int remaining = arrow.flightTicks - (int) (tick - arrow.startTick);
+            if (remaining <= 0) {
+                if (!arrow.landed) land(arrow);
+                continue;
             }
-
-            arrow.entity.setPosition(position.x, position.y, position.z);
+            steer(arrow, remaining);
         }
+    }
+
+    /** Re-aims the arrow from wherever it has got to, and moves it if nothing else will. */
+    private static void steer(FlyingArrow arrow, int remaining) {
+        ArrowEntity entity = arrow.entity;
+        Vec3d here = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+
+        if (arrow.lastSeen != null && here.squaredDistanceTo(arrow.lastSeen) < 1.0E-6) {
+            if (++arrow.stalledTicks >= ARROW_STALL_TICKS) arrow.selfDriven = true;
+        } else {
+            arrow.stalledTicks = 0;
+        }
+
+        Vec3d velocity = launchVelocity(here, arrow.to, remaining);
+        entity.setVelocity(velocity);
+        entity.velocityDirty = true;
+
+        if (arrow.selfDriven) {
+            entity.setPosition(here.x + velocity.x, here.y + velocity.y, here.z + velocity.z);
+        }
+        arrow.lastSeen = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+    }
+
+    /** Stops it dead on the mark, which is how a stuck arrow reads. */
+    private static void land(FlyingArrow arrow) {
+        arrow.landed = true;
+        arrow.entity.setPosition(arrow.to.x, arrow.to.y, arrow.to.z);
+        arrow.entity.setVelocity(Vec3d.ZERO);
+        arrow.entity.setNoGravity(true);
+        arrow.entity.velocityDirty = true;
+    }
+
+    /**
+     * The velocity that reaches a point in a given number of ticks.
+     *
+     * <p>An arrow keeps 99% of its speed each tick and then has gravity taken off it, so what
+     * it covers is a geometric sum rather than a straight line. Solving that sum gives exactly
+     * one velocity per flight time, and that is what puts the arc on the mark.
+     */
+    private static Vec3d launchVelocity(Vec3d from, Vec3d to, int ticks) {
+        double travel = ARROW_DRAG == 1.0 ? ticks
+                : ARROW_DRAG * (1.0 - Math.pow(ARROW_DRAG, ticks)) / (1.0 - ARROW_DRAG);
+        double fall = ARROW_GRAVITY / (1.0 - ARROW_DRAG);
+
+        return new Vec3d(
+                (to.x - from.x) / travel,
+                (to.y - from.y + fall * ticks) / travel - fall,
+                (to.z - from.z) / travel);
     }
 
     private static void launchArrow(ClientWorld world, BlockPos pos, Vec3d target) {
@@ -924,14 +967,24 @@ public final class ClientDispensers {
         ArrowEntity arrow = new ArrowEntity(world, from.x, from.y, from.z,
                 new ItemStack(Items.ARROW), null);
         arrow.setId(nextId());
-        // We drive the position ourselves, so keep vanilla physics out of it entirely.
-        arrow.setNoGravity(true);
-        arrow.noClip = true;
-        arrow.setVelocity(Vec3d.ZERO);
         arrow.setPosition(from.x, from.y, from.z);
+        // Straight through everything. It must not stick in the block it came out of, and a
+        // client-side arrow catching a real player would show a hit that never happened.
+        arrow.noClip = true;
+
+        FlyingArrow flight = new FlyingArrow(arrow, from, target, tick);
+        Vec3d launch = launchVelocity(from, target, flight.flightTicks);
+        arrow.setVelocity(launch);
+        arrow.velocityDirty = true;
+
+        // Aim it for the first frame, using vanilla's own convention: yaw from atan2(x, z),
+        // pitch from atan2(y, flat), neither negated. After this it turns itself.
+        double flat = Math.sqrt(launch.x * launch.x + launch.z * launch.z);
+        arrow.setYaw((float) (MathHelper.atan2(launch.x, launch.z) * 180.0 / Math.PI));
+        arrow.setPitch((float) (MathHelper.atan2(launch.y, flat) * 180.0 / Math.PI));
 
         world.addEntity(arrow);
-        arrows.add(new FlyingArrow(arrow, from, target, tick));
+        arrows.add(flight);
     }
 
     private static int nextId() {
@@ -1112,6 +1165,7 @@ public final class ClientDispensers {
         }
 
         seedDefaults();
+        for (RigProfile profile : profiles.values()) repair(profile);
         if (!profiles.containsKey(activeName)) {
             activeName = profiles.keySet().iterator().next();
         }
@@ -1255,6 +1309,51 @@ public final class ClientDispensers {
             profiles.put(roulette.name, roulette);
         }
         if (activeName.isEmpty()) activeName = "5050";
+    }
+
+    /**
+     * Puts right the things a rig cannot work without.
+     *
+     * <p>A file can be older than the code that reads it, or carry the marks of a command
+     * that has since changed, and every one of these leaves a rig that looks broken rather
+     * than one that says what is wrong.
+     */
+    private static void repair(RigProfile profile) {
+        // Duplicates read back as a rig with more options than it has: the switch key
+        // appears to stick, and a coin flip lays out three of one side and one of the other.
+        List<FakeSpec> unique = new ArrayList<>();
+        for (FakeSpec spec : profile.presets) {
+            boolean seen = false;
+            for (FakeSpec kept : unique) {
+                if (kept.stacksWith(spec)) seen = true;
+            }
+            if (!seen) unique.add(spec);
+        }
+        if (unique.size() != profile.presets.size()) {
+            profile.presets.clear();
+            profile.presets.addAll(unique);
+        }
+        if (profile.presetIndex() >= profile.presets.size()) {
+            profile.setPresetIndex(profile.presets.isEmpty() ? -1 : 0);
+        }
+
+        // A roulette rig with nothing loaded fires nothing and lays out nothing, which is
+        // indistinguishable from the game being broken.
+        if (profile.roulette) {
+            if (profile.bullet == null) {
+                Item crystal = SelfFakes.lookupItem("end_crystal");
+                if (crystal != null) profile.bullet = new FakeSpec(crystal, 1, "");
+            }
+            if (profile.blank == null) {
+                Item obsidian = SelfFakes.lookupItem("obsidian");
+                if (obsidian != null) profile.blank = new FakeSpec(obsidian, 1, "");
+            }
+            profile.tidyRoulette();
+        }
+
+        if (profile.paper && SelfFakes.lookupItem(profile.slipItem) == null) {
+            profile.slipItem = "paper";
+        }
     }
 
     /**

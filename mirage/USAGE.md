@@ -176,7 +176,8 @@ dispenser fires the selected one.
     /fake preset clear
 
 `F` and `R` step through that list. Nothing shows on screen when you do, so you
-can switch mid-game.
+can switch mid-game. Adding an item the rig already has is ignored — a repeat is
+not a second option, it is one more press of `F` that appears to do nothing.
 
 > `F` is vanilla's swap-with-offhand. Minecraft will mark it as a conflict and
 > run **both**, so clear the vanilla binding: Options → Controls → Gameplay →
@@ -294,8 +295,12 @@ A client-only arrow on a real ballistic path that always lands where you say.
     /fake arrow clear
 
 Once a target is set, any watched dispenser in that rig launches the arrow when
-it fires. It rises, slows, tips over and drops like a real one — the launch
-velocity is solved for rather than the shape being drawn.
+it fires.
+
+Vanilla flies it, so it rises, slows, tips over, falls and turns to face its own
+flight exactly like any other arrow — it *is* one. Landing on the mark is done by
+re-solving its velocity each tick from wherever it actually is; the corrections
+are a fraction of a block, so nothing shows. Longer shots arc higher.
 
 ## 8. Picking the fake up
 
