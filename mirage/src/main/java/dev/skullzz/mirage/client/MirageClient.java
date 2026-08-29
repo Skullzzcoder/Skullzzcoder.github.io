@@ -44,6 +44,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding previousResult;
     private static KeyBinding openMenu;
     private static KeyBinding cycleRig;
+    private static KeyBinding armNext;
 
     @Override
     public void onInitializeClient() {
@@ -100,11 +101,18 @@ public class MirageClient implements ClientModInitializer {
                 profile.tidyRoulette();
                 SelfFakes.save();
             }
+            int arming = WebDashboard.pollArm();
+            if (arming == 1) {
+                ClientDispensers.armNext();
+            } else if (arming == 0) {
+                ClientDispensers.disarm();
+            }
             if (WebDashboard.pollReset()) {
                 ClientDispensers.active().resetShots();
                 SelfFakes.save();
             }
 
+            while (armNext.wasPressed()) ClientDispensers.armNext();
             while (cycleRig.wasPressed()) {
                 if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
             }
@@ -134,6 +142,9 @@ public class MirageClient implements ClientModInitializer {
         previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.prev_result", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_LEFT_BRACKET, category));
+        armNext = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.arm_next", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_SEMICOLON, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -193,6 +204,8 @@ public class MirageClient implements ClientModInitializer {
             json.append(",\"chambers\":").append(shown.chambers)
                     .append(",\"bulletAt\":").append(shown.bulletAt)
                     .append(",\"shot\":").append(shown.shot)
+                    .append(",\"manual\":").append(shown.manualTrigger)
+                    .append(",\"armed\":").append(shown.armed)
                     .append(",\"bullet\":\"")
                     .append(WebDashboard.escape(shown.bullet == null ? "nothing" : shown.bullet.label()))
                     .append("\",\"blank\":\"")
@@ -328,6 +341,14 @@ public class MirageClient implements ClientModInitializer {
                                     return feedback(context, "Deleted rig '" + name + "'.");
                                 })))
                 .then(ClientCommandManager.literal("unset").executes(MirageClient::unsetDispenserResult))
+                .then(ClientCommandManager.literal("arm").executes(context -> {
+                    ClientDispensers.armNext();
+                    return feedback(context, "Next shot from this rig is the loaded one.");
+                }))
+                .then(ClientCommandManager.literal("disarm").executes(context -> {
+                    ClientDispensers.disarm();
+                    return feedback(context, "Disarmed.");
+                }))
                 .then(ClientCommandManager.literal("reset").executes(context -> {
                     ClientDispensers.active().resetShots();
                     SelfFakes.save();
@@ -360,6 +381,20 @@ public class MirageClient implements ClientModInitializer {
                     SelfFakes.save();
                     return feedback(context, "Roulette off for this rig.");
                 }))
+                .then(ClientCommandManager.literal("manual")
+                        .then(ClientCommandManager.literal("on").executes(context -> {
+                            RigProfile profile = ClientDispensers.active();
+                            profile.roulette = true;
+                            profile.manualTrigger = true;
+                            SelfFakes.save();
+                            return feedback(context, "This rig now fires the loaded item only "
+                                    + "when armed.");
+                        }))
+                        .then(ClientCommandManager.literal("off").executes(context -> {
+                            ClientDispensers.active().manualTrigger = false;
+                            SelfFakes.save();
+                            return feedback(context, "Back to counting chambers.");
+                        })))
                 .then(ClientCommandManager.literal("shot")
                         .then(ClientCommandManager.argument("number", IntegerArgumentType.integer(1, 64))
                                 .executes(context -> {

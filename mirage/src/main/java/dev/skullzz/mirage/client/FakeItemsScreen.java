@@ -43,6 +43,8 @@ public class FakeItemsScreen extends Screen {
     private final ButtonWidget[] rigButtons = new ButtonWidget[MAX_RIG_BUTTONS];
     private final ButtonWidget[] shotButtons = new ButtonWidget[MAX_SHOT_BUTTONS];
     private ButtonWidget rouletteToggle;
+    private ButtonWidget manualToggle;
+    private ButtonWidget armButton;
     private ButtonWidget collectToggle;
     private ButtonWidget fewerChambers;
     private ButtonWidget moreChambers;
@@ -199,10 +201,30 @@ public class FakeItemsScreen extends Screen {
         this.rigWidgets.add(this.rouletteToggle);
         this.addDrawableChild(this.rouletteToggle);
 
-        addExtra(this.rigWidgets, "Reset chamber", this.width / 2 + 2, togglesY, 150, button -> {
+        this.manualToggle = ButtonWidget.builder(Text.empty(), button -> {
+            RigProfile profile = ClientDispensers.active();
+            profile.manualTrigger = !profile.manualTrigger;
+            if (profile.manualTrigger) profile.roulette = true;
+            SelfFakes.save();
+            refresh();
+        }).dimensions(this.width / 2 + 2, togglesY, 150, 20).build();
+        this.rigWidgets.add(this.manualToggle);
+        this.addDrawableChild(this.manualToggle);
+
+        this.armButton = ButtonWidget.builder(Text.empty(), button -> {
+            RigProfile profile = ClientDispensers.active();
+            profile.armed = !profile.armed;
+            this.status = Text.literal(profile.armed
+                    ? "Next spin is the loaded one." : "Disarmed.").formatted(Formatting.GREEN);
+            refresh();
+        }).dimensions(this.width / 2 - 152, togglesY + 24, 150, 20).build();
+        this.rigWidgets.add(this.armButton);
+        this.addDrawableChild(this.armButton);
+
+        addExtra(this.rigWidgets, "Reset count", this.width / 2 + 2, togglesY + 24, 150, button -> {
             ClientDispensers.active().resetShots();
             SelfFakes.save();
-            this.status = Text.literal("Chamber count back to zero.").formatted(Formatting.GREEN);
+            this.status = Text.literal("Spin count back to zero.").formatted(Formatting.GREEN);
             refresh();
         });
 
@@ -212,7 +234,7 @@ public class FakeItemsScreen extends Screen {
             int shot = index + 1;
             ButtonWidget button = ButtonWidget.builder(Text.literal(String.valueOf(shot)),
                             ignored -> setBulletShot(shot))
-                    .dimensions(shotsLeft + index * 26, togglesY + 46, 24, 20)
+                    .dimensions(shotsLeft + index * 26, togglesY + 52, 24, 20)
                     .build();
             this.shotButtons[index] = button;
             this.rigWidgets.add(button);
@@ -221,10 +243,10 @@ public class FakeItemsScreen extends Screen {
 
         this.fewerChambers = ButtonWidget.builder(Text.literal("- chamber"),
                         button -> changeChambers(-1))
-                .dimensions(this.width / 2 - 152, togglesY + 70, 150, 20).build();
+                .dimensions(this.width / 2 - 152, togglesY + 76, 150, 20).build();
         this.moreChambers = ButtonWidget.builder(Text.literal("+ chamber"),
                         button -> changeChambers(1))
-                .dimensions(this.width / 2 + 2, togglesY + 70, 150, 20).build();
+                .dimensions(this.width / 2 + 2, togglesY + 76, 150, 20).build();
         this.rigWidgets.add(this.fewerChambers);
         this.rigWidgets.add(this.moreChambers);
         this.addDrawableChild(this.fewerChambers);
@@ -297,7 +319,16 @@ public class FakeItemsScreen extends Screen {
         this.rouletteToggle.setMessage(Text.literal(
                 profile.roulette ? "Roulette: on" : "Roulette: off"));
 
-        boolean showChambers = this.tab == Tab.RIGS && profile.roulette;
+        show(this.manualToggle, this.tab == Tab.RIGS && profile.roulette);
+        this.manualToggle.setMessage(Text.literal(
+                profile.manualTrigger ? "Fires: when armed" : "Fires: on a count"));
+
+        show(this.armButton, this.tab == Tab.RIGS && profile.roulette);
+        this.armButton.setMessage(Text.literal(
+                profile.armed ? "ARMED - click to cancel" : "Arm next spin"));
+
+        // A counted position means nothing when the shot is chosen by hand.
+        boolean showChambers = this.tab == Tab.RIGS && profile.roulette && !profile.manualTrigger;
         for (int index = 0; index < this.shotButtons.length; index++) {
             ButtonWidget button = this.shotButtons[index];
             boolean used = index < profile.chambers;

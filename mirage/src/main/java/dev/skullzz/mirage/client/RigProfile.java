@@ -40,6 +40,15 @@ public final class RigProfile {
     public FakeSpec blank;
     /** How many shots have gone in the current cycle. */
     public int shot;
+    /**
+     * Fire the loaded item only when armed, rather than on a counted position.
+     *
+     * <p>For a game where turns come in an order nobody decides in advance, counting chambers
+     * is the wrong shape: you want to say "this one" as it happens.
+     */
+    public boolean manualTrigger;
+    /** Set by arming; the next shot is the loaded one, then this clears itself. */
+    public boolean armed;
 
     private int presetIndex = -1;
 
@@ -83,6 +92,14 @@ public final class RigProfile {
     public FakeSpec advanceRoulette() {
         this.shot++;
         if (this.shot > this.chambers) this.shot = 1;
+
+        // Arming wins over both counting and manual mode, and is spent by this shot.
+        if (this.armed) {
+            this.armed = false;
+            return this.bullet;
+        }
+        if (this.manualTrigger) return this.blank;
+
         return this.shot == this.bulletAt ? this.bullet : this.blank;
     }
 

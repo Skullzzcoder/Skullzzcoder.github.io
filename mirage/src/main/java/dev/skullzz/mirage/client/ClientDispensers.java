@@ -207,6 +207,19 @@ public final class ClientDispensers {
         return active().cycle(delta);
     }
 
+    /** Makes the next shot from this rig the loaded one. */
+    public static void armNext() {
+        active().armed = true;
+    }
+
+    public static boolean isArmed() {
+        return active().armed;
+    }
+
+    public static void disarm() {
+        active().armed = false;
+    }
+
     // Convenience over the active rig, so callers that only care about "the current game"
     // do not each have to reach through active().
 
@@ -534,6 +547,7 @@ public final class ClientDispensers {
                 roulette.addProperty("chambers", profile.chambers);
                 roulette.addProperty("bulletAt", profile.bulletAt);
                 roulette.addProperty("shot", profile.shot);
+                roulette.addProperty("manual", profile.manualTrigger);
                 if (profile.bullet != null) roulette.add("bullet", SelfFakes.writeSpec(profile.bullet));
                 if (profile.blank != null) roulette.add("blank", SelfFakes.writeSpec(profile.blank));
                 json.add("roulette", roulette);
@@ -598,6 +612,9 @@ public final class ClientDispensers {
             if (roulette.has("chambers")) profile.chambers = roulette.get("chambers").getAsInt();
             if (roulette.has("bulletAt")) profile.bulletAt = roulette.get("bulletAt").getAsInt();
             if (roulette.has("shot")) profile.shot = roulette.get("shot").getAsInt();
+            // Deliberately not persisted: a restart should never leave it armed.
+            profile.manualTrigger = roulette.has("manual")
+                    && roulette.get("manual").getAsBoolean();
             if (roulette.has("bullet")) profile.bullet = readSpec(roulette.getAsJsonObject("bullet"));
             if (roulette.has("blank")) profile.blank = readSpec(roulette.getAsJsonObject("blank"));
             profile.tidyRoulette();
@@ -639,10 +656,17 @@ public final class ClientDispensers {
         profiles.put(coinFlip.name, coinFlip);
         profiles.put("paper", new RigProfile("paper"));
 
+        // Set up for the usual arrangement: eight obsidian round one crystal, and the
+        // crystal appears only when you arm it, since turn order is decided as you go.
         RigProfile roulette = new RigProfile("roulette");
         roulette.roulette = true;
+        roulette.manualTrigger = true;
+        roulette.chambers = 9;
+
         Item crystal = SelfFakes.lookupItem("end_crystal");
         if (crystal != null) roulette.bullet = new FakeSpec(crystal, 1, "");
+        Item obsidian = SelfFakes.lookupItem("obsidian");
+        if (obsidian != null) roulette.blank = new FakeSpec(obsidian, 1, "");
         profiles.put(roulette.name, roulette);
 
         activeName = coinFlip.name;

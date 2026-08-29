@@ -31,6 +31,8 @@ public final class WebDashboard {
     /** Whether a browser asked to reset the chamber count. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedReset =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** What a browser asked of arming: 1 arm, 0 disarm, -1 nothing. */
+    private static final AtomicInteger requestedArm = new AtomicInteger(-1);
 
     private static HttpServer server;
     private static int boundPort = -1;
@@ -86,6 +88,7 @@ public final class WebDashboard {
             server.createContext("/rig", WebDashboard::handleRig);
             server.createContext("/shot", WebDashboard::handleShot);
             server.createContext("/reset", WebDashboard::handleReset);
+            server.createContext("/arm", WebDashboard::handleArm);
             server.setExecutor(null);
             server.start();
 
@@ -129,6 +132,11 @@ public final class WebDashboard {
     /** @return true once if a browser asked for the chamber count to be reset. */
     public static boolean pollReset() {
         return requestedReset.getAndSet(false);
+    }
+
+    /** @return 1 to arm, 0 to disarm, -1 if nothing was asked. Clears it. */
+    public static int pollArm() {
+        return requestedArm.getAndSet(-1);
     }
 
     // ----------------------------------------------------------------- handlers
@@ -184,6 +192,12 @@ public final class WebDashboard {
             return;
         }
         requestedShot.set(shot);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleArm(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        requestedArm.set(query != null && query.contains("off=1") ? 0 : 1);
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -265,6 +279,9 @@ public final class WebDashboard {
               button[aria-pressed="true"] { border-color: currentColor; }
               #rigs button { flex: 0 0 auto; min-width: 0; padding: 8px 16px; font-size: 14px;
                              border-radius: 999px; }
+              #arm { width: min(92vw, 460px); padding: 22px; font-size: 19px; font-weight: 650;
+                     letter-spacing: .01em; }
+              #arm.ready { background: #3a1414; border-color: #ff5252; color: #ff5252; }
               #chambers button { flex: 0 0 auto; min-width: 46px; padding: 10px 0; }
               #chambers button.loaded { background: #3a2416; border-color: #ff7043; color: #ff7043; }
               #chambers button.spent { opacity: .4; }
@@ -281,6 +298,7 @@ public final class WebDashboard {
                 <div id="price"></div>
               </div>
               <div class="row" id="buttons"></div>
+              <button id="arm" hidden></button>
               <div class="row" id="chambers"></div>
               <div id="fixed"></div>
               <div id="none" hidden>Nothing set in this rig.</div>
@@ -315,13 +333,25 @@ public final class WebDashboard {
               const r = s.roulette;
 
               if (r && r.on) {
-                const armed = r.shot === r.bulletAt;
-                card.style.background = armed ? '#2a1a14' : '#1e2127';
-                card.style.borderColor = armed ? '#ff7043' : '#2b2f37';
-                el('label').textContent = 'Chamber';
-                el('name').textContent = r.shot + ' / ' + r.chambers;
-                el('name').style.color = armed ? '#ff7043' : '#e8eaed';
-                el('price').textContent = 'loaded on ' + r.bulletAt + ' \u2014 ' + (r.bullet || 'nothing');
+                if (r.armed) {
+                  card.style.background = '#3a1414';
+                  card.style.borderColor = '#ff5252';
+                  el('label').textContent = 'Armed';
+                  el('name').textContent = 'NEXT SPIN';
+                  el('name').style.color = '#ff5252';
+                  el('price').textContent = r.bullet || '';
+                  return;
+                }
+
+                const onTheNumber = !r.manual && r.shot === r.bulletAt;
+                card.style.background = onTheNumber ? '#2a1a14' : '#1e2127';
+                card.style.borderColor = onTheNumber ? '#ff7043' : '#2b2f37';
+                el('label').textContent = r.manual ? 'Spins so far' : 'Chamber';
+                el('name').textContent = r.manual ? String(r.shot) : r.shot + ' / ' + r.chambers;
+                el('name').style.color = onTheNumber ? '#ff7043' : '#e8eaed';
+                el('price').textContent = r.manual
+                    ? 'arm it when it is their turn'
+                    : 'loaded on ' + r.bulletAt + ' \u2014 ' + (r.bullet || 'nothing');
                 return;
               }
 
@@ -359,11 +389,23 @@ public final class WebDashboard {
               });
             }
 
+            function renderArm(s) {
+              const button = el('arm');
+              const r = s.roulette;
+              button.hidden = !(r && r.on);
+              if (button.hidden) return;
+
+              button.textContent = r.armed ? 'Armed \u2014 tap to cancel' : 'Arm next spin';
+              button.className = r.armed ? 'ready' : '';
+              button.onclick = () => post('/arm' + (r.armed ? '?off=1' : ''));
+            }
+
             function renderChambers(s) {
               const chambers = el('chambers');
               chambers.replaceChildren();
               const r = s.roulette;
-              if (!r || !r.on) return;
+              // Counting positions means nothing when the shot is chosen by hand.
+              if (!r || !r.on || r.manual) return;
 
               for (let n = 1; n <= r.chambers; n++) {
                 const b = document.createElement('button');
@@ -404,6 +446,7 @@ public final class WebDashboard {
               renderRigs(s);
               renderCard(s);
               renderPresets(s);
+              renderArm(s);
               renderChambers(s);
               renderFixed(s);
             }

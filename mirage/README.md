@@ -283,12 +283,26 @@ that dispenser for you.
 
 ### Russian roulette
 
-A rig can count chambers instead of holding one answer: the dispenser fires a set number of
-times and the loaded shot lands where you put it.
+A rig can fire a loaded item instead of holding one answer, in one of two ways.
+
+**Armed by hand** — for the usual setup, a dropper holding eight obsidian and one crystal that
+players take turns spinning. Turn order is decided as you go, so counting positions is the
+wrong shape: every spin shows obsidian until you arm it, and the next one shows the crystal.
 
 ```
-/fake rig use roulette
-/fake rig roulette on
+/fake rig use roulette      already set up: obsidian, crystal, armed by hand
+/fake rig arm               the next spin is the crystal
+/fake rig disarm
+```
+
+`;` arms it too, and the dashboard's Arm button is the easiest way — it fills the page, turns
+red once armed, and tapping it again cancels. The `roulette` rig ships in this mode.
+
+**Counted** — the dispenser fires a set number of times and the loaded shot lands on a
+position you pick.
+
+```
+/fake rig roulette manual off      count positions instead of arming
 /fake rig roulette chambers 6
 /fake rig roulette shot 4          the fourth shot is the loaded one
 /fake rig roulette bullet end_crystal
