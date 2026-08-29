@@ -669,6 +669,74 @@ public final class ClientDispensers {
         return lines;
     }
 
+    /**
+     * The dispenser a hand move applies to.
+     *
+     * <p>Falls back to the block last looked at even when it has no layout yet, so the first
+     * item can be loaded into one that has never been filled.
+     */
+    private static BlockPos targetDispenser(ClientPlayerEntity player) {
+        BlockPos pos = openDispenserPos(player);
+        return pos != null ? pos : openDispenser;
+    }
+
+    /** @return whether the open dispenser is faking that slot, so a click on it is ours. */
+    public static boolean stockHolds(ClientPlayerEntity player, int slot) {
+        Map<Integer, FakeSpec> slots = openStock(player);
+        return slots != null && slots.containsKey(slot);
+    }
+
+    /** Shift-clicking a laid-out slot takes it into the inventory, like emptying a dispenser. */
+    public static boolean takeFromStock(ClientPlayerEntity player, int slot) {
+        BlockPos pos = targetDispenser(player);
+        if (pos == null) return false;
+
+        Map<Integer, FakeSpec> slots = active().stockAt(pos);
+        if (slots == null) return false;
+
+        FakeSpec spec = slots.get(slot);
+        if (spec == null || !SelfFakes.collect(spec, player)) return false;
+
+        slots.remove(slot);
+        SelfFakes.repaintContainer();
+        SelfFakes.save();
+        return true;
+    }
+
+    /** Shift-clicking a fake in the inventory loads it, the way a dispenser is filled by hand. */
+    public static boolean putIntoStock(ClientPlayerEntity player, int inventorySlot) {
+        BlockPos pos = targetDispenser(player);
+        if (pos == null) return false;
+
+        FakeSpec spec = SelfFakes.all().get(inventorySlot);
+        if (spec == null) return false;
+
+        Map<Integer, FakeSpec> slots = active().stock
+                .computeIfAbsent(pos.toImmutable(), key -> new LinkedHashMap<>());
+
+        // Onto a matching stack first, the way a real shift-click loads a dispenser.
+        for (Map.Entry<Integer, FakeSpec> entry : slots.entrySet()) {
+            FakeSpec held = entry.getValue();
+            if (!held.stacksWith(spec) || held.count >= 64) continue;
+
+            entry.setValue(held.withCount(Math.min(64, held.count + spec.count)));
+            SelfFakes.clear(inventorySlot, player);
+            SelfFakes.repaintContainer();
+            return true;
+        }
+
+        for (int slot = 0; slot < STOCK_SLOTS; slot++) {
+            if (slots.containsKey(slot)) continue;
+
+            slots.put(slot, spec);
+            SelfFakes.clear(inventorySlot, player);
+            SelfFakes.repaintContainer();
+            return true;
+        }
+        // Full. Leaving it in the inventory is what a real shift-click would do too.
+        return false;
+    }
+
     /** Counts a layout up by item, so "8x obsidian, 1x end crystal" can be read back. */
     public static String describeStock(BlockPos pos) {
         Map<Integer, FakeSpec> slots = active().stockAt(pos);

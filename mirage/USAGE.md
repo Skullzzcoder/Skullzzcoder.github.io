@@ -51,6 +51,25 @@ is rigged does not change what is in the box.
 random the way a real dispenser picks, so opening it afterwards agrees with what
 everyone just watched come out. This is on for every game, not only roulette.
 
+### Moving items by hand
+
+**Shift-click** works in both directions while a dispenser is open:
+
+- shift-click a fake in your inventory → it loads into the dispenser
+- shift-click one in the dispenser → it comes back to your inventory
+
+It stacks onto a matching slot first and takes the next free slot otherwise,
+same as loading a real dispenser. So the loop closes: the crystal fires, lands
+in your inventory, and you shift-click it back into the middle for the next
+round without typing anything.
+
+A plain (non-shift) click on a faked slot does nothing at all, deliberately.
+Vanilla would send that click to the server, which sees the slot's **real**
+contents — so a click aimed at something that is not there could move something
+that is. Real items are untouched and still click normally.
+
+### Commands, if you want them
+
     /fake dispenser fill      (look straight at it first)
     /fake dispenser unfill    (show its real contents again)
     /fake dispenser status    (how many slots each holds, and which one a GUI would show)
@@ -271,6 +290,7 @@ Client-only decoration for your base.
 | `\` | next rig |
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |
+| `H` | refill the dispenser you are looking at |
 | — | open the menu (unbound by default) |
 
 Rebindable in Options → Controls → Miscellaneous.
@@ -283,3 +303,10 @@ Rebindable in Options → Controls → Miscellaneous.
 3. `/fake debug on`, then set the dispenser off — does the watcher see it?
 4. `'` — if the key produces the item but the redstone does not, the dispenser
    is being worked by something the client cannot see. Use the key.
+
+## A note on who sees what
+
+Only the person who opens a dispenser sees its contents, and they see them from
+their own client. So the ring, the depletion and the shift-click loading are all
+on **your** screen — they hold the illusion together for you and for anything you
+are recording or sharing, and the other player's client is unaffected either way.

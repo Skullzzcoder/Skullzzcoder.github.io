@@ -47,6 +47,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding cycleRig;
     private static KeyBinding armNext;
     private static KeyBinding fireNow;
+    private static KeyBinding refill;
 
     @Override
     public void onInitializeClient() {
@@ -128,6 +129,7 @@ public class MirageClient implements ClientModInitializer {
 
             while (armNext.wasPressed()) ClientDispensers.armNext();
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);
+            while (refill.wasPressed()) refillLookedAt(client);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
             if (WebDashboard.pollRefill()) {
                 ClientDispensers.refillWatched();
@@ -147,6 +149,7 @@ public class MirageClient implements ClientModInitializer {
             ClientDecor.reset();
         });
 
+        FakeClicks.register();
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
 
@@ -168,6 +171,9 @@ public class MirageClient implements ClientModInitializer {
         fireNow = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.fire_now", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_APOSTROPHE, category));
+        refill = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.refill", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -749,6 +755,23 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /** Lays out the dispenser being looked at, or the one just used, on a single key. */
+    private static void refillLookedAt(MinecraftClient client) {
+        BlockPos pos = null;
+
+        BlockHitResult hit = lookedAt(6.0);
+        if (hit != null && client.world != null
+                && client.world.getBlockState(hit.getBlockPos()).getBlock() instanceof DispenserBlock) {
+            pos = hit.getBlockPos();
+        }
+        if (pos == null) pos = ClientDispensers.openDispenserPos(client.player);
+        if (pos == null || !ClientDispensers.fill(pos)) return;
+
+        ClientDispensers.watch(pos);
+        ClientDispensers.setOpenDispenser(pos);
+        SelfFakes.save();
     }
 
     private static int fillDispenser(CommandContext<FabricClientCommandSource> context) {
