@@ -7,5 +7,6 @@
   "key.mirage.fire_now": "Fire watched dispensers",
   "key.mirage.open_menu": "Open Mirage menu",
   "key.mirage.refill": "Refill the dispenser",
-  "key.mirage.clear_fakes": "Clear fakes from inventory"
+  "key.mirage.clear_fakes": "Clear fakes from inventory",
+  "key.mirage.cycle_winner": "Who wins the paper game"
 }

@@ -36,6 +36,8 @@ public final class WebDashboard {
     /** Whether a browser asked to set the watched dispensers off by hand. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedFire =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** Side a browser rigged the paper game for; "*" means chance. Null when unasked. */
+    private static final AtomicReference<String> requestedWinner = new AtomicReference<>(null);
     /** Whether a browser asked for the watched dispensers to be laid out again. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedRefill =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -97,6 +99,7 @@ public final class WebDashboard {
             server.createContext("/arm", WebDashboard::handleArm);
             server.createContext("/fire", WebDashboard::handleFire);
             server.createContext("/refill", WebDashboard::handleRefill);
+            server.createContext("/winner", WebDashboard::handleWinner);
             server.setExecutor(null);
             server.start();
 
@@ -152,6 +155,11 @@ public final class WebDashboard {
         return requestedFire.getAndSet(false);
     }
 
+    /** @return a side a browser rigged the paper game for, "*" for chance, or null. */
+    public static String pollWinner() {
+        return requestedWinner.getAndSet(null);
+    }
+
     /** @return true once if a browser asked for the dispensers to be laid out again. */
     public static boolean pollRefill() {
         return requestedRefill.getAndSet(false);
@@ -179,6 +187,18 @@ public final class WebDashboard {
             return;
         }
         requested.set(index);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleWinner(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || !query.startsWith("side=")) {
+            respond(exchange, 400, "text/plain", "bad side");
+            return;
+        }
+
+        requestedWinner.set(
+                java.net.URLDecoder.decode(query.substring(5), StandardCharsets.UTF_8));
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -330,6 +350,7 @@ public final class WebDashboard {
               <button id="fire">Fire the watched dispensers</button>
               <button id="refill">Refill them</button>
               <div class="row" id="chambers"></div>
+              <div class="row" id="winners"></div>
               <div id="fixed"></div>
               <div id="none" hidden>Nothing set in this rig.</div>
             <script>
@@ -435,6 +456,22 @@ public final class WebDashboard {
               button.onclick = () => post('/arm' + (r.armed ? '?off=1' : ''));
             }
 
+            function renderWinners(s) {
+              const row = el('winners');
+              row.replaceChildren();
+              const p = s.paper;
+              if (!p || !p.on) return;
+
+              for (const side of p.sides.concat(['*'])) {
+                const b = document.createElement('button');
+                b.textContent = side === '*' ? 'Leave it to chance' : side + ' wins';
+                b.setAttribute('aria-pressed',
+                    String(side === '*' ? p.winner === '' : p.winner === side));
+                b.onclick = () => post('/winner?side=' + encodeURIComponent(side));
+                row.append(b);
+              }
+            }
+
             function renderChambers(s) {
               const chambers = el('chambers');
               chambers.replaceChildren();
@@ -483,6 +520,7 @@ public final class WebDashboard {
               renderPresets(s);
               renderArm(s);
               renderChambers(s);
+              renderWinners(s);
               renderFixed(s);
             }
 

@@ -50,6 +50,8 @@ public final class ClientDispensers {
     private static final int COLLECT_AFTER_TICKS = 30;
     /** How long the flight into the player takes, matching vanilla's pickup. */
     private static final int COLLECT_TICKS = 4;
+    /** Fires closer together than this belong to the same round of a paper game. */
+    private static final int ROUND_TICKS = 40;
     /** How close the player has to get for it to come early. */
     private static final double COLLECT_RANGE_SQUARED = 2.5;
 
@@ -382,9 +384,14 @@ public final class ClientDispensers {
             RigProfile profile = active();
             // In roulette the whole rig shares one chamber counter, so which dispenser fired
             // does not matter; otherwise a dispenser's own answer wins.
-            FakeSpec result = profile.roulette
-                    ? profile.advanceRoulette()
-                    : profile.resultFor(fire.pos());
+            FakeSpec result;
+            if (profile.roulette) {
+                result = profile.advanceRoulette();
+            } else if (profile.paper) {
+                result = paperSlip(profile, fire.pos());
+            } else {
+                result = profile.resultFor(fire.pos());
+            }
             if (result == null) {
                 note("rig '" + profile.name + "' has nothing set to fire");
             } else {
@@ -426,6 +433,34 @@ public final class ClientDispensers {
             Boolean wasPowered = lastPowered.put(pos, powered);
             if (powered && wasPowered != null && !wasPowered) spotFire(pos, "redstone");
         }
+    }
+
+    /**
+     * The slip this machine fires, drawn as half of a pair.
+     *
+     * <p>Two dispensers going off together are one round: whichever fires first draws both
+     * numbers, and the second takes the other half, so the two always disagree and the rigged
+     * side always has the higher one.
+     */
+    private static FakeSpec paperSlip(RigProfile profile, BlockPos pos) {
+        if (tick - profile.roundTick > ROUND_TICKS) profile.startRound(random, tick);
+
+        String side = profile.sideAt(pos);
+        boolean wins = !profile.roundWinner.isEmpty() && profile.roundWinner.equals(side);
+        int number = wins ? profile.highRoll : profile.lowRoll;
+
+        Item slip = SelfFakes.lookupItem(profile.slipItem);
+        if (slip == null) return null;
+
+        // Built to match the laid-out slip exactly, so it empties that slot on the way out.
+        return new FakeSpec(slip, 1, "", null, null, profile.slipName(number, side));
+    }
+
+    /** Steps who the paper game is rigged for, and says who that is now. */
+    public static String cycleWinner() {
+        String winner = active().cycleWinner();
+        SelfFakes.save();
+        return winner;
     }
 
     private static boolean isDispenser(ClientWorld world, BlockPos pos) {
@@ -527,6 +562,18 @@ public final class ClientDispensers {
                 // Each slot needs its own copy: they empty one at a time.
                 if (spec != null) slots.put(slot, spec.withCount(1));
             }
+        } else if (profile.paper) {
+            // One slip per number, all named for the side this machine plays.
+            String side = profile.sideAt(pos);
+            Item slip = SelfFakes.lookupItem(profile.slipItem);
+
+            if (slip != null) {
+                int count = Math.min(profile.numbers, STOCK_SLOTS);
+                for (int slot = 0; slot < count; slot++) {
+                    slots.put(slot, new FakeSpec(slip, 1, "", null, null,
+                            profile.slipName(slot + 1, side)));
+                }
+            }
         } else {
             FakeSpec fixed = profile.perDispenser.get(pos);
             if (fixed != null) {
@@ -621,9 +668,15 @@ public final class ClientDispensers {
         RigProfile profile = active();
 
         lines.add("Rig '" + profile.name + "'"
+                + (profile.paper ? ", paper" : "")
                 + (profile.roulette ? ", roulette" : "")
                 + (profile.roulette && profile.manualTrigger ? ", manual" : "")
                 + (profile.armed ? ", ARMED" : ""));
+        if (profile.paper) {
+            lines.add("  rigged for: "
+                    + (profile.winner.isEmpty() ? "chance" : profile.winner)
+                    + ", sides " + profile.sideNames());
+        }
         if (profile.roulette) {
             lines.add("  shot " + profile.shot + " of " + profile.chambers
                     + ", loaded one at " + profile.bulletAt
@@ -658,6 +711,9 @@ public final class ClientDispensers {
                             .append(world.isReceivingRedstonePower(pos)
                                     || world.isReceivingRedstonePower(pos.up())
                                     ? "powered now" : "unpowered");
+                    if (profile.paper) {
+                        line.append(", plays ").append(profile.sides.get(pos));
+                    }
                     FakeSpec fixed = profile.perDispenser.get(pos);
                     if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
 
@@ -978,6 +1034,20 @@ public final class ClientDispensers {
                         + profile.arrowTarget.y + "," + profile.arrowTarget.z);
             }
 
+            if (profile.paper) {
+                JsonObject paper = new JsonObject();
+                paper.addProperty("winner", profile.winner);
+                paper.addProperty("item", profile.slipItem);
+                paper.addProperty("numbers", profile.numbers);
+
+                JsonObject sides = new JsonObject();
+                for (Map.Entry<BlockPos, String> entry : profile.sides.entrySet()) {
+                    sides.addProperty(writePos(entry.getKey()), entry.getValue());
+                }
+                paper.add("sides", sides);
+                json.add("paper", paper);
+            }
+
             if (profile.roulette) {
                 JsonObject roulette = new JsonObject();
                 roulette.addProperty("chambers", profile.chambers);
@@ -1063,6 +1133,22 @@ public final class ClientDispensers {
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
+        if (json.has("paper")) {
+            JsonObject paper = json.getAsJsonObject("paper");
+            profile.paper = true;
+            if (paper.has("winner")) profile.winner = paper.get("winner").getAsString();
+            if (paper.has("item")) profile.slipItem = paper.get("item").getAsString();
+            if (paper.has("numbers")) profile.numbers = paper.get("numbers").getAsInt();
+
+            if (paper.has("sides")) {
+                for (Map.Entry<String, JsonElement> entry
+                        : paper.getAsJsonObject("sides").entrySet()) {
+                    BlockPos pos = readPos(entry.getKey());
+                    if (pos != null) profile.sides.put(pos, entry.getValue().getAsString());
+                }
+            }
+        }
+
         if (json.has("roulette")) {
             JsonObject roulette = json.getAsJsonObject("roulette");
             profile.roulette = true;
@@ -1120,7 +1206,11 @@ public final class ClientDispensers {
             profiles.put(coinFlip.name, coinFlip);
         }
         if (!profiles.containsKey("paper")) {
-            profiles.put("paper", new RigProfile("paper"));
+            // Two machines of numbered slips, the higher one winning. Sides are handed out
+            // as the dispensers are watched: first the player's, then the host's.
+            RigProfile paper = new RigProfile("paper");
+            paper.paper = true;
+            profiles.put(paper.name, paper);
         }
         if (!profiles.containsKey("roulette")) {
             // Set up for the usual arrangement: eight obsidian round one crystal, and the

@@ -41,6 +41,7 @@ the rig it belongs to:
 | rig | the GUI shows |
 |---|---|
 | roulette | 8 blanks in a ring, the loaded item in the middle slot |
+| paper | slips 1–9, each named for the side that machine plays |
 | a dispenser with a fixed answer | nine of that |
 | anything else | one of each of the rig's items, in order |
 
@@ -179,15 +180,54 @@ can switch mid-game.
 whichever entry is selected.
 
 **Per dispenser** — one dispenser always fires one thing, whatever is selected.
-This is the one for the paper game, where two dispensers fire and the higher
-number wins.
 
-    (look at the left dispenser)
-    /fake rig set paper 1 Seven
-    (look at the right dispenser)
-    /fake rig set paper 1 Two
+    (look at the dispenser)
+    /fake rig set diamond_block 1 Jackpot
 
 `/fake rig unset` puts the dispenser you are looking at back on the cycled item.
+
+---
+
+## 5b. The paper game
+
+Two machines each fire a numbered slip and the higher number wins. Setting it
+up is two commands:
+
+    /fake rig use paper
+    (look at the left dispenser)  /fake dispenser watch
+    (look at the right dispenser) /fake dispenser watch
+
+Sides are handed out in the order you watch them: the first is **Player**, the
+second is **Host**. Both are laid out at once, so the left machine holds
+`1 (Player)` through `9 (Player)` and the right holds `1 (Host)` through
+`9 (Host)`.
+
+Got them the wrong way round? Look at one and name it:
+
+    /fake rig paper side Host
+
+### Rigging who wins
+
+Press **`M`** to step through it: `Player wins` → `Host wins` → chance → round
+again. Silent, so you can set it while everyone is watching the machines. The
+dashboard shows the same three as buttons, and `/fake dispenser status` prints
+`rigged for: Player`.
+
+Both dispensers going off together count as **one round**: whichever fires
+first draws the pair of numbers and the second takes the other half. So the two
+never tie, and the rigged side always draws the higher one. The winning number
+is always in the top half of the range, so it reads as a real win rather than a
+two beating a one.
+
+Changing the slips:
+
+    /fake rig paper item name_tag     (something other than paper)
+    /fake rig paper numbers 6         (slips run 1 to 6)
+    /fake rig paper winner chance
+    /fake rig paper on | off
+
+Lay the dispensers out again after either of the first two — the slips are
+named for the setup they were made with.
 
 ---
 
@@ -299,6 +339,7 @@ Client-only decoration for your base.
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
 | `K` | clear every fake out of your inventory |
+| `M` | who wins the paper game (Player / Host / chance) |
 | — | open the menu (unbound by default) |
 
 Rebindable in Options → Controls → Miscellaneous.

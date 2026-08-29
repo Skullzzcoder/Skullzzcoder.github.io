@@ -49,6 +49,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding fireNow;
     private static KeyBinding refill;
     private static KeyBinding clearFakes;
+    private static KeyBinding cycleWinner;
 
     @Override
     public void onInitializeClient() {
@@ -105,6 +106,14 @@ public class MirageClient implements ClientModInitializer {
             int picked = WebDashboard.pollSelection();
             if (picked >= 0) applyDashboardSelection(client, picked);
 
+            String pickedWinner = WebDashboard.pollWinner();
+            if (pickedWinner != null) {
+                RigProfile paper = ClientDispensers.active();
+                paper.winner = pickedWinner.equals("*") ? "" : pickedWinner;
+                paper.roundTick = Long.MIN_VALUE;
+                SelfFakes.save();
+            }
+
             String pickedRig = WebDashboard.pollRig();
             if (pickedRig != null && ClientDispensers.use(pickedRig)) SelfFakes.save();
 
@@ -132,6 +141,7 @@ public class MirageClient implements ClientModInitializer {
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
+            while (cycleWinner.wasPressed()) stepWinner(client);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
             if (WebDashboard.pollRefill()) {
                 ClientDispensers.refillWatched();
@@ -179,6 +189,9 @@ public class MirageClient implements ClientModInitializer {
         clearFakes = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.clear_fakes", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_K, category));
+        cycleWinner = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.cycle_winner", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_M, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -245,6 +258,19 @@ public class MirageClient implements ClientModInitializer {
                     .append("\",\"blank\":\"")
                     .append(WebDashboard.escape(shown.blank == null ? "nothing" : shown.blank.label()))
                     .append('"');
+        }
+        json.append("},\"paper\":{\"on\":").append(shown.paper);
+        if (shown.paper) {
+            json.append(",\"winner\":\"").append(WebDashboard.escape(shown.winner))
+                    .append("\",\"sides\":[");
+
+            first = true;
+            for (String side : shown.sideNames()) {
+                if (!first) json.append(',');
+                first = false;
+                json.append('"').append(WebDashboard.escape(side)).append('"');
+            }
+            json.append(']');
         }
         json.append("}}");
 
@@ -392,6 +418,7 @@ public class MirageClient implements ClientModInitializer {
                     SelfFakes.save();
                     return feedback(context, "Chamber count back to zero.");
                 }))
+                .then(paperBranch())
                 .then(rouletteBranch())
                 .then(ClientCommandManager.literal("set")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
@@ -402,6 +429,71 @@ public class MirageClient implements ClientModInitializer {
                                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
                                                 .executes(context -> setDispenserResult(context,
                                                         IntegerArgumentType.getInteger(context, "count")))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> paperBranch() {
+        return ClientCommandManager.literal("paper")
+                .then(ClientCommandManager.literal("on").executes(context -> {
+                    ClientDispensers.active().paper = true;
+                    SelfFakes.save();
+                    return feedback(context, "Paper game on. Watch the two dispensers and "
+                            + "they get a side each, then /fake dispenser fill both.");
+                }))
+                .then(ClientCommandManager.literal("off").executes(context -> {
+                    ClientDispensers.active().paper = false;
+                    SelfFakes.save();
+                    return feedback(context, "Paper game off for this rig.");
+                }))
+                .then(ClientCommandManager.literal("side")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(MirageClient::setPaperSide)))
+                .then(ClientCommandManager.literal("winner")
+                        .then(ClientCommandManager.literal("chance").executes(context -> {
+                            ClientDispensers.active().winner = "";
+                            SelfFakes.save();
+                            return feedback(context, "Left to chance.");
+                        }))
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.winner = StringArgumentType.getString(context, "name");
+                                    profile.roundTick = Long.MIN_VALUE;
+                                    SelfFakes.save();
+                                    return feedback(context, profile.winner + " draws higher.");
+                                })))
+                .then(ClientCommandManager.literal("item")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.slipItem = StringArgumentType.getString(context, "item");
+                                    SelfFakes.save();
+                                    return feedback(context, "Slips are now "
+                                            + profile.slipItem + ". Fill the dispensers again.");
+                                })))
+                .then(ClientCommandManager.literal("numbers")
+                        .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(2, 9))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.numbers = IntegerArgumentType.getInteger(context, "count");
+                                    SelfFakes.save();
+                                    return feedback(context, "Slips run 1 to "
+                                            + profile.numbers + ". Fill the dispensers again.");
+                                })));
+    }
+
+    private static int setPaperSide(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the dispenser you are naming.");
+
+        RigProfile profile = ClientDispensers.active();
+        String side = StringArgumentType.getString(context, "name");
+        profile.setSide(hit.getBlockPos(), side);
+
+        // The slips carry the side in their names, so they have to be laid out again.
+        ClientDispensers.fill(hit.getBlockPos());
+        SelfFakes.save();
+        return feedback(context, "That dispenser plays " + side + ", holding "
+                + ClientDispensers.describeStock(hit.getBlockPos()) + ".");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> rouletteBranch() {
@@ -760,6 +852,23 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /**
+     * Steps who the paper game is rigged for.
+     *
+     * <p>Silent by default like the other switches, since the whole point is deciding it
+     * while everyone is watching the machines rather than your chat.
+     */
+    private static void stepWinner(MinecraftClient client) {
+        RigProfile profile = ClientDispensers.active();
+        if (!profile.paper || client.player == null) return;
+
+        String winner = ClientDispensers.cycleWinner();
+        if (!SelfFakes.announceSwitching()) return;
+
+        client.player.sendMessage(Text.literal(winner.isEmpty() ? "chance" : winner + " wins")
+                .formatted(Formatting.GRAY), true);
     }
 
     /**
