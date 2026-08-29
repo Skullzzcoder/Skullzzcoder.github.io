@@ -193,6 +193,31 @@ exactly on the point. Longer shots arc higher. `/fake arrow clear` turns it off.
 **This changes nothing about the real outcome.** The arrow exists only on your client; the
 server's arrow, and whatever it pays, are untouched and unaware.
 
+### Per-item prices
+
+The menu's **price** field sets the value for that one fake, overriding the price file. Leave
+it empty to fall back to the file. Precedence is: the price typed on the fake, then the
+`prices` table, then the API.
+
+### Fake item frames and armour stands
+
+Decoration for a base, visible only to you:
+
+```
+/fake decor frame <item>        hangs a frame on the block face you are looking at
+/fake decor stand <material>    stands one on top of the block you are looking at
+/fake decor remove              clears fake decor within three blocks of your aim
+/fake decor clear
+/fake decor list
+```
+
+`<material>` takes `netherite`, `diamond`, `iron`, `golden`, `chainmail` or `leather` for a
+full set; anything else that names an item is worn on the head instead.
+
+These are client-only entities, so they cost the server nothing and nobody else sees them.
+The client discards entities in chunks it unloads, so they are respawned automatically when
+their chunk comes back.
+
 ### Switching the result without touching a menu
 
 For a two-way gamble, keep both outcomes as presets and flip between them with a key, so
@@ -204,8 +229,9 @@ nothing visible ever happens on your screen:
 | `[` | previous dispenser result |
 | unbound | open the Mirage menu |
 
-All three are rebindable under Options then Controls then Mirage. The selected result shows
-briefly in the action bar rather than chat: small, fades on its own, no scrollback.
+All three are rebindable under Options then Controls then Mirage. Cycling prints nothing at
+all; use the dashboard below or `/fake list` to see what is selected. To have it announced in
+the action bar instead, set `"announceSwitching": true` in `config/mirage-client.json`.
 
 Presets default to one gold ingot and one diamond. To change them:
 
@@ -214,6 +240,26 @@ Presets default to one gold ingot and one diamond. To change them:
 /fake preset list
 /fake preset clear
 ```
+
+### Browser dashboard
+
+A page showing which preset is currently selected, and buttons to change it:
+
+```
+http://localhost:25599
+```
+
+Handy on a second monitor or a phone. It is configured in `config/mirage-client.json`:
+
+```json
+"dashboard": { "enabled": true, "port": 25599, "host": "127.0.0.1" }
+```
+
+`127.0.0.1` keeps the page to this machine. **Setting `host` to `0.0.0.0` exposes the page,
+and its buttons, to everything on your network** — only do that if you know what is on it.
+
+Game state is never touched from an HTTP thread: the client tick publishes a snapshot, and a
+click parks a choice that the next tick picks up.
 
 ### Price lines
 

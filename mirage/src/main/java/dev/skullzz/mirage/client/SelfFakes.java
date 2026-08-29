@@ -54,6 +54,8 @@ public final class SelfFakes {
     private static final Map<Integer, ItemStack> containerApplied = new HashMap<>();
 
     private static Map<Identifier, Item> itemsById;
+    /** Whether cycling a preset prints anything. Off by default. */
+    private static boolean announceSwitching = false;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private SelfFakes() {
@@ -127,6 +129,15 @@ public final class SelfFakes {
     public static ItemStack get(int slot) {
         FakeSpec spec = fakes.get(slot);
         return spec == null ? ItemStack.EMPTY : spec.stack();
+    }
+
+    public static boolean announceSwitching() {
+        return announceSwitching;
+    }
+
+    public static void setAnnounceSwitching(boolean announce) {
+        announceSwitching = announce;
+        save();
     }
 
     public static void set(int slot, FakeSpec spec) {
@@ -281,7 +292,10 @@ public final class SelfFakes {
         containerFakes.clear();
 
         Path file = file();
-        if (!Files.exists(file)) return;
+        if (!Files.exists(file)) {
+            WebDashboard.configure(new JsonObject());
+            return;
+        }
 
         try {
             JsonElement parsed = JsonParser.parseString(Files.readString(file));
@@ -302,7 +316,11 @@ public final class SelfFakes {
                     readSection(entry.getValue().getAsJsonObject(), allContainer(size));
                 }
             }
+            announceSwitching = root.has("announceSwitching")
+                    && root.get("announceSwitching").getAsBoolean();
             ClientDispensers.load(root);
+            ClientDecor.load(root);
+            WebDashboard.configure(root);
         } catch (IOException | RuntimeException e) {
             Mirage.LOGGER.error("Mirage could not read {} -- starting empty", file, e);
             fakes.clear();
@@ -321,7 +339,8 @@ public final class SelfFakes {
 
                 int count = json.has("count") ? json.get("count").getAsInt() : 1;
                 String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
-                target.put(slot, new FakeSpec(item, count, enchants));
+                Double price = json.has("price") ? json.get("price").getAsDouble() : null;
+                target.put(slot, new FakeSpec(item, count, enchants, price));
             } catch (RuntimeException ignored) {
                 // one unreadable entry should not lose the rest
             }
@@ -338,6 +357,9 @@ public final class SelfFakes {
             containers.add(String.valueOf(entry.getKey()), writeSection(entry.getValue()));
         }
         root.add("containers", containers);
+        root.addProperty("announceSwitching", announceSwitching);
+        WebDashboard.writeConfig(root);
+        ClientDecor.save(root);
         ClientDispensers.save(root);
 
         Path file = file();
@@ -354,6 +376,7 @@ public final class SelfFakes {
         json.addProperty("id", Registries.ITEM.getId(spec.item).toString());
         json.addProperty("count", spec.count);
         if (!spec.enchants.isEmpty()) json.addProperty("enchants", spec.enchants);
+        if (spec.price != null) json.addProperty("price", spec.price);
         return json;
     }
 

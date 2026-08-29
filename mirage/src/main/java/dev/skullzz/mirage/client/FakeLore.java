@@ -148,6 +148,17 @@ public final class FakeLore {
         return priceOf(stack) != null;
     }
 
+    /** What a price would render as, for showing back in the menu. */
+    public static String preview(double price) {
+        return abbreviate(price);
+    }
+
+    /** @return something like {@code $19.1K}, or empty if this item has no price. */
+    public static String priceLabel(ItemStack stack, Double override) {
+        Double price = override != null ? override : priceOf(stack);
+        return price == null ? "" : "$" + abbreviate(price * stack.getCount());
+    }
+
     private static Double priceOf(ItemStack stack) {
         String id = Registries.ITEM.getId(stack.getItem()).toString();
         // The local table wins, so a value you set by hand is never overwritten by the API.
@@ -156,7 +167,11 @@ public final class FakeLore {
     }
 
     public static ItemStack applyTo(ItemStack stack) {
-        return applyTo(stack, null);
+        return applyTo(stack, null, null);
+    }
+
+    public static ItemStack applyTo(ItemStack stack, String enchantSpec) {
+        return applyTo(stack, enchantSpec, null);
     }
 
     /**
@@ -166,14 +181,15 @@ public final class FakeLore {
      * <p>Both kinds of line share the one lore component, so they are composed here and
      * written once — setting it twice would erase the first set.
      */
-    public static ItemStack applyTo(ItemStack stack, String enchantSpec) {
+    public static ItemStack applyTo(ItemStack stack, String enchantSpec, Double priceOverride) {
         List<Text> lines = new ArrayList<>();
 
         for (String enchant : FakeEnchants.lines(enchantSpec)) {
             lines.add(Text.literal(enchant).setStyle(Style.EMPTY.withItalic(false)));
         }
 
-        Double unitPrice = priceOf(stack);
+        // A price set on the fake itself beats the file, which beats the API.
+        Double unitPrice = priceOverride != null ? priceOverride : priceOf(stack);
         if (unitPrice != null && !loreLines.isEmpty()) {
             // Price scales with the stack, the way a sell-all total would.
             double total = unitPrice * stack.getCount();

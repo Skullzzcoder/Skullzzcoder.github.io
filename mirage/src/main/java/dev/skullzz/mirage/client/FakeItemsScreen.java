@@ -33,6 +33,7 @@ public class FakeItemsScreen extends Screen {
 
     private TextFieldWidget itemField;
     private TextFieldWidget countField;
+    private TextFieldWidget priceField;
     private TextFieldWidget enchantField;
     private Text status = Text.empty();
     private Tab tab = Tab.INVENTORY;
@@ -53,17 +54,21 @@ public class FakeItemsScreen extends Screen {
         addTab("Dispenser", Tab.DISPENSER, tabsLeft + 92);
         addTab("Ender chest", Tab.ENDER, tabsLeft + 184);
 
-        int fieldsLeft = (this.width - 330) / 2;
-        this.itemField = new TextFieldWidget(this.textRenderer, fieldsLeft, 68, 150, 20, Text.literal("item"));
+        int fieldsLeft = (this.width - 360) / 2;
+        this.itemField = new TextFieldWidget(this.textRenderer, fieldsLeft, 68, 130, 20, Text.literal("item"));
         this.itemField.setMaxLength(64);
         this.addDrawableChild(this.itemField);
 
-        this.countField = new TextFieldWidget(this.textRenderer, fieldsLeft + 156, 68, 40, 20, Text.literal("count"));
+        this.countField = new TextFieldWidget(this.textRenderer, fieldsLeft + 136, 68, 34, 20, Text.literal("count"));
         this.countField.setMaxLength(3);
         this.countField.setText("1");
         this.addDrawableChild(this.countField);
 
-        this.enchantField = new TextFieldWidget(this.textRenderer, fieldsLeft + 202, 68, 128, 20,
+        this.priceField = new TextFieldWidget(this.textRenderer, fieldsLeft + 176, 68, 60, 20, Text.literal("price"));
+        this.priceField.setMaxLength(16);
+        this.addDrawableChild(this.priceField);
+
+        this.enchantField = new TextFieldWidget(this.textRenderer, fieldsLeft + 242, 68, 118, 20,
                 Text.literal("enchants"));
         this.enchantField.setMaxLength(128);
         this.addDrawableChild(this.enchantField);
@@ -180,7 +185,17 @@ public class FakeItemsScreen extends Screen {
         } catch (NumberFormatException ignored) {
             // an unparseable count just means one
         }
-        return new FakeSpec(item, count, this.enchantField.getText());
+        // An empty price falls back to the price file; a typed one overrides it for this fake.
+        Double price = null;
+        String typedPrice = this.priceField.getText().trim().replace(",", "");
+        if (!typedPrice.isEmpty()) {
+            try {
+                price = Double.parseDouble(typedPrice);
+            } catch (NumberFormatException ignored) {
+                // leave it null and fall back to the file
+            }
+        }
+        return new FakeSpec(item, count, this.enchantField.getText(), price);
     }
 
     private void onSlotClicked(int slot, Tab owner) {
@@ -208,9 +223,9 @@ public class FakeItemsScreen extends Screen {
             case DISPENSER -> SelfFakes.setContainer(SelfFakes.DISPENSER, slot, spec);
             case ENDER -> SelfFakes.setContainer(SelfFakes.ENDER_CHEST, slot, spec);
         }
-        this.status = Text.literal(spec.count + "x " + typed
-                + (FakeLore.hasPriceFor(spec.stack()) ? " (priced)" : " (no price set)"))
-                .formatted(Formatting.GREEN);
+        String priced = spec.price != null ? " at $" + FakeLore.preview(spec.price)
+                : (FakeLore.hasPriceFor(spec.stack()) ? " (priced from file)" : " (no price)");
+        this.status = Text.literal(spec.count + "x " + typed + priced).formatted(Formatting.GREEN);
     }
 
     private void setDispenserOutput() {
@@ -276,7 +291,7 @@ public class FakeItemsScreen extends Screen {
 
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 12, 0xFFFFFFFF);
         context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("Item, count, enchants (sharpness:5, unbreaking:3). Empty item clears a slot.")
+                Text.literal("Item, count, price, enchants (sharpness:5). Empty item clears a slot.")
                         .formatted(Formatting.GRAY),
                 this.width / 2, 26, 0xFFAAAAAA);
 

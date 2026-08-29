@@ -58,6 +58,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(dispenserBranch())
                         .then(arrowBranch())
                         .then(presetBranch())
+                        .then(decorBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(MirageClient::reloadPrices)))
@@ -68,8 +69,13 @@ public class MirageClient implements ClientModInitializer {
             // Repaint every tick: the server overwrites a slot whenever the real item changes.
             if (client.player != null) SelfFakes.apply(client.player);
             ClientDispensers.tick(client);
+            ClientDecor.tick(client.world);
             // A price that arrived from the API rebuilds the fakes once, not every tick.
             if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
+
+            publishDashboard();
+            int picked = WebDashboard.pollSelection();
+            if (picked >= 0) applyDashboardSelection(client, picked);
 
             while (nextResult.wasPressed()) selectPreset(client, 1);
             while (previousResult.wasPressed()) selectPreset(client, -1);
@@ -79,6 +85,7 @@ public class MirageClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             SelfFakes.forgetShadows();
             ClientDispensers.reset();
+            ClientDecor.reset();
         });
 
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
@@ -102,20 +109,55 @@ public class MirageClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_UNKNOWN, category));
     }
 
+    private static String lastPublished = "";
+
+    /** Pushes the current selection to the dashboard, only when it has actually changed. */
+    private static void publishDashboard() {
+        if (!WebDashboard.isRunning()) return;
+
+        List<FakeSpec> presets = ClientDispensers.presets();
+        StringBuilder json = new StringBuilder("{\"presets\":[");
+        for (int index = 0; index < presets.size(); index++) {
+            FakeSpec spec = presets.get(index);
+            if (index > 0) json.append(',');
+            json.append("{\"name\":\"")
+                    .append(WebDashboard.escape(spec.stack().getName().getString()))
+                    .append("\",\"price\":\"")
+                    .append(WebDashboard.escape(FakeLore.priceLabel(spec.stack(), spec.price)))
+                    .append("\"}");
+        }
+        json.append("],\"active\":").append(ClientDispensers.presetIndex()).append('}');
+
+        String built = json.toString();
+        if (!built.equals(lastPublished)) {
+            lastPublished = built;
+            WebDashboard.publish(built);
+        }
+    }
+
+    /** Applies a pick made in the browser, on the client thread where it is safe to. */
+    private static void applyDashboardSelection(MinecraftClient client, int index) {
+        List<FakeSpec> presets = ClientDispensers.presets();
+        if (index >= presets.size()) return;
+
+        // cyclePreset moves relative, so step by the difference to land on the chosen one.
+        int current = ClientDispensers.presetIndex();
+        int delta = current < 0 ? index + 1 : index - current;
+        if (delta == 0) return;
+
+        ClientDispensers.cyclePreset(delta);
+        SelfFakes.save();
+    }
+
     /** Flips to another preset result without opening anything anyone could see. */
     private static void selectPreset(MinecraftClient client, int delta) {
         FakeSpec spec = ClientDispensers.cyclePreset(delta);
-        if (spec == null) {
-            if (client.player != null) {
-                client.player.sendMessage(Text.literal("No dispenser presets set.")
-                        .formatted(Formatting.RED), true);
-            }
-            return;
-        }
+        if (spec == null) return;
 
         SelfFakes.save();
-        if (client.player != null) {
-            // The action bar rather than chat: small, fades by itself, no scrollback.
+
+        // Off unless asked for. /fake list and the dashboard both report the selection.
+        if (SelfFakes.announceSwitching() && client.player != null) {
             client.player.sendMessage(Text.literal(spec.count + "x "
                     + spec.stack().getName().getString()).formatted(Formatting.GRAY), true);
         }
@@ -174,6 +216,69 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setContainer(context, SelfFakes.DISPENSER,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> decorBranch() {
+        return ClientCommandManager.literal("decor")
+                .then(ClientCommandManager.literal("frame")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(MirageClient::placeFrame)))
+                .then(ClientCommandManager.literal("stand")
+                        .then(ClientCommandManager.argument("material", StringArgumentType.word())
+                                .executes(MirageClient::placeStand)))
+                .then(ClientCommandManager.literal("remove").executes(MirageClient::removeDecor))
+                .then(ClientCommandManager.literal("clear").executes(context -> {
+                    ClientDecor.clear();
+                    return feedback(context, "Removed every fake frame and stand.");
+                }))
+                .then(ClientCommandManager.literal("list").executes(context -> {
+                    List<String> lines = ClientDecor.describe();
+                    if (lines.isEmpty()) {
+                        context.getSource().sendFeedback(Text.literal("No fake decor placed."));
+                        return 0;
+                    }
+                    context.getSource().sendFeedback(Text.literal("Fake decor:").formatted(Formatting.AQUA));
+                    for (String line : lines) {
+                        context.getSource().sendFeedback(Text.literal("  " + line));
+                    }
+                    return lines.size();
+                }));
+    }
+
+    private static int placeFrame(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the wall or block to hang it on.");
+
+        String itemName = itemName(context);
+        if (SelfFakes.lookupItem(itemName) == null) {
+            return error(context, "No item called '" + itemName + "'.");
+        }
+
+        // Attached to the block you clicked, facing out along the face you clicked.
+        ClientDecor.addFrame(hit.getBlockPos(), hit.getSide(), itemName);
+        return feedback(context, "Placed a fake item frame holding " + itemName + ".");
+    }
+
+    private static int placeStand(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the block to stand it on.");
+
+        String material = StringArgumentType.getString(context, "material");
+        // Stand on top of the block that was clicked.
+        if (!ClientDecor.addStand(hit.getBlockPos().up(), material)) {
+            return error(context, "'" + material + "' is not an armour material or an item. "
+                    + "Try netherite, diamond, iron, golden, chainmail or leather.");
+        }
+        return feedback(context, "Placed a fake armour stand in " + material + ".");
+    }
+
+    private static int removeDecor(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the decor you want gone.");
+
+        int removed = ClientDecor.removeNear(hit.getBlockPos(), 3.0);
+        if (removed == 0) return error(context, "Nothing fake within three blocks of there.");
+        return feedback(context, "Removed " + removed + " fake piece(s).");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> presetBranch() {

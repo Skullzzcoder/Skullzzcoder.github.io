@@ -432,6 +432,7 @@ public final class ClientDispensers {
 
         int count = json.has("count") ? json.get("count").getAsInt() : 1;
         String enchants = json.has("enchants") ? json.get("enchants").getAsString() : "";
-        return new FakeSpec(item, count, enchants);
+        Double price = json.has("price") ? json.get("price").getAsDouble() : null;
+        return new FakeSpec(item, count, enchants, price);
     }
 }
