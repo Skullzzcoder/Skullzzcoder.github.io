@@ -57,8 +57,8 @@ public final class RigProfile {
     public int numbers = 9;
     /** The side a draw belongs to. Named rather than fixed, since the sides are. */
     public String house = DEFAULT_SIDES[1];
-    /** How often a round the house takes is drawn level instead, in percent. */
-    public int tieChance = 20;
+    /** How often a round the house takes is drawn level instead, in percent. Off by default. */
+    public int tieChance;
 
     /** Drawn once per round and shared by both machines. Never saved. */
     public int highRoll = 9;
@@ -221,6 +221,14 @@ public final class RigProfile {
         return !this.house.isEmpty() && this.house.equalsIgnoreCase(side);
     }
 
+    /** Whether a side name still belongs to a machine in the game. */
+    public boolean hasSide(String name) {
+        for (String side : sideNames()) {
+            if (side.equalsIgnoreCase(name)) return true;
+        }
+        return false;
+    }
+
     /**
      * Draws the pair of numbers for a round, and settles who the high one goes to.
      *
@@ -236,13 +244,24 @@ public final class RigProfile {
         this.roundTick = tick;
 
         List<String> names = sideNames();
+
+        // A name can go stale: a machine renamed, unwatched, or carried over from a file
+        // written before the sides were worked out. A winner nobody answers to is the worst
+        // possible outcome, because then no machine draws the high number and both take the
+        // low one -- the same slip on both sides, every single round.
+        if (!this.winner.isEmpty() && !hasSide(this.winner)) this.winner = "";
+
         this.roundWinner = !this.winner.isEmpty() ? this.winner
                 : names.isEmpty() ? "" : names.get(random.nextInt(names.size()));
 
         int span = Math.max(1, this.numbers / 2);
         this.highRoll = this.numbers - random.nextInt(span);
 
-        boolean level = isHouse(this.roundWinner) && random.nextInt(100) < this.tieChance;
+        // Level only when the house is taking the round and only when asked for. Anything
+        // else must come out apart, or the machines agree and the rigging means nothing.
+        boolean level = this.tieChance > 0
+                && isHouse(this.roundWinner)
+                && random.nextInt(100) < this.tieChance;
         this.lowRoll = level ? this.highRoll
                 : 1 + random.nextInt(Math.max(1, this.highRoll - 1));
     }

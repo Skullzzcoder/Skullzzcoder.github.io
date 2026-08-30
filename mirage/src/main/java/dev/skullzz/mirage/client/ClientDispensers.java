@@ -459,7 +459,8 @@ public final class ClientDispensers {
         String side = profile.sideAt(pos, watched);
         if (side.isEmpty()) return null;
 
-        boolean wins = !profile.roundWinner.isEmpty() && profile.roundWinner.equals(side);
+        boolean wins = !profile.roundWinner.isEmpty()
+                && profile.roundWinner.equalsIgnoreCase(side);
         int number = wins ? profile.highRoll : profile.lowRoll;
 
         Item slip = SelfFakes.lookupItem(profile.slipItem);
@@ -1140,7 +1141,7 @@ public final class ClientDispensers {
                 paper.addProperty("item", profile.slipItem);
                 paper.addProperty("numbers", profile.numbers);
                 paper.addProperty("house", profile.house);
-                paper.addProperty("tieChance", profile.tieChance);
+                paper.addProperty("ties", profile.tieChance);
 
                 JsonObject sides = new JsonObject();
                 for (Map.Entry<BlockPos, String> entry : profile.sides.entrySet()) {
@@ -1243,9 +1244,9 @@ public final class ClientDispensers {
             if (paper.has("item")) profile.slipItem = paper.get("item").getAsString();
             if (paper.has("numbers")) profile.numbers = paper.get("numbers").getAsInt();
             if (paper.has("house")) profile.house = paper.get("house").getAsString();
-            if (paper.has("tieChance")) {
-                profile.tieChance = paper.get("tieChance").getAsInt();
-            }
+            // Read from "ties", not the older "tieChance": levelling was on by default for
+            // a while, and nobody chose that, so those files start again from off.
+            if (paper.has("ties")) profile.tieChance = paper.get("ties").getAsInt();
 
             if (paper.has("sides")) {
                 for (Map.Entry<String, JsonElement> entry
@@ -1384,6 +1385,10 @@ public final class ClientDispensers {
         if (profile.paper) {
             if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
             profile.tieChance = Math.max(0, Math.min(100, profile.tieChance));
+            // A winner nobody answers to leaves every round a draw, so drop it back to chance.
+            if (!profile.winner.isEmpty() && !profile.hasSide(profile.winner)) {
+                profile.winner = "";
+            }
             // Sides held by machines that are gone push the real ones out of the game.
             profile.pruneSides(watched);
         }

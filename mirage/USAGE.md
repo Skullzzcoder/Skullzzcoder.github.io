@@ -239,20 +239,19 @@ first draws the pair of numbers and the second takes the other half. The winning
 number is always in the top half of the range, so it reads as a real win rather
 than a two beating a one.
 
-### Draws go to the house
+The two machines always come out apart. **Levelling is off**, and the rigged
+side's slip is always strictly higher.
 
-A draw is a win for the house, so the two sides are not treated the same:
+### Draws go to the house (optional)
 
-- **Host rigged** — the round may come out **level**. A draw still wins it, and
-  two machines agreeing now and then is what a fair pair would do.
-- **Player rigged** — never level. A draw would hand them the loss the rigging
-  exists to avoid, so the player's slip is always strictly higher.
+A draw is a win for the house, so if you want that to show up sometimes you can
+turn it on. It only ever applies to rounds the **house** takes — a level round
+on the player's turn would hand them the loss the rigging exists to avoid, so
+that can never happen whatever this is set to.
 
-Left to chance, the same applies to whichever side the round lands on.
-
-    /fake rig paper house Host      (who a draw belongs to)
-    /fake rig paper house nobody    (never level)
-    /fake rig paper ties 20         (how often its wins come out level)
+    /fake rig paper ties 20         (a fifth of the house's wins come out level)
+    /fake rig paper ties 0          (off, the default)
+    /fake rig paper house Host      (who a draw would belong to)
 
 `/fake dispenser status` prints both.
 

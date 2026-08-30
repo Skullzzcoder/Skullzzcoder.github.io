@@ -9,7 +9,8 @@ SLOTS   = int(re.search(r"int STOCK_SLOTS = (\d+)", disp).group(1))
 ROUND   = int(re.search(r"int ROUND_TICKS = (\d+)", disp).group(1))
 SIDES   = re.findall(r'"(\w+)"', re.search(r"DEFAULT_SIDES = \{([^}]*)\}", rig).group(1))
 HOUSE   = SIDES[int(re.search(r"house = DEFAULT_SIDES\[(\d)\]", rig).group(1))]
-TIE_PCT = int(re.search(r"tieChance = (\d+)", rig).group(1))
+m = re.search(r"public int tieChance(?: = (\d+))?;", rig)
+TIE_PCT = int(m.group(1)) if m.group(1) else 0   # no initialiser means off
 assert 'this.numbers - random.nextInt(span)' in rig, "high roll formula changed"
 assert 'int span = Math.max(1, this.numbers / 2)' in rig, "span formula changed"
 
@@ -28,11 +29,14 @@ class Rig:
         self.round_tick = -10**18
     def start_round(self, rnd, tick):
         self.round_tick = tick
+        # a winner nobody answers to would leave both machines on the low number
+        if self.winner and self.winner not in SIDES: self.winner = ""
         self.round_winner = self.winner or SIDES[rnd.randrange(len(SIDES))]
         span = max(1, self.numbers // 2)
         self.high = self.numbers - rnd.randrange(span)
         # a draw belongs to the house, so only a round the house takes may come out level
-        level = self.round_winner == self.house and rnd.randrange(100) < self.tie_pct
+        level = (self.tie_pct > 0 and self.round_winner == self.house
+                 and rnd.randrange(100) < self.tie_pct)
         self.low = self.high if level else 1 + rnd.randrange(max(1, self.high - 1))
 
 def fire(r, side, tick, rnd):
@@ -51,7 +55,7 @@ rnd = random.Random(7)
 check("two default sides", len(SIDES) == 2)
 
 for rigged in SIDES:
-    r, tick = Rig(rigged), 0
+    r, tick = Rig(rigged, tie_pct=25), 0
     for round_no in range(400):
         tick += ROUND + 5                       # a new round
         left  = fire(r, SIDES[0], tick, rnd)
@@ -143,7 +147,26 @@ check("the first side is the player however they were watched",
 check("a custom side comes after the built-ins",
       side_names_py(["Dealer", SIDES[1], SIDES[0]]) == SIDES + ["Dealer"])
 
-check("the house does draw sometimes", TIE_PCT == 0 or ties[HOUSE] > 0)
+# Levelling is off unless asked for, and a stale winner must never survive into a draw.
+check("levelling is off by default", TIE_PCT == 0)
+check("levelling needs asking for", "this.tieChance > 0" in level)
+check("a stale winner is dropped before the draw",
+      "!hasSide(this.winner)" in rig and rig.index("!hasSide(this.winner)") < rig.index("this.roundWinner ="))
+check("a stale winner is dropped on load", "!profile.hasSide(profile.winner)" in disp)
+check("sides are matched regardless of case", "roundWinner.equalsIgnoreCase(side)" in disp)
+
+# the reported failure: a winner matching neither machine gave both the same slip
+stale = Rig("Side 3", tie_pct=0)
+rnd3 = random.Random(11)
+same = 0
+for i in range(200):
+    stale.start_round(rnd3, i * (ROUND + 5))
+    a = stale.high if stale.round_winner == SIDES[0] else stale.low
+    b = stale.high if stale.round_winner == SIDES[1] else stale.low
+    if a == b: same += 1
+check("a stale winner no longer draws every round", same == 0)
+
+check("the house does draw when asked", ties[HOUSE] > 0)
 check("the player never draws at all", ties[SIDES[0] if HOUSE == SIDES[1] else SIDES[1]] == 0)
 
 # a house of nobody means the machines never agree
@@ -163,7 +186,8 @@ for i in range(600):
 check("chance picks both sides", all(w > 0 for w in wins.values()))
 
 print("FAILED: " + "; ".join(dict.fromkeys(fails)) if fails else
-      "paper draws: %s, slips 1-%d; %s takes draws (%d%% level, %d seen), %s never draws"
-      % (SIDES, NUMBERS, HOUSE, TIE_PCT, ties[HOUSE],
+      "paper draws: %s, slips 1-%d; levelling off by default, %s only when asked "
+      "(%d seen at 25%%), %s never draws, stale winners recover"
+      % (SIDES, NUMBERS, HOUSE, ties[HOUSE],
          SIDES[0] if HOUSE == SIDES[1] else SIDES[1]))
 sys.exit(1 if fails else 0)
