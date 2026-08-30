@@ -456,13 +456,15 @@ public final class ClientDispensers {
      * side always has the higher one.
      */
     private static FakeSpec paperSlip(RigProfile profile, BlockPos pos) {
+        // The side first: it is settled here, and a round drawn before any machine had one
+        // had no winner to give the high number to, so both took the low one.
+        String side = profile.sideAt(pos, watched);
+        if (side.isEmpty()) return null;
+
         // Added to the older side, never subtracted from the newer: the no-round-yet marker
         // is Long.MIN_VALUE, and subtracting that overflows to a huge negative, which reads
         // as "still the same round" forever and leaves every draw on its starting value.
         if (tick > profile.roundTick + ROUND_TICKS) profile.startRound(random, tick);
-
-        String side = profile.sideAt(pos, watched);
-        if (side.isEmpty()) return null;
 
         boolean wins = !profile.roundWinner.isEmpty()
                 && profile.roundWinner.equalsIgnoreCase(side);
@@ -1413,8 +1415,11 @@ public final class ClientDispensers {
         if (profile.paper) {
             if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
             profile.tieChance = Math.max(0, Math.min(100, profile.tieChance));
-            // A winner nobody answers to leaves every round a draw, so drop it back to chance.
-            if (!profile.winner.isEmpty() && !profile.hasSide(profile.winner)) {
+            // A winner nobody answers to leaves every round a draw, so drop it back to
+            // chance -- but only where there are sides to check it against, since none are
+            // known until the machines have been laid out.
+            if (!profile.winner.isEmpty() && !profile.sideNames().isEmpty()
+                    && !profile.hasSide(profile.winner)) {
                 profile.winner = "";
             }
             // Sides held by machines that are gone push the real ones out of the game.

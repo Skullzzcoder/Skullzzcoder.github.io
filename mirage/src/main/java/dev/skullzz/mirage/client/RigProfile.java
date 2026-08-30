@@ -249,9 +249,14 @@ public final class RigProfile {
         // written before the sides were worked out. A winner nobody answers to is the worst
         // possible outcome, because then no machine draws the high number and both take the
         // low one -- the same slip on both sides, every single round.
-        if (!this.winner.isEmpty() && !hasSide(this.winner)) this.winner = "";
+        //
+        // Only ever for this round, and only against sides that are actually known. Nothing
+        // is known before the machines have been laid out, and taking that for a stale name
+        // threw away a winner that had just been set by hand.
+        String wanted = this.winner;
+        if (!wanted.isEmpty() && !names.isEmpty() && !hasSide(wanted)) wanted = "";
 
-        this.roundWinner = !this.winner.isEmpty() ? this.winner
+        this.roundWinner = !wanted.isEmpty() ? wanted
                 : names.isEmpty() ? "" : names.get(random.nextInt(names.size()));
 
         int span = Math.max(1, this.numbers / 2);

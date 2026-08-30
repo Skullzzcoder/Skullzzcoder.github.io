@@ -27,11 +27,14 @@ class Rig:
         self.numbers, self.winner = NUMBERS, winner
         self.house, self.tie_pct = house, tie_pct
         self.round_tick = -10**18
-    def start_round(self, rnd, tick):
+    def start_round(self, rnd, tick, known=None):
         self.round_tick = tick
-        # a winner nobody answers to would leave both machines on the low number
-        if self.winner and self.winner not in SIDES: self.winner = ""
-        self.round_winner = self.winner or SIDES[rnd.randrange(len(SIDES))]
+        known = SIDES if known is None else known
+        # a winner nobody answers to would leave both machines on the low number, but
+        # nothing is stale before any machine has been given a side
+        wanted = self.winner
+        if wanted and known and wanted not in known: wanted = ""
+        self.round_winner = wanted or (rnd.choice(known) if known else "")
         span = max(1, self.numbers // 2)
         self.high = self.numbers - rnd.randrange(span)
         # a draw belongs to the house, so only a round the house takes may come out level
@@ -151,8 +154,25 @@ check("a custom side comes after the built-ins",
 check("levelling is off by default", TIE_PCT == 0)
 check("levelling needs asking for", "this.tieChance > 0" in level)
 check("a stale winner is dropped before the draw",
-      "!hasSide(this.winner)" in rig and rig.index("!hasSide(this.winner)") < rig.index("this.roundWinner ="))
+      "!hasSide(wanted)" in rig and rig.index("!hasSide(wanted)") < rig.index("this.roundWinner ="))
 check("a stale winner is dropped on load", "!profile.hasSide(profile.winner)" in disp)
+
+# The guard that broke it: before any machine is laid out nothing is known, so nothing is
+# stale, and a winner just set by hand has to survive its first round rather than be wiped.
+start = re.search(r"public void startRound\(.*?\n    \}", rig, re.S).group(0)
+check("the draw never writes over the winner", 'this.winner = ""' not in start)
+check("staleness is judged only against known sides", "!names.isEmpty() && !hasSide(wanted)" in rig)
+check("load judges it only against known sides", "!profile.sideNames().isEmpty()" in disp)
+
+# and the side must be settled before the round is drawn, or the first fire of a session
+# draws a round with nobody in it to give the high number to
+slip = re.search(r"private static FakeSpec paperSlip.*?\n    \}", disp, re.S).group(0)
+check("the side is resolved before the round is drawn",
+      slip.index("sideAt(pos, watched)") < slip.index("startRound"))
+
+fresh = Rig(SIDES[0])                        # Z pressed, no machine laid out yet
+fresh.start_round(random.Random(5), 0, known=[])
+check("a winner set by hand survives the first round", fresh.winner == SIDES[0])
 check("sides are matched regardless of case", "roundWinner.equalsIgnoreCase(side)" in disp)
 
 # the reported failure: a winner matching neither machine gave both the same slip
