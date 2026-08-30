@@ -307,15 +307,17 @@ public final class FakeBlocks {
 
             if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
 
-            // Never where the player is standing or about to be: a block the server does not
-            // have is one the server will not let them stand on.
-            if (tooClose(player, pos)) {
+            BlockState wanted = showing.get(pos);
+            if (wanted == null || world.getBlockState(pos) == wanted) continue;
+
+            // Held back only where the server has nothing. Over a real block the paint is
+            // just a change of skin: both sides agree something solid is there, so it can
+            // be stood on and walked into exactly as it looks. Over air it cannot, so near
+            // the player it comes off rather than have them stand on nothing.
+            if (tooClose(player, pos) && beneath(world, pos).isAir()) {
                 restore(world, pos);
                 continue;
             }
-
-            BlockState wanted = showing.get(pos);
-            if (wanted == null || world.getBlockState(pos) == wanted) continue;
             paint(world, pos, wanted);
         }
     }
@@ -331,10 +333,23 @@ public final class FakeBlocks {
                 && Math.abs(pos.getZ() - (int) Math.floor(player.getZ())) <= CLEAR_SIDE;
     }
 
+    /**
+     * What the server actually has at a position, painted over or not.
+     *
+     * <p>Once something is painted the world's own answer is ours, so the remembered state
+     * is the honest one wherever there is one.
+     */
+    private static BlockState beneath(ClientWorld world, BlockPos pos) {
+        BlockState was = real.get(pos);
+        return was != null ? was : world.getBlockState(pos);
+    }
+
     private static void paint(ClientWorld world, BlockPos pos, BlockState state) {
         try {
-            // Remembered once and only once: painting over our own paint would lose it.
-            if (!real.containsKey(pos)) real.put(pos.toImmutable(), world.getBlockState(pos));
+            // Only ever reached when what is there is not what we painted, so what is there
+            // is the server's word on it -- including a block just placed by hand under a
+            // fake, which is how a real floor comes to hold up a painted one.
+            real.put(pos.toImmutable(), world.getBlockState(pos));
             world.setBlockState(pos, state);
         } catch (RuntimeException e) {
             showing.remove(pos);

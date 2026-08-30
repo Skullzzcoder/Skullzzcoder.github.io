@@ -25,28 +25,44 @@ def cleared(px, py, pz, bx, by, bz):
     if by < feet - BELOW or by > feet + ABOVE: return False
     return abs(bx - math.floor(px)) <= SIDE and abs(bz - math.floor(pz)) <= SIDE
 
-# The one that matters: whatever the player is standing on, and every block their body
-# occupies, has to be held back. Standing on a block the server has not got is what reads
-# as flying, and walking into one they cannot pass is what leaves them stuck.
+def suppressed(px, py, pz, bx, by, bz, real_is_air):
+    """A fake is held back only near the player AND only where the server has nothing."""
+    return cleared(px, py, pz, bx, by, bz) and real_is_air
+
+# The one that matters: over air, whatever the player stands on and every block their body
+# occupies has to be held back. Standing on a block the server has not got is what reads as
+# flying. Over a real block the paint is only a change of skin -- both sides agree something
+# solid is there -- so it stays, which is what lets a real floor hold up a painted one.
 for px in (0.0, 0.5, -0.3, 12.9, -7.5):
     for py in (64.0, 64.62, 70.0, -12.4):
         for pz in (0.0, 0.5, -0.3, 8.2):
             import math
             fx, fy, fz = math.floor(px), math.floor(py), math.floor(pz)
-            check("the block underfoot is held back", cleared(px, py, pz, fx, fy - 1, fz))
-            check("the block at the feet is held back", cleared(px, py, pz, fx, fy, fz))
-            check("the block at head height is held back", cleared(px, py, pz, fx, fy + 1, fz))
-            # and the ring they would walk into
+            check("nothing to stand on underfoot is held back",
+                  suppressed(px, py, pz, fx, fy - 1, fz, True))
+            check("nothing at the feet is held back",
+                  suppressed(px, py, pz, fx, fy, fz, True))
+            check("nothing at head height is held back",
+                  suppressed(px, py, pz, fx, fy + 1, fz, True))
             for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                check("the step ahead is held back",
-                      cleared(px, py, pz, fx + dx, fy, fz + dz))
-            # far away must not be held back, or nothing would ever show
-            check("distant blocks still show", not cleared(px, py, pz, fx + 6, fy, fz))
-            check("blocks well overhead still show", not cleared(px, py, pz, fx, fy + 9, fz))
+                check("nothing in the step ahead is held back",
+                      suppressed(px, py, pz, fx + dx, fy, fz + dz, True))
+
+            # over a real block, the paint stays even right underfoot
+            check("a real floor keeps its paint underfoot",
+                  not suppressed(px, py, pz, fx, fy - 1, fz, False))
+            check("a real wall keeps its paint beside you",
+                  not suppressed(px, py, pz, fx + 1, fy, fz, False))
+
+            # far away must never be held back, or nothing would ever show
+            check("distant blocks still show", not suppressed(px, py, pz, fx + 6, fy, fz, True))
+            check("blocks well overhead still show",
+                  not suppressed(px, py, pz, fx, fy + 9, fz, True))
 
 # the sweep has to act on that, not merely compute it
 tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n    \}", blocks, re.S).group(1)
 check("the sweep puts a too-close block back", "tooClose(player, pos)" in tick and "restore(world, pos)" in tick)
+check("holding back is only over air", "beneath(world, pos).isAir()" in tick)
 check("the sweep skips unloaded chunks", "isChunkLoaded" in tick)
 check("the sweep is sliced", "MAX_SLICE" in tick and "MIN_SLICE" in tick)
 
@@ -76,7 +92,11 @@ check("the box is measured in long arithmetic", "public static long regionSize()
 
 # the real state must be taken once and given back
 paint = re.search(r"private static void paint\(.*?\n    \}", blocks, re.S).group(0)
-check("the real state is remembered once", "!real.containsKey(pos)" in paint)
+# Refreshed on every paint, not just the first: a block placed by hand under a fake arrives
+# as a server update, and treating that as still-air would keep holding the fake back and
+# the floor would never become standable.
+check("the real state is refreshed each paint", "real.put(pos.toImmutable(), world.getBlockState(pos))" in paint)
+check("the real state is not stale-guarded", "!real.containsKey(pos)" not in paint)
 restore = re.search(r"private static void restore\(.*?\n    \}", blocks, re.S).group(0)
 check("restoring writes the real state back", "world.setBlockState(pos, was)" in restore)
 check("restoring forgets the shadow", "real.remove(pos)" in restore)
@@ -99,6 +119,6 @@ check("the file stays manageable at the cap", MAX * 16 * 4 / 3 < 20e6)
 
 print("FAILED: " + "; ".join(dict.fromkeys(fails)) if fails else
       "clearance %d wide, %d below, %d above keeps the player off every fake block; "
-      "cap %d, full sweep %.1fs at the cap, real states restored on take and hide"
-      % (SIDE, BELOW, ABOVE, MAX, -(-MAX // slice_for(MAX)) / 20.0))
+      "cap %d, full sweep %.1fs at the cap; paint kept over real blocks so a placed "
+      "floor is standable" % (SIDE, BELOW, ABOVE, MAX, -(-MAX // slice_for(MAX)) / 20.0))
 sys.exit(1 if fails else 0)

@@ -416,20 +416,40 @@ coordinates only for `save` — `put` places it wherever you are looking.
 Copy from a creative single-player world, a plot, or anything already standing
 on the server — then put it wherever you like.
 
+### Standing on it — place a real floor
+
+Paint over a **real** block and it is only a change of skin: both your client
+and the server agree something solid is there, so you can stand on it and walk
+into it exactly as it looks. Paint over **air** and only your client thinks it
+is there, which is the dangerous kind.
+
+So the rule is: a fake is held back only where the server has nothing, and only
+within one block of you.
+
+That gives you the hybrid. **Place real blocks for the floor you gamble on** —
+any blocks, they get re-skinned to whatever the schematic says — and leave the
+walls, roof and decoration purely visual. You stand on the real floor while it
+looks like the build, and you walk straight through the fake walls, which is
+also how you get inside.
+
+Cheap stone under a quartz schematic reads as quartz. Only the shape has to be
+right, so build the standing floor out of **full blocks**, not slabs or stairs.
+
+Place a block under a fake and it becomes standable straight away — the server
+update arrives, the mod notes the real block underneath, and stops holding the
+paint back there.
+
+Where you have not placed anything, the fake opens up as you walk into it and
+you drop through. That is the mod telling you exactly where the floor needs to
+go.
+
 ### It will not get you flagged
 
-A fake block you could stand on would have your client think it is standing
-while the server thinks you are falling, and the server would drag you back.
-That looks exactly like flying.
-
-So fakes are **held back in a small space around you** — one block out, one
-below, two above. You never stand on one, and you walk straight through them,
-which is also how you get inside your own build. Everything further away shows
-normally. Your movement is identical to a client with no mod on it.
-
-Two smaller things: you cannot mine a fake block (the server has nothing to
-break), and if the server sends a real update for a position it will flicker
-back for up to a second before the sweep repaints it.
+Your movement stays identical to a client with no mod on it: you never stand on
+or walk into anything the server does not also have. Two smaller things — you
+cannot mine a fake block (there is nothing there to break), and if the server
+sends a real update for a position it flickers back for up to a second before
+the sweep repaints it.
 
 ## 11. Item frames and armour stands
 
