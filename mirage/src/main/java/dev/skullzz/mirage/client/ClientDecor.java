@@ -141,8 +141,17 @@ public final class ClientDecor {
 
     // --------------------------------------------------------------------- tick
 
+    /** Takes the decor out of the world but keeps it listed, ready to come straight back. */
+    public static void hide() {
+        for (Piece piece : pieces) despawn(piece);
+    }
+
     public static void tick(ClientWorld world) {
         if (world == null || pieces.isEmpty()) return;
+        if (!SelfFakes.enabled()) {
+            hide();
+            return;
+        }
         if (++tick % RESPAWN_CHECK_TICKS != 0) return;
 
         for (Piece piece : pieces) {

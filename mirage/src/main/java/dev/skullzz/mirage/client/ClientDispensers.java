@@ -371,6 +371,11 @@ public final class ClientDispensers {
         if (world == null) return;
         tick++;
 
+        if (!SelfFakes.enabled()) {
+            recall();
+            return;
+        }
+
         tidySpawned(client);
         flyArrows();
         watchTick(world);
@@ -691,6 +696,10 @@ public final class ClientDispensers {
     public static List<String> status(ClientWorld world) {
         List<String> lines = new ArrayList<>();
         RigProfile profile = active();
+
+        if (!SelfFakes.enabled()) {
+            lines.add("EVERYTHING IS OFF. Nothing is being faked.");
+        }
 
         lines.add("Rig '" + profile.name + "'"
                 + (profile.paper ? ", paper" : "")
@@ -1073,6 +1082,25 @@ public final class ClientDispensers {
         float pitch = ((player.getRandom().nextFloat() - player.getRandom().nextFloat()) * 0.7F
                 + 1.0F) * 2.0F;
         player.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 0.2F, pitch);
+    }
+
+    /**
+     * Takes back everything already in the air.
+     *
+     * <p>Switched off has to be immediate: an item still arcing out of a dispenser is the
+     * one thing that would give it away a second after the switch. The edge memory goes too,
+     * so that coming back on does not fire on a dispenser that went off while it was off.
+     */
+    private static void recall() {
+        for (SpawnedItem item : spawned) item.entity.discard();
+        spawned.clear();
+
+        for (FlyingArrow arrow : arrows) arrow.entity.discard();
+        arrows.clear();
+
+        pending.clear();
+        lastTriggered.clear();
+        lastPowered.clear();
     }
 
     /** Leaving a world takes the client entities with it. */

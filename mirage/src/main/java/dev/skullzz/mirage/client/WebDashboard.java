@@ -38,6 +38,8 @@ public final class WebDashboard {
             new java.util.concurrent.atomic.AtomicBoolean(false);
     /** Side a browser rigged the paper game for; "*" means chance. Null when unasked. */
     private static final AtomicReference<String> requestedWinner = new AtomicReference<>(null);
+    /** Which way a browser threw the master switch, or null when unasked. */
+    private static final AtomicReference<Boolean> requestedPower = new AtomicReference<>(null);
     /** Whether a browser asked for the watched dispensers to be laid out again. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedRefill =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -100,6 +102,7 @@ public final class WebDashboard {
             server.createContext("/fire", WebDashboard::handleFire);
             server.createContext("/refill", WebDashboard::handleRefill);
             server.createContext("/winner", WebDashboard::handleWinner);
+            server.createContext("/power", WebDashboard::handlePower);
             server.setExecutor(null);
             server.start();
 
@@ -155,6 +158,11 @@ public final class WebDashboard {
         return requestedFire.getAndSet(false);
     }
 
+    /** @return which way a browser threw the master switch, or null if it did not. */
+    public static Boolean pollPower() {
+        return requestedPower.getAndSet(null);
+    }
+
     /** @return a side a browser rigged the paper game for, "*" for chance, or null. */
     public static String pollWinner() {
         return requestedWinner.getAndSet(null);
@@ -187,6 +195,12 @@ public final class WebDashboard {
             return;
         }
         requested.set(index);
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handlePower(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        requestedPower.set(query != null && query.contains("on=1"));
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -347,6 +361,7 @@ public final class WebDashboard {
               </div>
               <div class="row" id="buttons"></div>
               <button id="arm" hidden></button>
+              <button id="power"></button>
               <button id="fire">Fire the watched dispensers</button>
               <button id="refill">Refill them</button>
               <div class="row" id="chambers"></div>
@@ -440,6 +455,17 @@ public final class WebDashboard {
               });
             }
 
+            function renderPower(s) {
+              const button = el('power');
+              button.textContent = s.on ? 'Turn everything off' : 'OFF \u2014 turn it back on';
+              button.className = s.on ? '' : 'ready';
+              button.onclick = () => post('/power?on=' + (s.on ? '0' : '1'));
+
+              // Nothing else means anything while it is off.
+              for (const id of ['fire', 'refill', 'arm'])
+                el(id).disabled = !s.on;
+            }
+
             function wireButtons() {
               el('fire').onclick = () => post('/fire');
               el('refill').onclick = () => post('/refill');
@@ -515,6 +541,7 @@ public final class WebDashboard {
               const roulette = s.roulette && s.roulette.on;
               el('none').hidden = roulette || s.presets.length > 0;
 
+              renderPower(s);
               renderRigs(s);
               renderCard(s);
               renderPresets(s);

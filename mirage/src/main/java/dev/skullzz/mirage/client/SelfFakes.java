@@ -61,6 +61,8 @@ public final class SelfFakes {
     private static boolean announceSwitching = false;
     /** Whether a fake fired from a dispenser ends up in the inventory afterwards. */
     private static boolean autoCollect = true;
+    /** The master switch. Off puts everything real back without forgetting any of it. */
+    private static boolean enabled = true;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private SelfFakes() {
@@ -167,6 +169,15 @@ public final class SelfFakes {
     public static ItemStack get(int slot) {
         FakeSpec spec = fakes.get(slot);
         return spec == null ? ItemStack.EMPTY : spec.stack();
+    }
+
+    public static boolean enabled() {
+        return enabled;
+    }
+
+    public static void setEnabled(boolean on) {
+        enabled = on;
+        save();
     }
 
     public static boolean autoCollect() {
@@ -289,7 +300,38 @@ public final class SelfFakes {
     // ----------------------------------------------------------------- applying
 
     public static void apply(ClientPlayerEntity player) {
+        if (!enabled) {
+            revert(player);
+            return;
+        }
         applyInventory(player);
+        applyContainer(player);
+    }
+
+    /**
+     * Puts the real contents back everywhere, while forgetting nothing.
+     *
+     * <p>Switched off has to leave a screen somebody else is looking over as honest as one
+     * from a client with no mod on it, and switching back on has to cost nothing, so the
+     * fakes stay in their maps and only what was painted into the world is undone.
+     */
+    private static void revert(ClientPlayerEntity player) {
+        PlayerInventory inventory = player.getInventory();
+
+        for (Map.Entry<Integer, ItemStack> entry : applied.entrySet()) {
+            int slot = entry.getKey();
+            if (slot < 0 || slot >= SLOT_COUNT) continue;
+            // Only where it is still the very stack we wrote; anything else is the server's.
+            if (inventory.getStack(slot) != entry.getValue()) continue;
+
+            ItemStack real = shadowed.get(slot);
+            inventory.setStack(slot, real == null ? ItemStack.EMPTY : real);
+        }
+        applied.clear();
+        shadowed.clear();
+
+        // An open container is put right by painting nothing into it: the sweep at the end
+        // of applyContainer gives back every slot that is no longer faked.
         applyContainer(player);
     }
 
@@ -339,7 +381,8 @@ public final class SelfFakes {
         // one fires. Anything else falls back to the one set kept per container size.
         if (size == DISPENSER) target = ClientDispensers.openStock(player);
         if (target == null) target = containerFakes.get(size);
-        if (target == null) target = Map.of();
+        // Switched off paints nothing, which hands every slot back on the sweep below.
+        if (target == null || !enabled) target = Map.of();
 
         for (Map.Entry<Integer, FakeSpec> entry : target.entrySet()) {
             int slot = entry.getKey();
@@ -443,6 +486,7 @@ public final class SelfFakes {
             announceSwitching = root.has("announceSwitching")
                     && root.get("announceSwitching").getAsBoolean();
             autoCollect = !root.has("autoCollect") || root.get("autoCollect").getAsBoolean();
+            enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
             ClientDispensers.load(root);
             ClientDecor.load(root);
             WebDashboard.configure(root);
@@ -486,6 +530,7 @@ public final class SelfFakes {
         root.add("containers", containers);
         root.addProperty("announceSwitching", announceSwitching);
         root.addProperty("autoCollect", autoCollect);
+        root.addProperty("enabled", enabled);
         WebDashboard.writeConfig(root);
         ClientDecor.save(root);
         ClientDispensers.save(root);

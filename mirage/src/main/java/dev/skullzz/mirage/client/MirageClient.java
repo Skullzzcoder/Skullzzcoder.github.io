@@ -52,6 +52,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding cycleWinner;
     private static KeyBinding winFirst;
     private static KeyBinding winSecond;
+    private static KeyBinding power;
 
     @Override
     public void onInitializeClient() {
@@ -93,6 +94,15 @@ public class MirageClient implements ClientModInitializer {
                                     ClientDispensers.setDebug(false);
                                     return feedback(context, "Watcher debug off.");
                                 })))
+                        .then(ClientCommandManager.literal("off").executes(context -> {
+                            setPower(MinecraftClient.getInstance(), false);
+                            return feedback(context, "Everything off. Nothing is being faked, "
+                                    + "and nothing has been forgotten.");
+                        }))
+                        .then(ClientCommandManager.literal("on").executes(context -> {
+                            setPower(MinecraftClient.getInstance(), true);
+                            return feedback(context, "Everything back on.");
+                        }))
                         .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
                         .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
 
@@ -105,6 +115,17 @@ public class MirageClient implements ClientModInitializer {
             if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
 
             publishDashboard();
+
+            // Before every other switch, and the only one that still works when it is off.
+            Boolean askedPower = WebDashboard.pollPower();
+            if (askedPower != null) setPower(client, askedPower);
+            while (power.wasPressed()) setPower(client, !SelfFakes.enabled());
+
+            if (!SelfFakes.enabled()) {
+                if (drainKeys()) say(client, "Mirage is off. Press N to bring it back.");
+                return;
+            }
+
             int picked = WebDashboard.pollSelection();
             if (picked >= 0) applyDashboardSelection(client, picked);
 
@@ -202,6 +223,9 @@ public class MirageClient implements ClientModInitializer {
         winSecond = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.win_second", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_X, category));
+        power = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.power", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_N, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -218,7 +242,9 @@ public class MirageClient implements ClientModInitializer {
         if (!WebDashboard.isRunning()) return;
 
         RigProfile profile = ClientDispensers.active();
-        StringBuilder json = new StringBuilder("{\"rig\":\"")
+        StringBuilder json = new StringBuilder("{\"on\":")
+                .append(SelfFakes.enabled())
+                .append(",\"rig\":\"")
                 .append(WebDashboard.escape(profile.name)).append("\",\"rigs\":[");
 
         boolean first = true;
@@ -893,6 +919,42 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /**
+     * The master switch.
+     *
+     * <p>Off puts every real item, dispenser and decoration back at once and takes anything
+     * still in the air with it, while forgetting none of the setup. Always says which way it
+     * went: this is the one switch where being unsure which state you are in is the whole
+     * problem, and a silent one would be worse than no switch at all.
+     */
+    private static void setPower(MinecraftClient client, boolean on) {
+        if (on == SelfFakes.enabled()) return;
+        SelfFakes.setEnabled(on);
+
+        if (!on && client.player != null) {
+            SelfFakes.apply(client.player);
+            ClientDecor.hide();
+        }
+        say(client, on ? "Mirage on." : "Mirage off. Everything you can see is real.");
+    }
+
+    /**
+     * Empties the other keys while it is off.
+     *
+     * <p>Otherwise a handful of presses made in the meantime would all fire at once the
+     * moment it came back on.
+     */
+    private static boolean drainKeys() {
+        KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
+                clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu };
+
+        boolean pressed = false;
+        for (KeyBinding key : rest) {
+            while (key.wasPressed()) pressed = true;
+        }
+        return pressed;
     }
 
     /**

@@ -14,6 +14,23 @@ Two config files, both under your instance's `config/` folder:
 Menu: `/fake ui`. Dashboard: <http://127.0.0.1:25599> (starts by itself).
 Check anything: `/fake list`.
 
+## The off switch
+
+**`N`**, the top button on the dashboard, or `/fake off` and `/fake on`.
+
+Off puts everything real back at once — inventory, ender chest, whatever
+container is open, the dispenser layouts, the item frames and armour stands —
+and takes anything still in the air with it, mid-flight. Your screen becomes
+indistinguishable from a client with no mod installed.
+
+**Nothing is forgotten.** Every rig, layout, price and fake stays exactly where
+it was, and `N` again brings all of it straight back. It is remembered across
+restarts, so if you leave it off it stays off.
+
+While it is off, the other keys do nothing and say so rather than stacking up
+and all firing at once when it comes back. `N` always prints which way it went:
+being unsure which state you are in is the one thing worse than no switch.
+
 ---
 
 ## 1. Fake inventory items
@@ -379,6 +396,7 @@ Client-only decoration for your base.
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
 | `K` | clear every fake out of your inventory |
+| `N` | turn everything off / back on |
 | `Z` / `X` | paper game: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |

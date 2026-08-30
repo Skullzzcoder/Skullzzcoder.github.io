@@ -86,6 +86,8 @@ public final class FakeClicks {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         if (player == null || client.currentScreen != screen) return false;
+        // Switched off, every click is somebody else's business again.
+        if (!SelfFakes.enabled()) return false;
 
         ScreenHandler handler = screen.getScreenHandler();
         int size = handler.slots.size() - PLAYER_SLOTS;

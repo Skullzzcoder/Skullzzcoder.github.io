@@ -10,5 +10,6 @@
   "key.mirage.clear_fakes": "Clear fakes from inventory",
   "key.mirage.cycle_winner": "Who wins the paper game",
   "key.mirage.win_first": "Paper game: first side wins",
-  "key.mirage.win_second": "Paper game: second side wins"
+  "key.mirage.win_second": "Paper game: second side wins",
+  "key.mirage.power": "Turn everything off / on"
 }
