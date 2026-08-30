@@ -331,6 +331,9 @@ public final class ClientDispensers {
 
     public static boolean unwatch(BlockPos pos) {
         active().stock.remove(pos);
+        // Across every rig, not just this one: a name left behind by a machine no longer in
+        // play would keep the next one out of the game.
+        for (RigProfile profile : profiles.values()) profile.sides.remove(pos);
         lastTriggered.remove(pos);
         lastPowered.remove(pos);
         lastFire.remove(pos);
@@ -453,7 +456,9 @@ public final class ClientDispensers {
         // as "still the same round" forever and leaves every draw on its starting value.
         if (tick > profile.roundTick + ROUND_TICKS) profile.startRound(random, tick);
 
-        String side = profile.sideAt(pos);
+        String side = profile.sideAt(pos, watched);
+        if (side.isEmpty()) return null;
+
         boolean wins = !profile.roundWinner.isEmpty() && profile.roundWinner.equals(side);
         int number = wins ? profile.highRoll : profile.lowRoll;
 
@@ -565,15 +570,22 @@ public final class ClientDispensers {
         Map<Integer, FakeSpec> slots = new LinkedHashMap<>();
 
         if (profile.roulette) {
+            // Loaded here rather than only on load: a rig that lays out nothing and fires
+            // nothing reads as the whole game being broken, and there is no arrangement
+            // where an empty roulette rig is what somebody meant.
+            if (profile.bullet == null) profile.bullet = defaultSpec("end_crystal");
+            if (profile.blank == null) profile.blank = defaultSpec("obsidian");
+
             for (int slot = 0; slot < STOCK_SLOTS; slot++) {
                 FakeSpec spec = slot == MIDDLE_SLOT ? profile.bullet : profile.blank;
                 // Each slot needs its own copy: they empty one at a time.
                 if (spec != null) slots.put(slot, spec.withCount(1));
             }
         } else if (profile.paper) {
-            // One slip per number, all named for the side this machine plays.
-            String side = profile.sideAt(pos);
-            Item slip = SelfFakes.lookupItem(profile.slipItem);
+            // One slip per number, all named for the side this machine plays. A machine
+            // with no side is one of the other games' and is left showing its real self.
+            String side = profile.sideAt(pos, watched);
+            Item slip = side.isEmpty() ? null : SelfFakes.lookupItem(profile.slipItem);
 
             if (slip != null) {
                 int count = Math.min(profile.numbers, STOCK_SLOTS);
@@ -615,7 +627,11 @@ public final class ClientDispensers {
         RigProfile profile = active();
         int filled = 0;
         for (BlockPos pos : watched) {
-            if (profile.stock.containsKey(pos)) continue;
+            // Emptied counts as needing it: a dispenser played out to its last slot leaves
+            // the key behind with nothing under it, and skipping that is why a rig switched
+            // back to came up bare.
+            Map<Integer, FakeSpec> slots = profile.stockAt(pos);
+            if (slots != null && !slots.isEmpty()) continue;
             if (fill(pos)) filled++;
         }
         return filled;
@@ -720,7 +736,8 @@ public final class ClientDispensers {
                                     || world.isReceivingRedstonePower(pos.up())
                                     ? "powered now" : "unpowered");
                     if (profile.paper) {
-                        line.append(", plays ").append(profile.sides.get(pos));
+                        String side = profile.sides.get(pos);
+                        line.append(side == null ? ", not in this game" : ", plays " + side);
                     }
                     FakeSpec fixed = profile.perDispenser.get(pos);
                     if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
@@ -819,6 +836,11 @@ public final class ClientDispensers {
             text.append(entry.getValue()).append("x ").append(entry.getKey());
         }
         return text.toString();
+    }
+
+    private static FakeSpec defaultSpec(String id) {
+        Item item = SelfFakes.lookupItem(id);
+        return item == null ? null : new FakeSpec(item, 1, "");
     }
 
     private static String describeSpec(FakeSpec spec) {
@@ -1351,8 +1373,10 @@ public final class ClientDispensers {
             profile.tidyRoulette();
         }
 
-        if (profile.paper && SelfFakes.lookupItem(profile.slipItem) == null) {
-            profile.slipItem = "paper";
+        if (profile.paper) {
+            if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
+            // Sides held by machines that are gone push the real ones out of the game.
+            profile.pruneSides(watched);
         }
     }
 

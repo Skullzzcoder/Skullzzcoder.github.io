@@ -63,6 +63,18 @@ check("arming spent itself", not r.armed)
 stock = {0: BULLET}
 check("no matching item is left alone", not deplete(stock, BLANK) and stock == {0: BULLET})
 
+# A roulette rig must never be able to lay out nothing: unloaded, it fills no slots and
+# fires nothing, which is indistinguishable from the game being broken.
+fill = re.search(r"public static boolean fill\(BlockPos pos\) \{(.*?)\n    \}", src, re.S).group(1)
+check("an unloaded roulette rig loads itself", 'defaultSpec("end_crystal")' in fill
+      and 'defaultSpec("obsidian")' in fill)
+
+# A dispenser played down to its last slot keeps its key with nothing under it. Skipping
+# those is why a rig switched back to came up bare.
+empties = re.search(r"public static int fillEmptyWatched\(\) \{(.*?)\n    \}", src, re.S).group(1)
+check("an emptied dispenser counts as needing filling", "containsKey" not in empties
+      and "isEmpty()" in empties)
+
 print("bullet=%s blank=%s chambers=%d slots=%d middle=%d" % (BULLET, BLANK, CHAMBERS, SLOTS, MIDDLE))
 print("FAILED: " + ", ".join(fails) if fails else "all roulette stock checks pass")
 sys.exit(1 if fails else 0)

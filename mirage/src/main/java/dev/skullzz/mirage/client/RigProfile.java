@@ -152,21 +152,37 @@ public final class RigProfile {
 
     // ------------------------------------------------------------------- paper
 
-    /** Which side this dispenser plays for, giving it one if it has none yet. */
-    public String sideAt(BlockPos pos) {
+    /**
+     * Which side this dispenser plays for, giving it one if it has none yet.
+     *
+     * <p>Watched dispensers are shared by every rig, so switching to the paper game reaches
+     * machines belonging to the other games too. Only the two sides are ever handed out, and
+     * only against machines still in play: a third one is not a third player, it is the
+     * roulette dropper standing nearby, and it is left out rather than called "Side 3".
+     *
+     * @param live the dispensers currently being watched.
+     * @return the side, or empty for a machine that is not part of this game.
+     */
+    public String sideAt(BlockPos pos, Set<BlockPos> live) {
         String side = this.sides.get(pos);
         if (side != null) return side;
 
-        // First watched is the player, second the host, which is how they get set up.
-        for (String candidate : DEFAULT_SIDES) {
-            if (!this.sides.containsValue(candidate)) {
-                this.sides.put(pos.toImmutable(), candidate);
-                return candidate;
-            }
+        Set<String> taken = new LinkedHashSet<>();
+        for (Map.Entry<BlockPos, String> entry : this.sides.entrySet()) {
+            if (live.contains(entry.getKey())) taken.add(entry.getValue());
         }
-        side = "Side " + (this.sides.size() + 1);
-        this.sides.put(pos.toImmutable(), side);
-        return side;
+
+        for (String candidate : DEFAULT_SIDES) {
+            if (taken.contains(candidate)) continue;
+            this.sides.put(pos.toImmutable(), candidate);
+            return candidate;
+        }
+        return "";
+    }
+
+    /** Forgets sides belonging to machines that are no longer watched. */
+    public void pruneSides(Set<BlockPos> live) {
+        this.sides.keySet().retainAll(live);
     }
 
     public void setSide(BlockPos pos, String side) {

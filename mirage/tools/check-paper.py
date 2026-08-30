@@ -76,6 +76,36 @@ r = Rig(SIDES[0]); fire(r, SIDES[0], 0, rnd); first = r.high
 fire(r, SIDES[0], ROUND + 1, rnd)
 check("an idle gap starts a new round", r.round_tick == ROUND + 1)
 
+# Watched dispensers are shared by every rig, so switching to paper reaches the roulette
+# dropper and the coin-flip machines too. Only the two sides may ever be handed out.
+side_at = re.search(r"public String sideAt\(BlockPos pos, Set<BlockPos> live\) \{(.*?)\n    \}",
+                    rig, re.S).group(1)
+check("a machine with no side left is not named", '"Side "' not in side_at)
+check("only live machines hold a name", "live.contains" in side_at)
+check("a sideless machine lays out nothing", "side.isEmpty() ? null" in disp)
+check("a sideless machine fires nothing", "if (side.isEmpty()) return null;" in disp)
+check("sides are pruned when a machine stops being watched", "profile.sides.remove(pos)" in disp)
+
+def side_at_py(sides, pos, live):
+    if pos in sides: return sides[pos]
+    taken = {n for p, n in sides.items() if p in live}
+    for c in SIDES:
+        if c not in taken:
+            sides[pos] = c
+            return c
+    return ""
+
+# four watched machines, only two of them the paper game's
+sides, live = {}, {"left", "right", "dropper", "flip"}
+got = [side_at_py(sides, p, live) for p in ("left", "right", "dropper", "flip")]
+check("the first two get the sides", got[:2] == SIDES)
+check("the other machines get no side", got[2:] == ["", ""])
+
+# unwatching one frees its name for the machine that replaces it
+del sides["left"]
+live = {"right", "dropper", "flip", "newleft"}
+check("a freed name is reused", side_at_py(sides, "newleft", live) == SIDES[0])
+
 # left to chance, both sides must win sometimes
 r, wins = Rig(""), {s: 0 for s in SIDES}
 for i in range(600):

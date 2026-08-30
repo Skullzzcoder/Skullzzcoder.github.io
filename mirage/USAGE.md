@@ -203,7 +203,10 @@ up is two commands:
     (look at the right dispenser) /fake dispenser watch
 
 Sides are handed out in the order you watch them: the first is **Player**, the
-second is **Host**. Both are laid out at once, so the left machine holds
+second is **Host**. Only those two — watched dispensers are shared by every rig,
+so a third machine is the roulette dropper standing nearby rather than a third
+player, and it is left showing its real contents. Put one in the game by hand
+with `/fake rig paper side <name>` if you ever want three. Both are laid out at once, so the left machine holds
 `1 (Player)` through `9 (Player)` and the right holds `1 (Host)` through
 `9 (Host)`.
 
