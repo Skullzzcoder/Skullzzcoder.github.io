@@ -128,6 +128,21 @@ check("a level draw is still only sometimes", "tieChance" in level)
 check("the winner is settled before the numbers",
       rig.index("this.roundWinner =") < rig.index("boolean level ="))
 
+# A key meaning "the player wins" has to keep meaning that whichever machine was watched
+# first, so the side order is fixed by the built-in list rather than by insertion.
+names = re.search(r"public List<String> sideNames\(\) \{(.*?)\n    \}", rig, re.S).group(1)
+check("sides are listed in the built-in order", "DEFAULT_SIDES" in names)
+
+def side_names_py(assigned):
+    unique = list(dict.fromkeys(assigned))
+    ordered = [n for n in SIDES if n in unique]
+    return ordered + [n for n in unique if n not in SIDES]
+
+check("the first side is the player however they were watched",
+      side_names_py([SIDES[1], SIDES[0]])[0] == SIDES[0])
+check("a custom side comes after the built-ins",
+      side_names_py(["Dealer", SIDES[1], SIDES[0]]) == SIDES + ["Dealer"])
+
 check("the house does draw sometimes", TIE_PCT == 0 or ties[HOUSE] > 0)
 check("the player never draws at all", ties[SIDES[0] if HOUSE == SIDES[1] else SIDES[1]] == 0)
 

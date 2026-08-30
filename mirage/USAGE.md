@@ -216,10 +216,23 @@ Got them the wrong way round? Look at one and name it:
 
 ### Rigging who wins
 
-Press **`M`** to step through it: `Player wins` → `Host wins` → chance → round
-again. Silent, so you can set it while everyone is watching the machines. The
-dashboard shows the same three as buttons, and `/fake dispenser status` prints
+One key per side, so there is nothing to count and nothing to remember:
+
+| key | does |
+|---|---|
+| `Z` | **Player** wins the next round |
+| `X` | **Host** wins the next round |
+| `M` | step: Player → Host → chance → round again |
+
+`Z` and `X` are absolute — press either and that side is rigged, whatever it was
+set to before. Use `M` when you want chance back.
+
+All silent, so you can set it while everyone is watching the machines. The
+dashboard shows the same as buttons, and `/fake dispenser status` prints
 `rigged for: Player`.
+
+The sides are ordered by the built-in list rather than by which machine you
+watched first, so `Z` means the player whichever way round you set it up.
 
 Both dispensers going off together count as **one round**: whichever fires
 first draws the pair of numbers and the second takes the other half. The winning
@@ -367,7 +380,8 @@ Client-only decoration for your base.
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
 | `K` | clear every fake out of your inventory |
-| `M` | who wins the paper game (Player / Host / chance) |
+| `Z` / `X` | paper game: Player wins / Host wins |
+| `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |
 
 Rebindable in Options → Controls → Miscellaneous.

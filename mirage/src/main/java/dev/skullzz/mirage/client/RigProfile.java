@@ -193,10 +193,21 @@ public final class RigProfile {
         this.sides.put(pos.toImmutable(), side);
     }
 
-    /** The sides in play, without repeats, for cycling through and for listing. */
+    /**
+     * The sides in play, without repeats.
+     *
+     * <p>Ordered by the built-in sides rather than by which machine was watched first, so
+     * that a key meaning "the player wins" keeps meaning that however the game was set up.
+     */
     public List<String> sideNames() {
         Set<String> unique = new LinkedHashSet<>(this.sides.values());
-        return new ArrayList<>(unique);
+        List<String> ordered = new ArrayList<>();
+
+        for (String name : DEFAULT_SIDES) {
+            if (unique.remove(name)) ordered.add(name);
+        }
+        ordered.addAll(unique);
+        return ordered;
     }
 
     /** What a slip in a given position reads, e.g. {@code 3 (Player)}. */

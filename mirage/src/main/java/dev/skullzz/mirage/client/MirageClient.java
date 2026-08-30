@@ -50,6 +50,8 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding refill;
     private static KeyBinding clearFakes;
     private static KeyBinding cycleWinner;
+    private static KeyBinding winFirst;
+    private static KeyBinding winSecond;
 
     @Override
     public void onInitializeClient() {
@@ -142,6 +144,8 @@ public class MirageClient implements ClientModInitializer {
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cycleWinner.wasPressed()) stepWinner(client);
+            while (winFirst.wasPressed()) setWinner(client, 0);
+            while (winSecond.wasPressed()) setWinner(client, 1);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
             if (WebDashboard.pollRefill()) {
                 ClientDispensers.refillWatched();
@@ -192,6 +196,12 @@ public class MirageClient implements ClientModInitializer {
         cycleWinner = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_winner", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_M, category));
+        winFirst = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.win_first", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_Z, category));
+        winSecond = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.win_second", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_X, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -883,6 +893,38 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /**
+     * Rigs one side of the paper game outright.
+     *
+     * <p>Stepping through the settings means knowing where it currently is and counting
+     * presses. A key per side means pressing it once and being certain, which is the point
+     * of having it on a key at all. Silent for the same reason the other switches are.
+     */
+    private static void setWinner(MinecraftClient client, int index) {
+        RigProfile profile = ClientDispensers.active();
+        if (!profile.paper) {
+            say(client, "Rig '" + profile.name + "' is not the paper game.");
+            return;
+        }
+
+        List<String> sides = profile.sideNames();
+        if (index >= sides.size()) {
+            say(client, "Only " + sides.size() + " machine"
+                    + (sides.size() == 1 ? " is" : "s are") + " in the game. Watch the other "
+                    + "dispenser first.");
+            return;
+        }
+
+        profile.winner = sides.get(index);
+        // Whatever numbers are already drawn belong to the old setting.
+        profile.roundTick = Long.MIN_VALUE;
+        SelfFakes.save();
+
+        if (!SelfFakes.announceSwitching() || client.player == null) return;
+        client.player.sendMessage(Text.literal(profile.winner + " wins")
+                .formatted(Formatting.GRAY), true);
     }
 
     /**
