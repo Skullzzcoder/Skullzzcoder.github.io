@@ -10,6 +10,7 @@ Two config files, both under your instance's `config/` folder:
 |---|---|
 | `mirage-client.json` | every fake, every rig, the dashboard settings |
 | `mirage-prices.json` | prices, lore format, and the price API key |
+| `mirage-builds.json` | saved schematics |
 
 Menu: `/fake ui`. Dashboard: <http://127.0.0.1:25599> (starts by itself).
 Check anything: `/fake list`.
@@ -374,7 +375,47 @@ live in `config/mirage-prices.json`:
 A per-item price and a custom name can also be given when adding an item, in
 the menu, which overrides the looked-up one.
 
-## 10. Item frames and armour stands
+## 10. Whole builds — a base without building it
+
+Copy something that really exists, then stand it up anywhere as a fake. The
+blocks go into your client's own copy of the world; the server is told nothing
+and its world is untouched.
+
+    (look at one corner)          /fake build corner
+    (look at the opposite corner) /fake build corner
+    /fake build save casino
+
+    (look at where the low corner should go)
+    /fake build put casino
+
+    /fake build take casino     (down, real blocks back)
+    /fake build takeall
+    /fake build list
+    /fake build forget casino   (delete it)
+
+Builds live in `config/mirage-builds.json`, written only when one changes.
+Up to 30,000 blocks each. Air is skipped, so only what is really built is
+carried, and the corner is measured from the lowest of the three axes.
+
+Copy from a creative single-player world, a plot, or anything already standing
+on the server — then put it wherever you like.
+
+### It will not get you flagged
+
+A fake block you could stand on would have your client think it is standing
+while the server thinks you are falling, and the server would drag you back.
+That looks exactly like flying.
+
+So fakes are **held back in a small space around you** — one block out, one
+below, two above. You never stand on one, and you walk straight through them,
+which is also how you get inside your own build. Everything further away shows
+normally. Your movement is identical to a client with no mod on it.
+
+Two smaller things: you cannot mine a fake block (the server has nothing to
+break), and if the server sends a real update for a position it will flicker
+back for up to a second before the sweep repaints it.
+
+## 11. Item frames and armour stands
 
 Client-only decoration for your base.
 

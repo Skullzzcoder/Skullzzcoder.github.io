@@ -60,6 +60,7 @@ public class MirageClient implements ClientModInitializer {
 
         FakeLore.load();
         SelfFakes.load();
+        FakeBlocks.load();
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommandManager.literal("fake")
@@ -70,6 +71,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(arrowBranch())
                         .then(presetBranch())
                         .then(decorBranch())
+                        .then(buildBranch())
                         .then(rigBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
@@ -111,6 +113,7 @@ public class MirageClient implements ClientModInitializer {
             if (client.player != null) SelfFakes.apply(client.player);
             ClientDispensers.tick(client);
             ClientDecor.tick(client.world);
+            FakeBlocks.tick(client);
             // A price that arrived from the API rebuilds the fakes once, not every tick.
             if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
 
@@ -184,6 +187,7 @@ public class MirageClient implements ClientModInitializer {
             SelfFakes.forgetShadows();
             ClientDispensers.reset();
             ClientDecor.reset();
+            FakeBlocks.reset();
         });
 
         FakeClicks.register();
@@ -402,6 +406,115 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setContainer(context, SelfFakes.DISPENSER,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> buildBranch() {
+        return ClientCommandManager.literal("build")
+                .then(ClientCommandManager.literal("corner").executes(MirageClient::buildCorner))
+                .then(ClientCommandManager.literal("save")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(MirageClient::buildSave)))
+                .then(ClientCommandManager.literal("put")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(MirageClient::buildPut)))
+                .then(ClientCommandManager.literal("take")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    if (!FakeBlocks.take(name)) {
+                                        return error(context, "'" + name + "' is not standing.");
+                                    }
+                                    FakeBlocks.persist();
+                                    return feedback(context, "Took '" + name + "' down.");
+                                })))
+                .then(ClientCommandManager.literal("takeall").executes(context -> {
+                    FakeBlocks.takeAll();
+                    FakeBlocks.persist();
+                    return feedback(context, "Took every build down.");
+                }))
+                .then(ClientCommandManager.literal("forget")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    if (!FakeBlocks.forget(name)) {
+                                        return error(context, "No build called '" + name + "'.");
+                                    }
+                                    FakeBlocks.persist();
+                                    return feedback(context, "Forgot '" + name + "'.");
+                                })))
+                .then(ClientCommandManager.literal("list").executes(MirageClient::buildList));
+    }
+
+    private static int buildCorner(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) return error(context, "Look at a block to set a corner.");
+
+        int which = FakeBlocks.corner(hit.getBlockPos());
+        BlockPos pos = hit.getBlockPos();
+
+        if (which == 1) {
+            return feedback(context, "Corner 1 at " + pos.getX() + " " + pos.getY() + " "
+                    + pos.getZ() + ". Now look at the opposite corner and run it again.");
+        }
+        return feedback(context, "Corner 2 set, " + FakeBlocks.regionSize()
+                + " blocks in the box. /fake build save <name>");
+    }
+
+    private static int buildSave(CommandContext<FabricClientCommandSource> context) {
+        if (!FakeBlocks.hasRegion()) {
+            return error(context, "Set both corners first with /fake build corner.");
+        }
+        if (FakeBlocks.regionSize() > FakeBlocks.MAX_BLOCKS) {
+            return error(context, "That box is " + FakeBlocks.regionSize() + " blocks, over the "
+                    + FakeBlocks.MAX_BLOCKS + " limit. Pick a smaller one.");
+        }
+
+        String name = StringArgumentType.getString(context, "name");
+        FakeBlocks.Build build = FakeBlocks.save(MinecraftClient.getInstance().world, name);
+        if (build == null) {
+            return error(context, "Nothing but air in that box, or the chunks are not loaded.");
+        }
+
+        FakeBlocks.persist();
+        return feedback(context, "Saved '" + name + "': " + build.count() + " blocks, "
+                + build.size() + ". Stand it up with /fake build put " + name + ".");
+    }
+
+    private static int buildPut(CommandContext<FabricClientCommandSource> context) {
+        String name = StringArgumentType.getString(context, "name");
+
+        // The corner goes where you are looking, or at your feet if that is nothing.
+        BlockHitResult hit = lookedAt(128.0);
+        BlockPos corner = hit != null ? hit.getBlockPos().up()
+                : MinecraftClient.getInstance().player == null ? null
+                : MinecraftClient.getInstance().player.getBlockPos();
+        if (corner == null) return error(context, "Look at where the corner should go.");
+
+        int count = FakeBlocks.put(name, corner);
+        if (count < 0) return error(context, "No build called '" + name + "'.");
+
+        FakeBlocks.persist();
+        return feedback(context, "'" + name + "' is up: " + count + " blocks from "
+                + corner.getX() + " " + corner.getY() + " " + corner.getZ() + ".");
+    }
+
+    private static int buildList(CommandContext<FabricClientCommandSource> context) {
+        Map<String, FakeBlocks.Build> all = FakeBlocks.builds();
+        if (all.isEmpty()) {
+            context.getSource().sendFeedback(Text.literal("No builds saved. Set two corners "
+                    + "round something and /fake build save <name>."));
+            return 0;
+        }
+
+        context.getSource().sendFeedback(Text.literal("Builds:").formatted(Formatting.AQUA));
+        for (FakeBlocks.Build build : all.values()) {
+            BlockPos at = FakeBlocks.placed().get(build.name);
+            context.getSource().sendFeedback(Text.literal("  " + build.name + " - "
+                    + build.count() + " blocks, " + build.size()
+                    + (at == null ? ", down"
+                            : ", up at " + at.getX() + " " + at.getY() + " " + at.getZ())));
+        }
+        return all.size();
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> rigBranch() {
