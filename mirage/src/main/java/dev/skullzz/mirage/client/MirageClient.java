@@ -470,6 +470,34 @@ public class MirageClient implements ClientModInitializer {
                                     return feedback(context, "Slips are now "
                                             + profile.slipItem + ". Fill the dispensers again.");
                                 })))
+                .then(ClientCommandManager.literal("house")
+                        .then(ClientCommandManager.literal("nobody").executes(context -> {
+                            ClientDispensers.active().house = "";
+                            SelfFakes.save();
+                            return feedback(context, "Draws go to nobody, so the machines "
+                                    + "never agree.");
+                        }))
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.house = StringArgumentType.getString(context, "name");
+                                    profile.roundTick = Long.MIN_VALUE;
+                                    SelfFakes.save();
+                                    return feedback(context, "A draw is now a win for "
+                                            + profile.house + ".");
+                                })))
+                .then(ClientCommandManager.literal("ties")
+                        .then(ClientCommandManager.argument("percent", IntegerArgumentType.integer(0, 100))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.tieChance =
+                                            IntegerArgumentType.getInteger(context, "percent");
+                                    profile.roundTick = Long.MIN_VALUE;
+                                    SelfFakes.save();
+                                    return feedback(context, profile.tieChance + "% of the rounds "
+                                            + (profile.house.isEmpty() ? "the house" : profile.house)
+                                            + " takes come out level.");
+                                })))
                 .then(ClientCommandManager.literal("numbers")
                         .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(2, 9))
                                 .executes(context -> {

@@ -55,6 +55,10 @@ public final class RigProfile {
     /** What the slips are made of, and how high they go. */
     public String slipItem = "paper";
     public int numbers = 9;
+    /** The side a draw belongs to. Named rather than fixed, since the sides are. */
+    public String house = DEFAULT_SIDES[1];
+    /** How often a round the house takes is drawn level instead, in percent. */
+    public int tieChance = 20;
 
     /** Drawn once per round and shared by both machines. Never saved. */
     public int highRoll = 9;
@@ -201,22 +205,35 @@ public final class RigProfile {
                 : number + " (" + side + ")";
     }
 
+    /** Whether a side is the one a draw goes to. */
+    public boolean isHouse(String side) {
+        return !this.house.isEmpty() && this.house.equalsIgnoreCase(side);
+    }
+
     /**
      * Draws the pair of numbers for a round, and settles who the high one goes to.
      *
      * <p>The high number is kept above the middle so the winning slip always looks like a
      * good draw rather than a two beating a one.
+     *
+     * <p>A draw belongs to the house, so a round the house is meant to take may come out
+     * level: the machines agreeing now and then is what a fair pair of them would do, and
+     * it costs nothing. A round the player is meant to take never can, because a draw
+     * would hand them the loss the rigging is there to avoid.
      */
     public void startRound(Random random, long tick) {
         this.roundTick = tick;
 
-        int span = Math.max(1, this.numbers / 2);
-        this.highRoll = this.numbers - random.nextInt(span);
-        this.lowRoll = 1 + random.nextInt(Math.max(1, this.highRoll - 1));
-
         List<String> names = sideNames();
         this.roundWinner = !this.winner.isEmpty() ? this.winner
                 : names.isEmpty() ? "" : names.get(random.nextInt(names.size()));
+
+        int span = Math.max(1, this.numbers / 2);
+        this.highRoll = this.numbers - random.nextInt(span);
+
+        boolean level = isHouse(this.roundWinner) && random.nextInt(100) < this.tieChance;
+        this.lowRoll = level ? this.highRoll
+                : 1 + random.nextInt(Math.max(1, this.highRoll - 1));
     }
 
     /** Steps the rigged winner on to the next side, then to chance, then round again. */

@@ -222,10 +222,26 @@ dashboard shows the same three as buttons, and `/fake dispenser status` prints
 `rigged for: Player`.
 
 Both dispensers going off together count as **one round**: whichever fires
-first draws the pair of numbers and the second takes the other half. So the two
-never tie, and the rigged side always draws the higher one. The winning number
-is always in the top half of the range, so it reads as a real win rather than a
-two beating a one.
+first draws the pair of numbers and the second takes the other half. The winning
+number is always in the top half of the range, so it reads as a real win rather
+than a two beating a one.
+
+### Draws go to the house
+
+A draw is a win for the house, so the two sides are not treated the same:
+
+- **Host rigged** — the round may come out **level**. A draw still wins it, and
+  two machines agreeing now and then is what a fair pair would do.
+- **Player rigged** — never level. A draw would hand them the loss the rigging
+  exists to avoid, so the player's slip is always strictly higher.
+
+Left to chance, the same applies to whichever side the round lands on.
+
+    /fake rig paper house Host      (who a draw belongs to)
+    /fake rig paper house nobody    (never level)
+    /fake rig paper ties 20         (how often its wins come out level)
+
+`/fake dispenser status` prints both.
 
 Changing the slips:
 

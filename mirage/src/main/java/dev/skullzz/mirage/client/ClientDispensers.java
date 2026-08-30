@@ -700,6 +700,8 @@ public final class ClientDispensers {
             lines.add("  rigged for: "
                     + (profile.winner.isEmpty() ? "chance" : profile.winner)
                     + ", sides " + profile.sideNames());
+            lines.add("  draws go to " + (profile.house.isEmpty() ? "nobody" : profile.house)
+                    + ", drawn " + profile.tieChance + "% of the rounds it wins");
         }
         if (profile.roulette) {
             lines.add("  shot " + profile.shot + " of " + profile.chambers
@@ -1137,6 +1139,8 @@ public final class ClientDispensers {
                 paper.addProperty("winner", profile.winner);
                 paper.addProperty("item", profile.slipItem);
                 paper.addProperty("numbers", profile.numbers);
+                paper.addProperty("house", profile.house);
+                paper.addProperty("tieChance", profile.tieChance);
 
                 JsonObject sides = new JsonObject();
                 for (Map.Entry<BlockPos, String> entry : profile.sides.entrySet()) {
@@ -1238,6 +1242,10 @@ public final class ClientDispensers {
             if (paper.has("winner")) profile.winner = paper.get("winner").getAsString();
             if (paper.has("item")) profile.slipItem = paper.get("item").getAsString();
             if (paper.has("numbers")) profile.numbers = paper.get("numbers").getAsInt();
+            if (paper.has("house")) profile.house = paper.get("house").getAsString();
+            if (paper.has("tieChance")) {
+                profile.tieChance = paper.get("tieChance").getAsInt();
+            }
 
             if (paper.has("sides")) {
                 for (Map.Entry<String, JsonElement> entry
@@ -1375,6 +1383,7 @@ public final class ClientDispensers {
 
         if (profile.paper) {
             if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
+            profile.tieChance = Math.max(0, Math.min(100, profile.tieChance));
             // Sides held by machines that are gone push the real ones out of the game.
             profile.pruneSides(watched);
         }
