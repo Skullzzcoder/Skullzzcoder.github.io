@@ -53,6 +53,7 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding winFirst;
     private static KeyBinding winSecond;
     private static KeyBinding power;
+    private static KeyBinding cutBlock;
 
     @Override
     public void onInitializeClient() {
@@ -167,6 +168,7 @@ public class MirageClient implements ClientModInitializer {
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
+            while (cutBlock.wasPressed()) cutLookedAt(client);
             while (cycleWinner.wasPressed()) stepWinner(client);
             while (winFirst.wasPressed()) setWinner(client, 0);
             while (winSecond.wasPressed()) setWinner(client, 1);
@@ -230,6 +232,9 @@ public class MirageClient implements ClientModInitializer {
         power = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.power", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_N, category));
+        cutBlock = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.cut_block", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_B, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -442,7 +447,60 @@ public class MirageClient implements ClientModInitializer {
                                     FakeBlocks.persist();
                                     return feedback(context, "Forgot '" + name + "'.");
                                 })))
+                .then(ClientCommandManager.literal("cut")
+                        .executes(context -> buildCut(context, 0, true))
+                        .then(ClientCommandManager.argument("radius",
+                                IntegerArgumentType.integer(0, FakeBlocks.MAX_CUT_RADIUS))
+                                .executes(context -> buildCut(context,
+                                        IntegerArgumentType.getInteger(context, "radius"), true))))
+                .then(ClientCommandManager.literal("uncut")
+                        .executes(context -> buildCut(context, 0, false))
+                        .then(ClientCommandManager.argument("radius",
+                                IntegerArgumentType.integer(0, FakeBlocks.MAX_CUT_RADIUS))
+                                .executes(context -> buildCut(context,
+                                        IntegerArgumentType.getInteger(context, "radius"), false))))
+                .then(ClientCommandManager.literal("uncutall")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .executes(context -> {
+                                    String name = StringArgumentType.getString(context, "name");
+                                    int filled = FakeBlocks.uncutAll(name);
+                                    if (filled == 0) {
+                                        return error(context, "'" + name + "' has no holes in "
+                                                + "it, or is not standing.");
+                                    }
+                                    FakeBlocks.persist();
+                                    return feedback(context, "Filled " + filled
+                                            + " blocks back in.");
+                                })))
                 .then(ClientCommandManager.literal("list").executes(MirageClient::buildList));
+    }
+
+    /**
+     * Takes a hole out of a standing build, or fills one back in.
+     *
+     * <p>What it is for is making room for something that has to really be there: a
+     * dispenser, a chest, a sign. The look of the place stays, and the machine in it works.
+     */
+    private static int buildCut(CommandContext<FabricClientCommandSource> context,
+                                int radius, boolean out) {
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) return error(context, "Look at the spot you want to open up.");
+
+        BlockPos pos = hit.getBlockPos();
+        String name = FakeBlocks.buildAt(pos);
+        if (name == null) {
+            return error(context, "Nothing of yours is standing there.");
+        }
+
+        int count = out ? FakeBlocks.cut(pos, radius) : FakeBlocks.uncut(pos, radius);
+        if (count == 0) {
+            return error(context, out ? "Already open there." : "Nothing was cut there.");
+        }
+
+        FakeBlocks.persist();
+        return feedback(context, (out ? "Took " : "Filled ") + count + " block"
+                + (count == 1 ? "" : "s") + (out ? " out of '" : " back into '") + name
+                + "'. " + FakeBlocks.cutCount(name) + " open in total.");
     }
 
     private static int buildCorner(CommandContext<FabricClientCommandSource> context) {
@@ -1040,6 +1098,23 @@ public class MirageClient implements ClientModInitializer {
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
     }
 
+    /** Opens up the one block being looked at, for punching holes as you go. */
+    private static void cutLookedAt(MinecraftClient client) {
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) return;
+
+        String name = FakeBlocks.buildAt(hit.getBlockPos());
+        if (name == null) {
+            say(client, "Nothing of yours is standing there.");
+            return;
+        }
+        if (FakeBlocks.cut(hit.getBlockPos(), 0) == 0) {
+            say(client, "Already open there.");
+            return;
+        }
+        FakeBlocks.persist();
+    }
+
     /**
      * The master switch.
      *
@@ -1067,7 +1142,8 @@ public class MirageClient implements ClientModInitializer {
      */
     private static boolean drainKeys() {
         KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
-                clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu };
+                clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu,
+                cutBlock };
 
         boolean pressed = false;
         for (KeyBinding key : rest) {

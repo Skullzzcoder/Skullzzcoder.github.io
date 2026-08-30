@@ -7,11 +7,13 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -69,6 +71,9 @@ public final class FakeBlocks {
     private static final int CLEAR_BELOW = 1;
     private static final int CLEAR_ABOVE = 2;
 
+    /** The most that may be taken out in one go, so a slip does not gut a build. */
+    public static final int MAX_CUT_RADIUS = 5;
+
     private static final Map<String, Build> builds = new LinkedHashMap<>();
     /** Which builds are up, and where the corner of each one sits. */
     private static final Map<String, BlockPos> placed = new LinkedHashMap<>();
@@ -93,6 +98,14 @@ public final class FakeBlocks {
         final int width;
         final int height;
         final int depth;
+        /**
+         * Positions cut out of it, relative to its corner.
+         *
+         * <p>Held against the build rather than against the world, so a hole belongs to the
+         * design: something real goes in it, and it stays a hole wherever the build is
+         * stood up.
+         */
+        final Set<BlockPos> cuts = new HashSet<>();
 
         Build(String name, List<BlockState> palette, int[] blocks,
               int width, int height, int depth) {
@@ -233,6 +246,11 @@ public final class FakeBlocks {
         placed.put(name, corner.toImmutable());
 
         for (int i = 0; i < build.blocks.length; i += 4) {
+            if (build.cuts.contains(new BlockPos(build.blocks[i], build.blocks[i + 1],
+                    build.blocks[i + 2]))) {
+                continue;
+            }
+
             BlockPos pos = new BlockPos(
                     corner.getX() + build.blocks[i],
                     corner.getY() + build.blocks[i + 1],
@@ -241,7 +259,7 @@ public final class FakeBlocks {
         }
 
         reindex();
-        return build.count();
+        return showing.size();
     }
 
     /** Takes a build back down, putting the real blocks back as it goes. */
@@ -271,6 +289,140 @@ public final class FakeBlocks {
 
     public static int showingCount() {
         return showing.size();
+    }
+
+    // ----------------------------------------------------------------- cutting
+
+    /** Which standing build covers a position, or null if none does. */
+    private static String owner(BlockPos pos) {
+        for (Map.Entry<String, BlockPos> entry : placed.entrySet()) {
+            Build build = builds.get(entry.getKey());
+            if (build == null) continue;
+
+            BlockPos corner = entry.getValue();
+            int dx = pos.getX() - corner.getX();
+            int dy = pos.getY() - corner.getY();
+            int dz = pos.getZ() - corner.getZ();
+
+            if (dx < 0 || dy < 0 || dz < 0) continue;
+            if (dx >= build.width || dy >= build.height || dz >= build.depth) continue;
+            return build.name;
+        }
+        return null;
+    }
+
+    /**
+     * Takes a hole out of whatever build covers a spot, and puts the real world back there.
+     *
+     * <p>What it is for is making room: a dispenser, a chest, a sign, anything that has to
+     * actually be there rather than only look it. The hole is remembered against the build,
+     * so it survives standing the build up again and is still there next time.
+     *
+     * @return how many blocks were taken out.
+     */
+    public static int cut(BlockPos centre, int radius) {
+        ClientWorld world = MinecraftClient.getInstance().world;
+        int taken = 0;
+
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockPos pos = centre.add(x, y, z);
+
+                    String name = owner(pos);
+                    if (name == null) continue;
+
+                    BlockPos corner = placed.get(name);
+                    BlockPos offset = new BlockPos(pos.getX() - corner.getX(),
+                            pos.getY() - corner.getY(), pos.getZ() - corner.getZ());
+                    if (!builds.get(name).cuts.add(offset)) continue;
+
+                    if (showing.remove(pos) != null) {
+                        restore(world, pos);
+                        taken++;
+                    }
+                }
+            }
+        }
+
+        if (taken > 0) reindex();
+        return taken;
+    }
+
+    /** Fills a hole back in. */
+    public static int uncut(BlockPos centre, int radius) {
+        Map<String, Set<BlockPos>> back = new LinkedHashMap<>();
+
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                for (int z = -radius; z <= radius; z++) {
+                    BlockPos pos = centre.add(x, y, z);
+
+                    String name = owner(pos);
+                    if (name == null) continue;
+
+                    BlockPos corner = placed.get(name);
+                    BlockPos offset = new BlockPos(pos.getX() - corner.getX(),
+                            pos.getY() - corner.getY(), pos.getZ() - corner.getZ());
+
+                    if (!builds.get(name).cuts.remove(offset)) continue;
+                    back.computeIfAbsent(name, key -> new HashSet<>()).add(offset);
+                }
+            }
+        }
+        return refill(back);
+    }
+
+    /** Fills every hole in a build back in. */
+    public static int uncutAll(String name) {
+        Build build = builds.get(name);
+        if (build == null || build.cuts.isEmpty()) return 0;
+
+        Map<String, Set<BlockPos>> back = new LinkedHashMap<>();
+        back.put(name, new HashSet<>(build.cuts));
+        build.cuts.clear();
+        return refill(back);
+    }
+
+    /**
+     * Puts uncut positions back on the board.
+     *
+     * <p>One pass over the build rather than standing the whole thing up again, which would
+     * take everything down and repaint it over several seconds for the sake of a few blocks.
+     */
+    private static int refill(Map<String, Set<BlockPos>> back) {
+        int filled = 0;
+
+        for (Map.Entry<String, Set<BlockPos>> entry : back.entrySet()) {
+            Build build = builds.get(entry.getKey());
+            BlockPos corner = placed.get(entry.getKey());
+            if (build == null || corner == null) continue;
+
+            for (int i = 0; i < build.blocks.length; i += 4) {
+                BlockPos offset = new BlockPos(build.blocks[i], build.blocks[i + 1],
+                        build.blocks[i + 2]);
+                if (!entry.getValue().contains(offset)) continue;
+
+                showing.put(new BlockPos(corner.getX() + offset.getX(),
+                                corner.getY() + offset.getY(), corner.getZ() + offset.getZ()),
+                        build.palette.get(build.blocks[i + 3]));
+                filled++;
+            }
+        }
+
+        if (filled > 0) reindex();
+        return filled;
+    }
+
+    /** @return how many holes are cut in a standing build, or -1 if it is not standing. */
+    public static int cutCount(String name) {
+        Build build = builds.get(name);
+        return build == null ? -1 : build.cuts.size();
+    }
+
+    /** The build covering a spot, for telling someone what they just cut into. */
+    public static String buildAt(BlockPos pos) {
+        return owner(pos);
     }
 
     private static void reindex() {
@@ -453,6 +605,16 @@ public final class FakeBlocks {
             // object churn of an array costs more than the file does.
             json.addProperty("packed", pack(build.blocks));
 
+            if (!build.cuts.isEmpty()) {
+                JsonArray cuts = new JsonArray();
+                for (BlockPos cut : build.cuts) {
+                    cuts.add(cut.getX());
+                    cuts.add(cut.getY());
+                    cuts.add(cut.getZ());
+                }
+                json.add("cuts", cuts);
+            }
+
             BlockPos corner = placed.get(build.name);
             if (corner != null) {
                 json.addProperty("at", corner.getX() + "," + corner.getY() + "," + corner.getZ());
@@ -490,6 +652,13 @@ public final class FakeBlocks {
                     json.has("width") ? json.get("width").getAsInt() : 0,
                     json.has("height") ? json.get("height").getAsInt() : 0,
                     json.has("depth") ? json.get("depth").getAsInt() : 0);
+            if (json.has("cuts")) {
+                JsonArray cuts = json.getAsJsonArray("cuts");
+                for (int i = 0; i + 2 < cuts.size(); i += 3) {
+                    build.cuts.add(new BlockPos(cuts.get(i).getAsInt(),
+                            cuts.get(i + 1).getAsInt(), cuts.get(i + 2).getAsInt()));
+                }
+            }
             builds.put(build.name, build);
 
             // Where it stood is remembered, but it is stood up again by the sweep rather

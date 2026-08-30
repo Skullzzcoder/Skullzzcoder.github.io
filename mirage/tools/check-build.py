@@ -111,6 +111,33 @@ check("hiding keeps the placements", "placed.clear()" not in hide and "showing.c
 check("leaving a world drops the shadows", "real.clear()" in
       re.search(r"public static void reset\(\) \{(.*?)\n    \}", blocks, re.S).group(1))
 
+# A hole cut for a real machine has to survive standing the build up again, and has to
+# put the world back where it was rather than just stop painting.
+cut = re.search(r"public static int cut\(BlockPos centre, int radius\) \{(.*?)\n    \}",
+                blocks, re.S).group(1)
+check("cutting puts the real block back", "restore(world, pos)" in cut)
+check("cutting drops it from the board", "showing.remove(pos)" in cut)
+check("a hole is held against the build", "cuts.add(offset)" in cut)
+check("holes are relative to the corner", "pos.getX() - corner.getX()" in cut)
+
+put = re.search(r"public static int put\(String name, BlockPos corner\) \{(.*?)\n    \}",
+                blocks, re.S).group(1)
+check("standing it up again keeps the holes", "cuts.contains" in put)
+check("holes are written", 'json.add("cuts", cuts)' in blocks)
+check("holes are read back", 'getAsJsonArray("cuts")' in blocks)
+
+# filling one back in must not take the whole build down and repaint it
+refill = re.search(r"private static int refill\(.*?\n    \}", blocks, re.S).group(0)
+# "showing.put" is the board; a bare put()/take() would be restanding the whole build
+bare = re.sub(r"showing\.put\(", "", refill)
+check("filling a hole does not restand the build",
+      re.search(r"\b(put|take)\(", bare) is None)
+check("filling a hole puts it back on the board", "showing.put(" in refill)
+
+MAXCUT = int(re.search(r"MAX_CUT_RADIUS = (\d+)", blocks).group(1))
+check("the cut radius is bounded", 0 < MAXCUT <= 8)
+check("the command bounds it too", "MAX_CUT_RADIUS" in client)
+
 check("builds are ticked", "FakeBlocks.tick(client)" in client)
 check("builds are loaded at startup", "FakeBlocks.load()" in client)
 check("a build is capped", 0 < MAX <= 1000000 and "MAX_BLOCKS" in client)

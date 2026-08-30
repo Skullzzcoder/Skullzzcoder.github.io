@@ -388,6 +388,11 @@ and its world is untouched.
     (look at where the low corner should go)
     /fake build put casino
 
+    /fake build cut             (open up the block you are looking at)
+    /fake build cut 2           (open a 5x5x5 around it)
+    /fake build uncut [radius]  (fill it back in)
+    /fake build uncutall casino (fill every hole in)
+
     /fake build take casino     (down, real blocks back)
     /fake build takeall
     /fake build list
@@ -415,6 +420,22 @@ coordinates only for `save` — `put` places it wherever you are looking.
 
 Copy from a creative single-player world, a plot, or anything already standing
 on the server — then put it wherever you like.
+
+### Making room for real machines
+
+`B`, or `/fake build cut`, opens up the fake block you are looking at: the real
+world comes back there and you can place a dispenser, a chest, a sign — whatever
+has to genuinely be there. `/fake build cut <radius>` opens a cube around it, up
+to radius 5.
+
+Holes are **held against the build**, not the world, so they survive taking it
+down and standing it up again, and they are still there next session. The rest
+of the place looks exactly as it did.
+
+`/fake build uncut` fills one back in, `/fake build uncutall <name>` all of them.
+
+The usual order is: stand the build up, cut a hole where each machine goes, place
+the real dispenser or dropper, then `/fake dispenser watch` it as normal.
 
 ### Standing on it — place a real floor
 
@@ -474,6 +495,7 @@ Client-only decoration for your base.
 | `H` | refill the dispenser you are looking at |
 | `K` | clear every fake out of your inventory |
 | `N` | turn everything off / back on |
+| `B` | open up the fake block you are looking at |
 | `Z` / `X` | paper game: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |
