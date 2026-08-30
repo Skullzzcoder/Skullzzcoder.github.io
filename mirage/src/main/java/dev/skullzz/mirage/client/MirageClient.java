@@ -456,8 +456,14 @@ public class MirageClient implements ClientModInitializer {
             return feedback(context, "Corner 1 at " + pos.getX() + " " + pos.getY() + " "
                     + pos.getZ() + ". Now look at the opposite corner and run it again.");
         }
-        return feedback(context, "Corner 2 set, " + FakeBlocks.regionSize()
-                + " blocks in the box. /fake build save <name>");
+        long size = FakeBlocks.regionSize();
+        if (size > FakeBlocks.MAX_BLOCKS) {
+            return feedback(context, "Corner 2 set, but that box is " + size + " positions, "
+                    + "over the " + FakeBlocks.MAX_BLOCKS + " limit. Air is not carried, so "
+                    + "saving it may still fit; if not, take it in pieces.");
+        }
+        return feedback(context, "Corner 2 set, " + size
+                + " positions in the box. /fake build save <name>");
     }
 
     private static int buildSave(CommandContext<FabricClientCommandSource> context) {

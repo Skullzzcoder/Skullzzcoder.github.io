@@ -394,8 +394,24 @@ and its world is untouched.
     /fake build forget casino   (delete it)
 
 Builds live in `config/mirage-builds.json`, written only when one changes.
-Up to 30,000 blocks each. Air is skipped, so only what is really built is
-carried, and the corner is measured from the lowest of the three axes.
+Air is skipped, so only what is really built is carried, and the corner is
+measured from the lowest of the three axes.
+
+**Up to 500,000 blocks each**, which is a whole base rather than a booth:
+
+| blocks | file | memory | full repaint |
+|---|---|---|---|
+| 30,000 | 0.6 MB | ~2 MB | 3.0 s |
+| 120,000 | 2.6 MB | ~9 MB | 3.0 s |
+| 500,000 | 10.7 MB | ~40 MB | 4.2 s |
+
+The repaint is a rolling sweep sized to the build, so a bigger one costs a
+little more each tick rather than taking proportionally longer to catch up.
+Only blocks in loaded chunks are painted, so a large build fills in as you
+approach rather than all at once.
+
+If you copy from a single-player world, note the two worlds need the same
+coordinates only for `save` — `put` places it wherever you are looking.
 
 Copy from a creative single-player world, a plot, or anything already standing
 on the server — then put it wherever you like.

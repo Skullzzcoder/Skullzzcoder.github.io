@@ -9,6 +9,9 @@ SIDE  = int(re.search(r"CLEAR_SIDE = (\d+)", blocks).group(1))
 BELOW = int(re.search(r"CLEAR_BELOW = (\d+)", blocks).group(1))
 ABOVE = int(re.search(r"CLEAR_ABOVE = (\d+)", blocks).group(1))
 MAX   = int(re.search(r"MAX_BLOCKS = (\d+)", blocks).group(1))
+TICKS = int(re.search(r"SWEEP_TICKS = (\d+)", blocks).group(1))
+MIN_S = int(re.search(r"MIN_SLICE = (\d+)", blocks).group(1))
+MAX_S = int(re.search(r"MAX_SLICE = (\d+)", blocks).group(1))
 
 fails = []
 def check(name, cond):
@@ -45,7 +48,31 @@ for px in (0.0, 0.5, -0.3, 12.9, -7.5):
 tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n    \}", blocks, re.S).group(1)
 check("the sweep puts a too-close block back", "tooClose(player, pos)" in tick and "restore(world, pos)" in tick)
 check("the sweep skips unloaded chunks", "isChunkLoaded" in tick)
-check("the sweep is sliced", "SWEEP_PER_TICK" in tick)
+check("the sweep is sliced", "MAX_SLICE" in tick and "MIN_SLICE" in tick)
+
+# The slice scales with the build, so a bigger one is still painted in about the same time
+# rather than taking proportionally longer to catch up after the server corrects it.
+def slice_for(n):
+    return min(n, max(MIN_S, min(MAX_S, n // TICKS)))
+
+for n in (2000, 30000, 120000, MAX):
+    passes = -(-n // slice_for(n))
+    check("a %d block build sweeps within 6s" % n, passes / 20.0 <= 6.0)
+    check("a %d block build does not sweep in one tick" % n, slice_for(n) <= MAX_S)
+check("a small build sweeps almost at once", -(-500 // slice_for(500)) <= 2)
+
+# The block list is stored as one string: a few million JsonPrimitives cost far more in
+# objects than the file ever does in bytes.
+check("blocks are packed into one value", 'addProperty("packed"' in blocks)
+check("older files still load", '"blocks"' in blocks and "readLoose" in blocks)
+check("packing is base64 of the raw ints", "Base64.getEncoder" in blocks
+      and "asIntBuffer" in blocks)
+
+# and the capture has to stop at the cap across all three loops, not just the innermost
+save = re.search(r"public static Build save\(ClientWorld world, String name\) \{(.*?)\n    \}",
+                 blocks, re.S).group(1)
+check("the cap breaks out of the whole capture", "break capture;" in save)
+check("the box is measured in long arithmetic", "public static long regionSize()" in blocks)
 
 # the real state must be taken once and given back
 paint = re.search(r"private static void paint\(.*?\n    \}", blocks, re.S).group(0)
@@ -66,9 +93,12 @@ check("leaving a world drops the shadows", "real.clear()" in
 
 check("builds are ticked", "FakeBlocks.tick(client)" in client)
 check("builds are loaded at startup", "FakeBlocks.load()" in client)
-check("a build is capped", MAX <= 100000 and "MAX_BLOCKS" in client)
+check("a build is capped", 0 < MAX <= 1000000 and "MAX_BLOCKS" in client)
+# 16 bytes a block before base64, so the file stays somewhere sane at the cap
+check("the file stays manageable at the cap", MAX * 16 * 4 / 3 < 20e6)
 
 print("FAILED: " + "; ".join(dict.fromkeys(fails)) if fails else
       "clearance %d wide, %d below, %d above keeps the player off every fake block; "
-      "real states restored on take, hide and world change" % (SIDE, BELOW, ABOVE))
+      "cap %d, full sweep %.1fs at the cap, real states restored on take and hide"
+      % (SIDE, BELOW, ABOVE, MAX, -(-MAX // slice_for(MAX)) / 20.0))
 sys.exit(1 if fails else 0)

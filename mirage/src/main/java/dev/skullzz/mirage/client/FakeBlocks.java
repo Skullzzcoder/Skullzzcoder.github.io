@@ -1,8 +1,10 @@
 package dev.skullzz.mirage.client;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -45,10 +47,22 @@ import dev.skullzz.mirage.Mirage;
  * build away puts back what was underneath rather than a guess at it.
  */
 public final class FakeBlocks {
-    /** As many blocks as one build may hold, which is plenty for a gambling front. */
-    public static final int MAX_BLOCKS = 30000;
-    /** Positions re-checked per tick, so a large build costs a slice rather than a spike. */
-    private static final int SWEEP_PER_TICK = 800;
+    /** As many blocks as one build may hold. A whole base fits well inside this. */
+    public static final int MAX_BLOCKS = 500000;
+    /** Above this, saving says how big it got, since it is enough to be worth knowing. */
+    public static final int LARGE_BLOCKS = 120000;
+
+    /**
+     * How long a full sweep of a build takes, in ticks.
+     *
+     * <p>Positions are re-checked a slice at a time so that a large build costs a little
+     * every tick rather than everything at once. Fixing the time rather than the slice means
+     * a build twice the size is still fully painted just as quickly, and the first paint --
+     * the only pass where most positions actually change -- is spread over the same window.
+     */
+    private static final int SWEEP_TICKS = 60;
+    private static final int MIN_SLICE = 400;
+    private static final int MAX_SLICE = 6000;
 
     /** How far around the player fakes are held back, so nothing is ever collided with. */
     private static final int CLEAR_SIDE = 1;
@@ -119,12 +133,13 @@ public final class FakeBlocks {
         return cornerOne != null && cornerTwo != null;
     }
 
-    public static int regionSize() {
-        if (!hasRegion()) return 0;
+    /** @return how many positions the box covers, in long arithmetic so it cannot wrap. */
+    public static long regionSize() {
+        if (!hasRegion()) return 0L;
 
-        int width = Math.abs(cornerOne.getX() - cornerTwo.getX()) + 1;
-        int height = Math.abs(cornerOne.getY() - cornerTwo.getY()) + 1;
-        int depth = Math.abs(cornerOne.getZ() - cornerTwo.getZ()) + 1;
+        long width = Math.abs(cornerOne.getX() - cornerTwo.getX()) + 1L;
+        long height = Math.abs(cornerOne.getY() - cornerTwo.getY()) + 1L;
+        long depth = Math.abs(cornerOne.getZ() - cornerTwo.getZ()) + 1L;
         return width * height * depth;
     }
 
@@ -152,6 +167,7 @@ public final class FakeBlocks {
         Map<BlockState, Integer> index = new HashMap<>();
         List<Integer> packed = new ArrayList<>();
 
+        capture:
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
@@ -172,7 +188,9 @@ public final class FakeBlocks {
                     packed.add(y - minY);
                     packed.add(z - minZ);
                     packed.add(slot);
-                    if (packed.size() / 4 >= MAX_BLOCKS) break;
+                    // Out of all three loops: breaking the inner one only skipped the
+                    // rest of that row and carried on filling past the limit.
+                    if (packed.size() / 4 >= MAX_BLOCKS) break capture;
                 }
             }
         }
@@ -280,7 +298,8 @@ public final class FakeBlocks {
         }
 
         ClientPlayerEntity player = client.player;
-        int slice = Math.min(SWEEP_PER_TICK, order.size());
+        int slice = Math.min(order.size(),
+                Math.max(MIN_SLICE, Math.min(MAX_SLICE, order.size() / SWEEP_TICKS)));
 
         for (int i = 0; i < slice; i++) {
             if (cursor >= order.size()) cursor = 0;
@@ -415,9 +434,9 @@ public final class FakeBlocks {
             }
             json.add("palette", palette);
 
-            JsonArray blocks = new JsonArray();
-            for (int value : build.blocks) blocks.add(value);
-            json.add("blocks", blocks);
+            // One string rather than a few million JsonPrimitives: at this size the
+            // object churn of an array costs more than the file does.
+            json.addProperty("packed", pack(build.blocks));
 
             BlockPos corner = placed.get(build.name);
             if (corner != null) {
@@ -439,7 +458,8 @@ public final class FakeBlocks {
 
         for (JsonElement element : root.getAsJsonArray("builds")) {
             JsonObject json = element.getAsJsonObject();
-            if (!json.has("name") || !json.has("palette") || !json.has("blocks")) continue;
+            if (!json.has("name") || !json.has("palette")) continue;
+            if (!json.has("packed") && !json.has("blocks")) continue;
 
             List<BlockState> palette = new ArrayList<>();
             for (JsonElement entry : json.getAsJsonArray("palette")) {
@@ -447,9 +467,9 @@ public final class FakeBlocks {
                         .result().orElse(Blocks.AIR.getDefaultState()));
             }
 
-            JsonArray packed = json.getAsJsonArray("blocks");
-            int[] blocks = new int[packed.size() - packed.size() % 4];
-            for (int i = 0; i < blocks.length; i++) blocks[i] = packed.get(i).getAsInt();
+            int[] blocks = json.has("packed")
+                    ? unpack(json.get("packed").getAsString())
+                    : readLoose(json.getAsJsonArray("blocks"));
 
             Build build = new Build(json.get("name").getAsString(), palette, blocks,
                     json.has("width") ? json.get("width").getAsInt() : 0,
@@ -469,6 +489,26 @@ public final class FakeBlocks {
         for (Map.Entry<String, BlockPos> entry : new ArrayList<>(placed.entrySet())) {
             put(entry.getKey(), entry.getValue());
         }
+    }
+
+    private static String pack(int[] blocks) {
+        ByteBuffer buffer = ByteBuffer.allocate(blocks.length * 4);
+        buffer.asIntBuffer().put(blocks);
+        return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
+    private static int[] unpack(String text) {
+        byte[] bytes = Base64.getDecoder().decode(text);
+        int[] blocks = new int[bytes.length / 4];
+        ByteBuffer.wrap(bytes).asIntBuffer().get(blocks);
+        return blocks;
+    }
+
+    /** Files written before the packed form, kept readable so nothing has to be recopied. */
+    private static int[] readLoose(JsonArray packed) {
+        int[] blocks = new int[packed.size() - packed.size() % 4];
+        for (int i = 0; i < blocks.length; i++) blocks[i] = packed.get(i).getAsInt();
+        return blocks;
     }
 
     private static BlockPos readPos(String text) {
