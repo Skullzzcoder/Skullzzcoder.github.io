@@ -187,6 +187,32 @@ for i in range(200):
 check("a stale winner no longer draws every round", same == 0)
 
 check("the house does draw when asked", ties[HOUSE] > 0)
+
+# Whether the game is on had to be recorded either way. Writing the block only when it was
+# on made a rig somebody had switched off look identical to one that had never heard of the
+# game, so nothing on the way back in could tell which it was.
+check("the paper block is written whether on or off",
+      'profile.paper || profile.name.equals("paper")' in disp)
+check("on is written explicitly", 'paper.addProperty("on", profile.paper)' in disp)
+check("an older block with no word means on", '!paper.has("on")' in disp)
+check("the file having spoken is remembered", "paperKnown" in disp)
+
+# The old test for turning it on also demanded the rig hold no presets, so a couple of items
+# added to it by accident left the game off and the machines laying out coins, not slips.
+seed = re.search(r"private static void seedDefaults\(\) \{(.*?)\n    \}", disp, re.S).group(1)
+check("turning it on does not depend on presets", "paper.presets.isEmpty()" not in seed)
+check("turning it on defers to the file", "!paperKnown" in seed)
+
+repair = re.search(r"private static void repair\(RigProfile profile\) \{(.*?)\n    \}",
+                   disp, re.S).group(1)
+# Inside the paper branch specifically: repair also collapses duplicate presets for the
+# coin flip, so looking at the whole method would match that instead.
+paper_branch = re.search(r"if \(profile\.paper\) \{(.*?)\n        \}", repair, re.S).group(1)
+check("a paper rig carries no presets", "profile.presets.clear()" in paper_branch)
+
+fill = re.search(r"public static boolean fill\(BlockPos pos\) \{(.*?)\n    \}", disp, re.S).group(1)
+check("paper is laid out before any preset fallback",
+      fill.index("profile.paper") < fill.index("profile.presets"))
 check("the player never draws at all", ties[SIDES[0] if HOUSE == SIDES[1] else SIDES[1]] == 0)
 
 # a house of nobody means the machines never agree

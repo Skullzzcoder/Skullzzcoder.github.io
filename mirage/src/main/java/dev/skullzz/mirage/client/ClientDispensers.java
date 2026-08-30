@@ -1165,8 +1165,12 @@ public final class ClientDispensers {
                         + profile.arrowTarget.y + "," + profile.arrowTarget.z);
             }
 
-            if (profile.paper) {
+            // Written whether it is on or off. Writing it only when on made a rig that
+            // had been turned off look identical to one that had never heard of the game,
+            // and there is no way to tell those apart on the way back in.
+            if (profile.paper || profile.name.equals("paper")) {
                 JsonObject paper = new JsonObject();
+                paper.addProperty("on", profile.paper);
                 paper.addProperty("winner", profile.winner);
                 paper.addProperty("item", profile.slipItem);
                 paper.addProperty("numbers", profile.numbers);
@@ -1203,6 +1207,7 @@ public final class ClientDispensers {
         lastPowered.clear();
         lastFire.clear();
         profiles.clear();
+        paperKnown = false;
         activeName = "";
 
         if (root.has("watchedDispensers")) {
@@ -1268,8 +1273,11 @@ public final class ClientDispensers {
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
         if (json.has("paper")) {
+            if (profile.name.equals("paper")) paperKnown = true;
             JsonObject paper = json.getAsJsonObject("paper");
-            profile.paper = true;
+            // Older files only wrote this block when the game was on, so a block with no
+            // word either way means on.
+            profile.paper = !paper.has("on") || paper.get("on").getAsBoolean();
             if (paper.has("winner")) profile.winner = paper.get("winner").getAsString();
             if (paper.has("item")) profile.slipItem = paper.get("item").getAsString();
             if (paper.has("numbers")) profile.numbers = paper.get("numbers").getAsInt();
@@ -1333,6 +1341,9 @@ public final class ClientDispensers {
      * rig existed has no trace of it, and the rig silently missing looks exactly like the
      * feature being broken. Rigs already in the file are left completely alone.
      */
+    /** Whether the file said either way about the paper rig, rather than staying silent. */
+    private static boolean paperKnown;
+
     private static void seedDefaults() {
         if (needsSeeding("5050")) {
             RigProfile coinFlip = new RigProfile("5050");
@@ -1350,10 +1361,12 @@ public final class ClientDispensers {
             paper.paper = true;
             profiles.put(paper.name, paper);
         } else {
-            // A file written before the paper game existed holds a rig with the name but
-            // not the mode, which lays out nothing and looks like the game being broken.
+            // A file written before the paper game existed holds the rig's name and nothing
+            // that says whether the game is on, so it gets turned on. The old test also
+            // asked that the rig carry no presets, which meant a couple of items added to
+            // it by accident quietly left it laying out coins instead of slips.
             RigProfile paper = profiles.get("paper");
-            if (!paper.roulette && paper.presets.isEmpty()) paper.paper = true;
+            if (!paper.roulette && !paperKnown) paper.paper = true;
         }
         if (needsSeeding("roulette")) {
             // Set up for the usual arrangement: eight obsidian round one crystal, and the
@@ -1415,6 +1428,10 @@ public final class ClientDispensers {
         if (profile.paper) {
             if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
             profile.tieChance = Math.max(0, Math.min(100, profile.tieChance));
+            // Presets belong to the coin-flip shape and mean nothing here. Dropping them
+            // stops the switch keys cycling through items this game never fires.
+            profile.presets.clear();
+            profile.setPresetIndex(-1);
             // A winner nobody answers to leaves every round a draw, so drop it back to
             // chance -- but only where there are sides to check it against, since none are
             // known until the machines have been laid out.
