@@ -180,6 +180,7 @@ Three come built in, and are put back if a config file is missing them:
 | `5050` | coin flip — gold block / diamond block |
 | `paper` | the named-paper game |
 | `roulette` | the crystal game |
+| `tower` | the five-floor shulker box climb |
 
 `\` cycles to the next rig without opening anything.
 
@@ -282,6 +283,54 @@ Changing the slips:
 
 Lay the dispensers out again after either of the first two — the slips are
 named for the setup they were made with.
+
+---
+
+## 5c. The tower
+
+Five machines, one per floor, each holding **two white and two black shulker
+boxes**. The player calls a colour before each floor and climbs while they are
+right, with the multiplier going up as they go.
+
+    /fake rig use tower
+    (look at floor 1) /fake dispenser watch
+    ... and so on up to floor 5
+
+Floors are handed out in the order you watch them. Got one wrong? Look at it and
+run `/fake rig tower floor 3`.
+
+### Playing it
+
+The **call is the only thing you have to enter**. What a floor fires is their own
+answer given back to them, or the other colour when the run ends.
+
+| key | means |
+|---|---|
+| `[` | they called **white** |
+| `]` | they called **black** |
+| `;` | **this next floor ends the run** |
+
+So a normal floor is one keypress: they say white, you press `[`, the machine
+fires white and they climb. When you want the run over, press `;` first and the
+machine fires the other colour instead.
+
+Arming beats everything and is spent by the floor it lands on, so you can end a
+run at any point without changing the setup.
+
+### Ending it on a set floor instead
+
+    /fake rig tower ends 4        (every run ends on floor 4)
+    /fake rig tower ends armed    (only when you arm it — the default)
+
+### Other settings
+
+    /fake rig tower floors 5
+    /fake rig tower colours white_shulker_box black_shulker_box
+    /fake rig tower call white     (same as the keys, if you prefer typing)
+    /fake rig tower on | off
+
+`/fake dispenser status` prints the floor of each machine, what they last
+called, and where the run ends.
 
 ---
 
@@ -496,6 +545,7 @@ Client-only decoration for your base.
 | `K` | clear every fake out of your inventory |
 | `N` | turn everything off / back on |
 | `B` | open up the fake block you are looking at |
+| `[` / `]` | tower: they called the first / second colour |
 | `Z` / `X` | paper game: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |

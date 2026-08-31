@@ -67,6 +67,30 @@ public final class RigProfile {
     public long roundTick = Long.MIN_VALUE;
 
     /**
+     * Tower mode: a row of machines, one per floor, each holding two of each colour.
+     *
+     * <p>The player calls a colour before each floor and climbs while they are right, so
+     * what a machine should fire is not a fixed answer but the answer to their call: the
+     * colour they said to let them through, the other one to end the run.
+     */
+    public boolean tower;
+    /** How many machines make a run. */
+    public int floors = 5;
+    /** Which floor of the tower each machine is, in the order they were watched. */
+    public final Map<BlockPos, Integer> towerFloors = new LinkedHashMap<>();
+    /** The two colours in play. */
+    public String towerA = "white_shulker_box";
+    public String towerB = "black_shulker_box";
+    /** How many of each colour a machine appears to hold. */
+    public int towerEach = 2;
+    /** What the player just called, so the machine knows which answer is theirs. */
+    public String call = "";
+    /** The floor a run always ends on, or zero to leave it to the arm key. */
+    public int bustAt;
+    /** Set by arming: the next floor to fire ends the run, whatever floor it is. */
+    public boolean bustNext;
+
+    /**
      * Roulette mode: instead of one answer, the dispenser cycles through a fixed number of
      * shots and the loaded one lands on a chosen position in that cycle.
      */
@@ -152,6 +176,67 @@ public final class RigProfile {
         this.chambers = Math.max(1, Math.min(this.chambers, 64));
         this.bulletAt = Math.max(1, Math.min(this.bulletAt, this.chambers));
         if (this.shot > this.chambers) this.shot = 0;
+    }
+
+    // ------------------------------------------------------------------- tower
+
+    /**
+     * Which floor a machine is, giving it the next one if it has none.
+     *
+     * <p>Floors go out in the order the machines are watched, and only as many as the run
+     * has. Watched dispensers are shared by every rig, so anything past the last floor is
+     * one of the other games' and is left out rather than made into a sixth floor.
+     *
+     * @return the floor, or zero for a machine that is not in this game.
+     */
+    public int floorAt(BlockPos pos, Set<BlockPos> live) {
+        Integer floor = this.towerFloors.get(pos);
+        if (floor != null) return floor;
+
+        Set<Integer> taken = new LinkedHashSet<>();
+        for (Map.Entry<BlockPos, Integer> entry : this.towerFloors.entrySet()) {
+            if (live.contains(entry.getKey())) taken.add(entry.getValue());
+        }
+
+        for (int candidate = 1; candidate <= this.floors; candidate++) {
+            if (taken.contains(candidate)) continue;
+            this.towerFloors.put(pos.toImmutable(), candidate);
+            return candidate;
+        }
+        return 0;
+    }
+
+    public void setFloor(BlockPos pos, int floor) {
+        this.towerFloors.put(pos.toImmutable(), floor);
+    }
+
+    /** Forgets floors belonging to machines that are no longer watched. */
+    public void pruneFloors(Set<BlockPos> live) {
+        this.towerFloors.keySet().retainAll(live);
+    }
+
+    /** The colour that is not the one named, so a wrong call has something to be. */
+    public String otherColour(String colour) {
+        return colour.equalsIgnoreCase(this.towerA) ? this.towerB : this.towerA;
+    }
+
+    /** What the player called, falling back to the first colour if they said nothing. */
+    public String called() {
+        return this.call.isEmpty() ? this.towerA : this.call;
+    }
+
+    /**
+     * Whether the run ends on a floor.
+     *
+     * <p>Arming beats the counted floor and is spent by the floor it lands on, so a run can
+     * be ended by hand at any point without disturbing where it was set to end.
+     */
+    public boolean bustsOn(int floor) {
+        if (this.bustNext) {
+            this.bustNext = false;
+            return true;
+        }
+        return this.bustAt > 0 && floor == this.bustAt;
     }
 
     // ------------------------------------------------------------------- paper
@@ -290,7 +375,7 @@ public final class RigProfile {
 
     public boolean isEmpty() {
         return this.presets.isEmpty() && this.perDispenser.isEmpty()
-                && this.arrowTarget == null && !this.roulette && !this.paper
+                && this.arrowTarget == null && !this.roulette && !this.paper && !this.tower
                 && this.stock.isEmpty();
     }
 }

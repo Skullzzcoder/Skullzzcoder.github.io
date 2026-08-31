@@ -1,6 +1,7 @@
 package dev.skullzz.mirage.client;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -54,6 +55,8 @@ public class MirageClient implements ClientModInitializer {
     private static KeyBinding winSecond;
     private static KeyBinding power;
     private static KeyBinding cutBlock;
+    private static KeyBinding callFirst;
+    private static KeyBinding callSecond;
 
     @Override
     public void onInitializeClient() {
@@ -169,6 +172,8 @@ public class MirageClient implements ClientModInitializer {
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
+            while (callFirst.wasPressed()) takeCall(client, true);
+            while (callSecond.wasPressed()) takeCall(client, false);
             while (cycleWinner.wasPressed()) stepWinner(client);
             while (winFirst.wasPressed()) setWinner(client, 0);
             while (winSecond.wasPressed()) setWinner(client, 1);
@@ -235,6 +240,12 @@ public class MirageClient implements ClientModInitializer {
         cutBlock = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cut_block", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_B, category));
+        callFirst = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.call_first", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_LEFT_BRACKET, category));
+        callSecond = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage.call_second", InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_RIGHT_BRACKET, category));
         cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_BACKSLASH, category));
@@ -632,6 +643,7 @@ public class MirageClient implements ClientModInitializer {
                     return feedback(context, "Chamber count back to zero.");
                 }))
                 .then(paperBranch())
+                .then(towerBranch())
                 .then(rouletteBranch())
                 .then(ClientCommandManager.literal("set")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
@@ -642,6 +654,93 @@ public class MirageClient implements ClientModInitializer {
                                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
                                                 .executes(context -> setDispenserResult(context,
                                                         IntegerArgumentType.getInteger(context, "count")))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> towerBranch() {
+        return ClientCommandManager.literal("tower")
+                .then(ClientCommandManager.literal("on").executes(context -> {
+                    ClientDispensers.active().tower = true;
+                    SelfFakes.save();
+                    return feedback(context, "Tower on. Watch the machines in floor order, "
+                            + "then /fake dispenser fill each one.");
+                }))
+                .then(ClientCommandManager.literal("off").executes(context -> {
+                    ClientDispensers.active().tower = false;
+                    SelfFakes.save();
+                    return feedback(context, "Tower off for this rig.");
+                }))
+                .then(ClientCommandManager.literal("floors")
+                        .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 9))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.floors = IntegerArgumentType.getInteger(context, "count");
+                                    if (profile.bustAt > profile.floors) profile.bustAt = 0;
+                                    SelfFakes.save();
+                                    return feedback(context, "A run is " + profile.floors
+                                            + " floors.");
+                                })))
+                .then(ClientCommandManager.literal("floor")
+                        .then(ClientCommandManager.argument("number", IntegerArgumentType.integer(1, 9))
+                                .executes(MirageClient::setTowerFloor)))
+                .then(ClientCommandManager.literal("colours")
+                        .then(ClientCommandManager.argument("first", StringArgumentType.word())
+                                .then(ClientCommandManager.argument("second", StringArgumentType.word())
+                                        .executes(MirageClient::setTowerColours))))
+                .then(ClientCommandManager.literal("call")
+                        .then(ClientCommandManager.argument("colour", StringArgumentType.word())
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    String colour = StringArgumentType
+                                            .getString(context, "colour").toLowerCase(Locale.ROOT);
+                                    String full = colour.contains("_") ? colour
+                                            : colour + "_shulker_box";
+                                    ClientDispensers.call(full);
+                                    return feedback(context, "They called " + full + ". Floors "
+                                            + "fire that back until the run is ended.");
+                                })))
+                .then(ClientCommandManager.literal("ends")
+                        .then(ClientCommandManager.literal("armed").executes(context -> {
+                            ClientDispensers.active().bustAt = 0;
+                            SelfFakes.save();
+                            return feedback(context, "A run ends only when you arm it.");
+                        }))
+                        .then(ClientCommandManager.argument("floor", IntegerArgumentType.integer(1, 9))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.bustAt = IntegerArgumentType.getInteger(context, "floor");
+                                    SelfFakes.save();
+                                    return feedback(context, "Every run ends on floor "
+                                            + profile.bustAt + ".");
+                                })));
+    }
+
+    private static int setTowerFloor(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(64.0);
+        if (hit == null) return error(context, "Look at the machine you are numbering.");
+
+        RigProfile profile = ClientDispensers.active();
+        int floor = IntegerArgumentType.getInteger(context, "number");
+        profile.setFloor(hit.getBlockPos(), floor);
+
+        ClientDispensers.fill(hit.getBlockPos());
+        SelfFakes.save();
+        return feedback(context, "That machine is floor " + floor + ".");
+    }
+
+    private static int setTowerColours(CommandContext<FabricClientCommandSource> context) {
+        RigProfile profile = ClientDispensers.active();
+        profile.towerA = StringArgumentType.getString(context, "first");
+        profile.towerB = StringArgumentType.getString(context, "second");
+
+        if (SelfFakes.lookupItem(profile.towerA) == null
+                || SelfFakes.lookupItem(profile.towerB) == null) {
+            return error(context, "One of those is not an item.");
+        }
+
+        ClientDispensers.refillWatched();
+        SelfFakes.save();
+        return feedback(context, "Floors now hold " + profile.towerA + " and "
+                + profile.towerB + ".");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> paperBranch() {
@@ -1098,6 +1197,26 @@ public class MirageClient implements ClientModInitializer {
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
     }
 
+    /**
+     * Takes the player's call for the floor they are about to play.
+     *
+     * <p>Silent like the other switches. The call is the whole input this game needs: what a
+     * floor fires is their own answer, or the other colour when the run is ended.
+     */
+    private static void takeCall(MinecraftClient client, boolean first) {
+        RigProfile profile = ClientDispensers.active();
+        if (!profile.tower) {
+            say(client, "Rig '" + profile.name + "' is not the tower.");
+            return;
+        }
+
+        String colour = ClientDispensers.call(first ? profile.towerA : profile.towerB);
+        if (!SelfFakes.announceSwitching() || client.player == null) return;
+
+        client.player.sendMessage(Text.literal("called " + colour)
+                .formatted(Formatting.GRAY), true);
+    }
+
     /** Opens up the one block being looked at, for punching holes as you go. */
     private static void cutLookedAt(MinecraftClient client) {
         BlockHitResult hit = lookedAt(128.0);
@@ -1143,7 +1262,7 @@ public class MirageClient implements ClientModInitializer {
     private static boolean drainKeys() {
         KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
                 clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu,
-                cutBlock };
+                cutBlock, callFirst, callSecond };
 
         boolean pressed = false;
         for (KeyBinding key : rest) {

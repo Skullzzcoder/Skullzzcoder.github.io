@@ -12,5 +12,7 @@
   "key.mirage.win_first": "Paper game: first side wins",
   "key.mirage.win_second": "Paper game: second side wins",
   "key.mirage.power": "Turn everything off / on",
-  "key.mirage.cut_block": "Open up a fake block"
+  "key.mirage.cut_block": "Open up a fake block",
+  "key.mirage.call_first": "Tower: they called the first colour",
+  "key.mirage.call_second": "Tower: they called the second colour"
 }

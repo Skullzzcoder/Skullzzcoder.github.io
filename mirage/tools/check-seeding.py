@@ -13,7 +13,8 @@ needs = re.search(r"private static boolean needsSeeding\(String name\) \{(.*?)\n
 
 # every built-in rig must go through needsSeeding, not a bare containsKey
 built_in = re.findall(r'needsSeeding\("(\w+)"\)', seed)
-check("all three built-ins are seeded", sorted(built_in) == ["5050", "paper", "roulette"])
+check("every built-in is seeded",
+      sorted(built_in) == ["5050", "paper", "roulette", "tower"])
 check("no bare containsKey left in seeding", 'containsKey("' not in seed)
 check("needsSeeding treats an empty rig as missing", "isEmpty()" in needs)
 
@@ -26,11 +27,14 @@ for field in STATE:
 # any future mode flag must be added to isEmpty too
 modes = re.findall(r"^    public boolean (\w+);", rig, re.M)
 for mode in modes:
-    check("mode '%s' is missing from isEmpty" % mode, mode in empty or mode in ("armed", "manualTrigger"))
+    # armed and bustNext are what the arm key sets for the next shot, and manualTrigger is
+    # how a rig is armed rather than counted: none of them says a rig has been set up.
+    transient = ("armed", "manualTrigger", "bustNext")
+    check("mode '%s' is missing from isEmpty" % mode, mode in empty or mode in transient)
 
 # the paper rig specifically has to be upgraded in place, since a user may have set one up
 check("an existing paper rig gets the mode turned on", "paper.paper = true;" in seed)
 
 print("FAILED: " + "; ".join(fails) if fails else
-      "built-ins %s reseed when empty; isEmpty covers %s" % (built_in, modes))
+      "built-ins %s reseed when empty; isEmpty covers %s" % (sorted(built_in), modes))
 sys.exit(1 if fails else 0)

@@ -232,15 +232,24 @@ public final class ClientDispensers {
 
     /** Makes the next shot from this rig the loaded one. */
     public static void armNext() {
-        active().armed = true;
+        RigProfile profile = active();
+        // The same key on either game: the next one is the one that goes badly for them.
+        if (profile.tower) {
+            profile.bustNext = true;
+        } else {
+            profile.armed = true;
+        }
     }
 
     public static boolean isArmed() {
-        return active().armed;
+        RigProfile profile = active();
+        return profile.tower ? profile.bustNext : profile.armed;
     }
 
     public static void disarm() {
-        active().armed = false;
+        RigProfile profile = active();
+        profile.bustNext = false;
+        profile.armed = false;
     }
 
     // Convenience over the active rig, so callers that only care about "the current game"
@@ -331,9 +340,12 @@ public final class ClientDispensers {
 
     public static boolean unwatch(BlockPos pos) {
         active().stock.remove(pos);
-        // Across every rig, not just this one: a name left behind by a machine no longer in
-        // play would keep the next one out of the game.
-        for (RigProfile profile : profiles.values()) profile.sides.remove(pos);
+        // Across every rig, not just this one: a name or a floor left behind by a machine no
+        // longer in play would keep the next one out of the game.
+        for (RigProfile profile : profiles.values()) {
+            profile.sides.remove(pos);
+            profile.towerFloors.remove(pos);
+        }
         lastTriggered.remove(pos);
         lastPowered.remove(pos);
         lastFire.remove(pos);
@@ -402,6 +414,8 @@ public final class ClientDispensers {
                 result = profile.advanceRoulette();
             } else if (profile.paper) {
                 result = paperSlip(profile, fire.pos());
+            } else if (profile.tower) {
+                result = towerBox(profile, fire.pos());
             } else {
                 result = profile.resultFor(fire.pos());
             }
@@ -475,6 +489,36 @@ public final class ClientDispensers {
 
         // Built to match the laid-out slip exactly, so it empties that slot on the way out.
         return new FakeSpec(slip, 1, "", null, null, profile.slipName(number, side));
+    }
+
+    /**
+     * The box a floor fires.
+     *
+     * <p>Which colour wins is whatever the player called, so a floor that lets them climb
+     * fires their own call back at them and one that ends the run fires the other. The
+     * machine they are standing at decides the floor rather than a counter, so firing them
+     * out of order or twice cannot walk the run somewhere it never went.
+     */
+    private static FakeSpec towerBox(RigProfile profile, BlockPos pos) {
+        int floor = profile.floorAt(pos, watched);
+        if (floor == 0) return null;
+
+        String colour = profile.bustsOn(floor)
+                ? profile.otherColour(profile.called())
+                : profile.called();
+
+        Item box = SelfFakes.lookupItem(colour);
+        if (box == null) return null;
+
+        note("floor " + floor + ": called " + profile.called() + ", fired " + colour);
+        return new FakeSpec(box, 1, "");
+    }
+
+    /** Records what the player just called, so the next floor knows their answer. */
+    public static String call(String colour) {
+        active().call = colour;
+        SelfFakes.save();
+        return colour;
     }
 
     /** Steps who the paper game is rigged for, and says who that is now. */
@@ -588,6 +632,18 @@ public final class ClientDispensers {
                 FakeSpec spec = slot == MIDDLE_SLOT ? profile.bullet : profile.blank;
                 // Each slot needs its own copy: they empty one at a time.
                 if (spec != null) slots.put(slot, spec.withCount(1));
+            }
+        } else if (profile.tower) {
+            // Two of each colour, so a machine looks like it could go either way however
+            // many times it has already been played.
+            Item first = SelfFakes.lookupItem(profile.towerA);
+            Item second = SelfFakes.lookupItem(profile.towerB);
+
+            if (profile.floorAt(pos, watched) > 0 && first != null && second != null) {
+                for (int i = 0; i < profile.towerEach; i++) {
+                    slots.put(i, new FakeSpec(first, 1, ""));
+                    slots.put(profile.towerEach + i, new FakeSpec(second, 1, ""));
+                }
             }
         } else if (profile.paper) {
             // One slip per number, all named for the side this machine plays. A machine
@@ -704,10 +760,17 @@ public final class ClientDispensers {
         }
 
         lines.add("Rig '" + profile.name + "'"
+                + (profile.tower ? ", tower" : "")
                 + (profile.paper ? ", paper" : "")
                 + (profile.roulette ? ", roulette" : "")
                 + (profile.roulette && profile.manualTrigger ? ", manual" : "")
                 + (profile.armed ? ", ARMED" : ""));
+        if (profile.tower) {
+            lines.add("  " + profile.floors + " floors, ends on "
+                    + (profile.bustAt > 0 ? "floor " + profile.bustAt : "the armed one")
+                    + (profile.bustNext ? " - ARMED" : "")
+                    + ", they called " + profile.called());
+        }
         if (profile.paper) {
             lines.add("  rigged for: "
                     + (profile.winner.isEmpty() ? "chance" : profile.winner)
@@ -752,6 +815,10 @@ public final class ClientDispensers {
                     if (profile.paper) {
                         String side = profile.sides.get(pos);
                         line.append(side == null ? ", not in this game" : ", plays " + side);
+                    }
+                    if (profile.tower) {
+                        Integer floor = profile.towerFloors.get(pos);
+                        line.append(floor == null ? ", not in this game" : ", floor " + floor);
                     }
                     FakeSpec fixed = profile.perDispenser.get(pos);
                     if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
@@ -1168,6 +1235,23 @@ public final class ClientDispensers {
             // Written whether it is on or off. Writing it only when on made a rig that
             // had been turned off look identical to one that had never heard of the game,
             // and there is no way to tell those apart on the way back in.
+            if (profile.tower) {
+                JsonObject tower = new JsonObject();
+                tower.addProperty("floors", profile.floors);
+                tower.addProperty("a", profile.towerA);
+                tower.addProperty("b", profile.towerB);
+                tower.addProperty("each", profile.towerEach);
+                tower.addProperty("bustAt", profile.bustAt);
+                tower.addProperty("call", profile.call);
+
+                JsonObject floors = new JsonObject();
+                for (Map.Entry<BlockPos, Integer> entry : profile.towerFloors.entrySet()) {
+                    floors.addProperty(writePos(entry.getKey()), entry.getValue());
+                }
+                tower.add("at", floors);
+                json.add("tower", tower);
+            }
+
             if (profile.paper || profile.name.equals("paper")) {
                 JsonObject paper = new JsonObject();
                 paper.addProperty("on", profile.paper);
@@ -1272,6 +1356,27 @@ public final class ClientDispensers {
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
+        if (json.has("tower")) {
+            JsonObject tower = json.getAsJsonObject("tower");
+            profile.tower = true;
+            if (tower.has("floors")) profile.floors = tower.get("floors").getAsInt();
+            if (tower.has("a")) profile.towerA = tower.get("a").getAsString();
+            if (tower.has("b")) profile.towerB = tower.get("b").getAsString();
+            if (tower.has("each")) profile.towerEach = tower.get("each").getAsInt();
+            if (tower.has("bustAt")) profile.bustAt = tower.get("bustAt").getAsInt();
+            if (tower.has("call")) profile.call = tower.get("call").getAsString();
+
+            if (tower.has("at")) {
+                for (Map.Entry<String, JsonElement> entry
+                        : tower.getAsJsonObject("at").entrySet()) {
+                    BlockPos pos = readPos(entry.getKey());
+                    if (pos != null) {
+                        profile.towerFloors.put(pos, entry.getValue().getAsInt());
+                    }
+                }
+            }
+        }
+
         if (json.has("paper")) {
             if (profile.name.equals("paper")) paperKnown = true;
             JsonObject paper = json.getAsJsonObject("paper");
@@ -1368,6 +1473,13 @@ public final class ClientDispensers {
             RigProfile paper = profiles.get("paper");
             if (!paper.roulette && !paperKnown) paper.paper = true;
         }
+        if (needsSeeding("tower")) {
+            // Five machines, two of each colour in every one, and the run ending wherever
+            // it is armed rather than on a floor picked in advance.
+            RigProfile tower = new RigProfile("tower");
+            tower.tower = true;
+            profiles.put(tower.name, tower);
+        }
         if (needsSeeding("roulette")) {
             // Set up for the usual arrangement: eight obsidian round one crystal, and the
             // crystal appears only when you arm it, since turn order is decided as you go.
@@ -1423,6 +1535,23 @@ public final class ClientDispensers {
                 if (obsidian != null) profile.blank = new FakeSpec(obsidian, 1, "");
             }
             profile.tidyRoulette();
+        }
+
+        if (profile.tower) {
+            profile.floors = Math.max(1, Math.min(profile.floors, STOCK_SLOTS));
+            profile.towerEach = Math.max(1, Math.min(profile.towerEach, STOCK_SLOTS / 2));
+            if (profile.bustAt > profile.floors) profile.bustAt = 0;
+
+            if (SelfFakes.lookupItem(profile.towerA) == null) {
+                profile.towerA = "white_shulker_box";
+            }
+            if (SelfFakes.lookupItem(profile.towerB) == null) {
+                profile.towerB = "black_shulker_box";
+            }
+            // A floor held by a machine that is gone keeps the next one out of the run.
+            profile.pruneFloors(watched);
+            profile.presets.clear();
+            profile.setPresetIndex(-1);
         }
 
         if (profile.paper) {
