@@ -79,6 +79,19 @@ public final class FakeBlocks {
     private static final Map<String, BlockPos> placed = new LinkedHashMap<>();
 
     /** What should be showing, and what was really there before it was. */
+    /**
+     * Positions held back only from directly underfoot, rather than from the whole space
+     * around the player.
+     *
+     * <p>A build wants the wider rule so you can walk through your own walls. Something a
+     * machine has just put on the ground wants the opposite: it is meant to be looked at
+     * from a step away, and a hole where it should be defeats the point. Only what could
+     * hold the player up is unsafe -- a full block at their own level cannot be stepped onto
+     * without jumping, and one that merely blocks the way never puts them anywhere the
+     * server disagrees with.
+     */
+    private static final Set<BlockPos> underfootOnly = new HashSet<>();
+
     private static final Map<BlockPos, BlockState> showing = new LinkedHashMap<>();
     private static final Map<BlockPos, BlockState> real = new HashMap<>();
     private static final List<BlockPos> order = new ArrayList<>();
@@ -477,6 +490,7 @@ public final class FakeBlocks {
     /** Whether a position is inside the space kept clear around the player. */
     private static boolean tooClose(ClientPlayerEntity player, BlockPos pos) {
         if (player == null) return false;
+        if (underfootOnly.contains(pos)) return underfoot(player, pos);
 
         int feet = (int) Math.floor(player.getY());
         if (pos.getY() < feet - CLEAR_BELOW || pos.getY() > feet + CLEAR_ABOVE) return false;
@@ -494,6 +508,43 @@ public final class FakeBlocks {
     private static BlockState beneath(ClientWorld world, BlockPos pos) {
         BlockState was = real.get(pos);
         return was != null ? was : world.getBlockState(pos);
+    }
+
+    /** Whether a position is the one holding the player up. */
+    private static boolean underfoot(ClientPlayerEntity player, BlockPos pos) {
+        if (pos.getY() != (int) Math.floor(player.getY()) - 1) return false;
+
+        // Half the player's width plus half a block: the columns their feet are over.
+        double dx = player.getX() - (pos.getX() + 0.5);
+        double dz = player.getZ() - (pos.getZ() + 0.5);
+        return Math.abs(dx) < 0.8 && Math.abs(dz) < 0.8;
+    }
+
+    /**
+     * Puts a single block on the board, the way a machine placing one would.
+     *
+     * <p>Kept apart from the builds: it is not part of any of them, it is held back only
+     * from underfoot, and it goes away again when the next one takes its place.
+     */
+    public static boolean place(BlockPos pos, BlockState state) {
+        ClientWorld world = MinecraftClient.getInstance().world;
+        if (world == null || !beneath(world, pos).isAir()) return false;
+
+        BlockPos key = pos.toImmutable();
+        showing.put(key, state);
+        underfootOnly.add(key);
+        reindex();
+        return true;
+    }
+
+    /** Takes one placed block away, putting the real world back. */
+    public static boolean unplace(BlockPos pos) {
+        if (!underfootOnly.remove(pos)) return false;
+
+        showing.remove(pos);
+        restore(MinecraftClient.getInstance().world, pos);
+        reindex();
+        return true;
     }
 
     private static void paint(ClientWorld world, BlockPos pos, BlockState state) {
@@ -544,6 +595,13 @@ public final class FakeBlocks {
     public static void reset() {
         real.clear();
         cursor = 0;
+    }
+
+    /** Takes away every block a machine has placed, leaving the builds standing. */
+    public static int unplaceAll() {
+        int gone = underfootOnly.size();
+        for (BlockPos pos : new ArrayList<>(underfootOnly)) unplace(pos);
+        return gone;
     }
 
     // -------------------------------------------------------------- persistence

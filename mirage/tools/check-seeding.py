@@ -27,9 +27,10 @@ for field in STATE:
 # any future mode flag must be added to isEmpty too
 modes = re.findall(r"^    public boolean (\w+);", rig, re.M)
 for mode in modes:
-    # armed and bustNext are what the arm key sets for the next shot, and manualTrigger is
-    # how a rig is armed rather than counted: none of them says a rig has been set up.
-    transient = ("armed", "manualTrigger", "bustNext")
+    # These say how a rig behaves, not that it has been set up: two are what the arm key
+    # sets for the next shot, one is whether a rig is armed rather than counted, and one is
+    # whether output is placed or thrown. A rig carrying only these is still an empty rig.
+    transient = ("armed", "manualTrigger", "bustNext", "placeOutput")
     check("mode '%s' is missing from isEmpty" % mode, mode in empty or mode in transient)
 
 # the paper rig specifically has to be upgraded in place, since a user may have set one up

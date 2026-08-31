@@ -14,6 +14,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DispenserBlock;
 import net.minecraft.client.MinecraftClient;
@@ -24,6 +25,7 @@ import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -68,6 +70,8 @@ public final class ClientDispensers {
     private static final Map<BlockPos, Boolean> lastTriggered = new HashMap<>();
     private static final Map<BlockPos, Boolean> lastPowered = new HashMap<>();
     private static final Map<BlockPos, Long> lastFire = new HashMap<>();
+    /** Where each machine's last placed answer is standing, so the next one replaces it. */
+    private static final Map<BlockPos, BlockPos> standing = new HashMap<>();
     private static final List<PendingFire> pending = new ArrayList<>();
     private static final List<SpawnedItem> spawned = new ArrayList<>();
     private static final List<FlyingArrow> arrows = new ArrayList<>();
@@ -423,7 +427,11 @@ public final class ClientDispensers {
             if (result == null) {
                 warn("Rig '" + profile.name + "' has nothing to fire.");
             } else {
-                spawn(world, fire.pos(), result);
+                if (profile.placeOutput) {
+                    stand(world, fire.pos(), result);
+                } else {
+                    spawn(world, fire.pos(), result);
+                }
                 // Take it out of what the dispenser looks like it is holding, so opening
                 // the thing afterwards agrees with what everyone just watched come out.
                 deplete(profile, fire.pos(), result);
@@ -1008,6 +1016,43 @@ public final class ClientDispensers {
         spawned.add(new SpawnedItem(entity, result, tick));
     }
 
+    /**
+     * Puts the answer down in front of the machine, the way a dispenser places a shulker box.
+     *
+     * <p>One per machine: the next round takes the last one away first, which is what
+     * clearing the floor between rounds looks like.
+     */
+    private static void stand(ClientWorld world, BlockPos pos, FakeSpec result) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof DispenserBlock)) return;
+
+        BlockPos was = standing.remove(pos);
+        if (was != null) FakeBlocks.unplace(was);
+
+        Block block = SelfFakes.lookupBlock(
+                Registries.ITEM.getId(result.item).getPath());
+        if (block == null) {
+            warn("A " + result.describe() + " is not something a machine can place.");
+            return;
+        }
+
+        // Where a real dispenser would put it: the block it faces.
+        BlockPos target = pos.offset(state.get(DispenserBlock.FACING));
+        if (!FakeBlocks.place(target, block.getDefaultState())) {
+            note("no room in front of " + text(pos) + " to put it down");
+            return;
+        }
+        standing.put(pos.toImmutable(), target);
+    }
+
+    /** Clears the answers standing in front of the machines. */
+    public static int clearStanding() {
+        int gone = standing.size();
+        for (BlockPos pos : standing.values()) FakeBlocks.unplace(pos);
+        standing.clear();
+        return gone;
+    }
+
     private static void flyArrows() {
         Iterator<FlyingArrow> iterator = arrows.iterator();
 
@@ -1195,6 +1240,7 @@ public final class ClientDispensers {
         pending.clear();
         lastTriggered.clear();
         lastPowered.clear();
+        clearStanding();
     }
 
     /** Leaving a world takes the client entities with it. */
@@ -1205,6 +1251,7 @@ public final class ClientDispensers {
         lastTriggered.clear();
         lastPowered.clear();
         lastFire.clear();
+        standing.clear();
     }
 
     public static void invalidateResults() {
@@ -1268,6 +1315,7 @@ public final class ClientDispensers {
                 tower.addProperty("each", profile.towerEach);
                 tower.addProperty("bustAt", profile.bustAt);
                 tower.addProperty("call", profile.call);
+                tower.addProperty("place", profile.placeOutput);
 
                 JsonObject floors = new JsonObject();
                 for (Map.Entry<BlockPos, Integer> entry : profile.towerFloors.entrySet()) {
@@ -1390,6 +1438,8 @@ public final class ClientDispensers {
             if (tower.has("each")) profile.towerEach = tower.get("each").getAsInt();
             if (tower.has("bustAt")) profile.bustAt = tower.get("bustAt").getAsInt();
             if (tower.has("call")) profile.call = tower.get("call").getAsString();
+            // Older files predate the setting, and the game it belongs to always wanted it.
+            profile.placeOutput = !tower.has("place") || tower.get("place").getAsBoolean();
 
             if (tower.has("at")) {
                 for (Map.Entry<String, JsonElement> entry
@@ -1503,6 +1553,7 @@ public final class ClientDispensers {
             // it is armed rather than on a floor picked in advance.
             RigProfile tower = new RigProfile("tower");
             tower.tower = true;
+            tower.placeOutput = true;
             profiles.put(tower.name, tower);
         }
         if (needsSeeding("roulette")) {

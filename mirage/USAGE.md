@@ -325,6 +325,25 @@ machine fires the other colour instead.
 Arming beats everything and is spent by the floor it lands on, so you can end a
 run at any point without changing the setup.
 
+### The box is placed, not thrown
+
+A dispenser holding shulker boxes **places** them, so a floor's answer stands on
+the ground in front of the machine rather than bouncing out of it. That is on by
+default for the tower.
+
+One box per machine: the next round takes the last one away first, which is what
+clearing the floor between rounds looks like. `/fake dispenser sweep` clears them
+all, and so does `N`.
+
+    /fake dispenser place off    (throw the answer out as an item instead)
+    /fake dispenser place on
+
+Because it is a block rather than an item, it is held back from **directly under
+your feet** and nowhere else — you can stand beside it, look at it from a step
+away, and it stays. Only a block that could hold you up is unsafe; one at your
+own level cannot be stepped onto without jumping, and one that merely blocks the
+way never puts you anywhere the server disagrees with.
+
 ### Ending it on a set floor instead
 
     /fake rig tower ends 4        (every run ends on floor 4)

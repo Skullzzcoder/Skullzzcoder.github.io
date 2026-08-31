@@ -113,6 +113,51 @@ check("firing reads the side rather than handing one out",
 
 check("a game with no machines says so", "partsInGame" in disp and "partsInGame" in client)
 
+# A dispenser holding shulker boxes places them rather than throwing them, so the answer
+# stands on the ground in front of the machine instead of bouncing out of it.
+blocks = io.open("src/main/java/dev/skullzz/mirage/client/FakeBlocks.java", encoding="utf-8").read()
+check("the tower places its answer", "tower.placeOutput = true" in disp)
+stand = re.search(r"private static void stand\(.*?\n    \}", disp, re.S).group(0)
+check("it goes where the machine faces", "pos.offset(state.get(DispenserBlock.FACING))" in stand)
+check("one per machine, the last taken away", "FakeBlocks.unplace(was)" in stand)
+check("only where there is room", "FakeBlocks.place(target" in stand)
+
+# The if-branch alone: matching to the end of the else would catch the throwing case too
+# and pass whichever way round they were.
+fire = re.search(r"if \(profile\.placeOutput\) \{(.*?)\n\s*\} else \{(.*?)\n\s*\}",
+                 disp, re.S)
+check("placing is what the flag does", "stand(world" in fire.group(1)
+      and "spawn(world" not in fire.group(1))
+check("throwing is what it does otherwise", "spawn(world" in fire.group(2)
+      and "stand(world" not in fire.group(2))
+
+# A placed block is meant to be looked at from a step away, so the wide clearance a build
+# uses would leave a hole exactly where the answer should be. Only what could hold the
+# player up is unsafe: a full block at their own level cannot be stepped onto without a
+# jump, and one that merely blocks the way never puts them where the server disagrees.
+close = re.search(r"private static boolean tooClose\(.*?\n    \}", blocks, re.S).group(0)
+check("a placed block uses the tight rule", "underfootOnly.contains(pos)" in close)
+under = re.search(r"private static boolean underfoot\(.*?\n    \}", blocks, re.S).group(0)
+check("tight means the block below the feet", "Math.floor(player.getY()) - 1" in under)
+check("tight means the player's own column", "0.8" in under)
+
+def underfoot_py(px, py, pz, bx, by, bz):
+    import math
+    if by != math.floor(py) - 1: return False
+    return abs(px - (bx + 0.5)) < 0.8 and abs(pz - (bz + 0.5)) < 0.8
+
+for px, pz in ((0.5, 0.5), (0.2, 0.9), (12.5, -7.5)):
+    import math
+    fx, fy, fz = math.floor(px), 64, math.floor(pz)
+    check("standing on it is held back", underfoot_py(px, 64.0, pz, fx, fy - 1, fz))
+    check("beside it at your level still shows",
+          not underfoot_py(px, 64.0, pz, fx + 1, fy, fz))
+    check("beside it below your level still shows",
+          not underfoot_py(px, 64.0, pz, fx + 2, fy - 1, fz))
+    check("above your head still shows", not underfoot_py(px, 64.0, pz, fx, fy + 1, fz))
+
+check("placed blocks go with the master switch", "clearStanding()" in disp)
+
 check("the arm key ends a tower run", "profile.bustNext = true;" in disp)
 check("the call keys are bound", "callFirst" in client and "callSecond" in client)
 check("floors are pruned with the machine", "towerFloors.remove(pos)" in disp)

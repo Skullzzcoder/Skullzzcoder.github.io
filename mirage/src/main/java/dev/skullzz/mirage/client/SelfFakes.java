@@ -21,6 +21,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -57,6 +58,7 @@ public final class SelfFakes {
     private static boolean containerDirty;
 
     private static Map<Identifier, Item> itemsById;
+    private static Map<Identifier, Block> blocksById;
     /** Whether cycling a preset prints anything. Off by default. */
     private static boolean announceSwitching = false;
     /** Whether a fake fired from a dispenser ends up in the inventory afterwards. */
@@ -154,6 +156,31 @@ public final class SelfFakes {
 
         Item item = lookupItem(text);
         return item == null ? null : new FakeSpec(item, count, enchants, price, mapId, name);
+    }
+
+    /**
+     * The block of the same name, for output a dispenser places rather than throws.
+     *
+     * <p>Built the same way as the item index and for the same reason: iterating the
+     * registry and asking it for ids are the two things that have not moved between
+     * versions, where the lookup methods have.
+     */
+    public static Block lookupBlock(String id) {
+        String cleaned = id.toLowerCase(Locale.ROOT).trim();
+        if (cleaned.isEmpty()) return null;
+        if (!cleaned.contains(":")) cleaned = "minecraft:" + cleaned;
+
+        Identifier identifier = Identifier.tryParse(cleaned);
+        if (identifier == null) return null;
+
+        if (blocksById == null || blocksById.isEmpty()) {
+            Map<Identifier, Block> index = new HashMap<>();
+            for (Block candidate : Registries.BLOCK) {
+                index.put(Registries.BLOCK.getId(candidate), candidate);
+            }
+            blocksById = index;
+        }
+        return blocksById.get(identifier);
     }
 
     // --------------------------------------------------------- inventory fakes

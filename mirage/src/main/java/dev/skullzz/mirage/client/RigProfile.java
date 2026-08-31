@@ -89,6 +89,14 @@ public final class RigProfile {
     public int bustAt;
     /** Set by arming: the next floor to fire ends the run, whatever floor it is. */
     public boolean bustNext;
+    /**
+     * Whether a machine puts its answer down as a block rather than throwing it out.
+     *
+     * <p>A dispenser holding shulker boxes places them, so a game played with them shows its
+     * answer standing on the ground rather than bouncing across it. On by default for the
+     * tower, since that is the game it belongs to.
+     */
+    public boolean placeOutput;
 
     /**
      * Roulette mode: instead of one answer, the dispenser cycles through a fixed number of

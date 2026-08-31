@@ -412,6 +412,11 @@ public class MirageClient implements ClientModInitializer {
                     return feedback(context, "Stopped watching every dispenser.");
                 }))
                 .then(ClientCommandManager.literal("fire").executes(MirageClient::fireDispenser))
+                .then(ClientCommandManager.literal("sweep").executes(context -> {
+                    int gone = ClientDispensers.clearStanding();
+                    if (gone == 0) return error(context, "Nothing is standing out there.");
+                    return feedback(context, "Cleared " + gone + " off the floor.");
+                }))
                 .then(ClientCommandManager.literal("fill").executes(MirageClient::fillDispenser))
                 .then(ClientCommandManager.literal("unfill").executes(MirageClient::unfillDispenser))
                 .then(ClientCommandManager.literal("status").executes(MirageClient::dispenserStatus))
@@ -637,6 +642,19 @@ public class MirageClient implements ClientModInitializer {
                                     SelfFakes.save();
                                     return feedback(context, "Deleted rig '" + name + "'.");
                                 })))
+                .then(ClientCommandManager.literal("place")
+                        .then(ClientCommandManager.literal("on").executes(context -> {
+                            ClientDispensers.active().placeOutput = true;
+                            SelfFakes.save();
+                            return feedback(context, "Machines put their answer down as a "
+                                    + "block, the way a shulker box is placed.");
+                        }))
+                        .then(ClientCommandManager.literal("off").executes(context -> {
+                            ClientDispensers.clearStanding();
+                            ClientDispensers.active().placeOutput = false;
+                            SelfFakes.save();
+                            return feedback(context, "Machines throw their answer out again.");
+                        })))
                 .then(ClientCommandManager.literal("unset").executes(MirageClient::unsetDispenserResult))
                 .then(ClientCommandManager.literal("arm").executes(context -> {
                     ClientDispensers.armNext();
