@@ -1003,6 +1003,11 @@ public final class ClientDispensers {
         ItemEntity entity = new ItemEntity(world, x, y, z, result.stack().copy());
         entity.setId(nextId());
         entity.setPickupDelayInfinite();
+        // The renderer draws between where a thing was last tick and where it is now. A
+        // freshly built entity has no last tick, so its first frame is drawn from wherever
+        // those fields happened to start -- usually the world origin, as a streak across
+        // the map. Setting both ends to the same point is what a spawn packet would do.
+        entity.refreshPositionAndAngles(x, y, z, 0.0F, 0.0F);
 
         var random = world.getRandom();
         double spread = 0.06;
@@ -1103,7 +1108,9 @@ public final class ClientDispensers {
     /** Stops it dead on the mark, which is how a stuck arrow reads. */
     private static void land(FlyingArrow arrow) {
         arrow.landed = true;
-        arrow.entity.setPosition(arrow.to.x, arrow.to.y, arrow.to.z);
+        // Both ends of the interpolation, or the last frame is drawn as a jump to the mark.
+        arrow.entity.refreshPositionAndAngles(arrow.to.x, arrow.to.y, arrow.to.z,
+                arrow.entity.getYaw(), arrow.entity.getPitch());
         arrow.entity.setVelocity(Vec3d.ZERO);
         arrow.entity.setNoGravity(true);
         arrow.entity.velocityDirty = true;
@@ -1140,7 +1147,7 @@ public final class ClientDispensers {
         ArrowEntity arrow = new ArrowEntity(world, from.x, from.y, from.z,
                 new ItemStack(Items.ARROW), null);
         arrow.setId(nextId());
-        arrow.setPosition(from.x, from.y, from.z);
+        arrow.refreshPositionAndAngles(from.x, from.y, from.z, 0.0F, 0.0F);
         // Straight through everything. It must not stick in the block it came out of, and a
         // client-side arrow catching a real player would show a hit that never happened.
         arrow.noClip = true;
@@ -1200,6 +1207,14 @@ public final class ClientDispensers {
                 item.collectStart = tick;
                 item.collectFrom = new Vec3d(item.entity.getX(), item.entity.getY(),
                         item.entity.getZ());
+
+                // From here we place it ourselves, so vanilla has to stop moving it. Left
+                // as it was, gravity and the throw carried it one way each tick and we
+                // snapped it back the other, which is a shudder all the way in.
+                item.entity.setVelocity(Vec3d.ZERO);
+                item.entity.setNoGravity(true);
+                item.entity.noClip = true;
+                item.entity.velocityDirty = true;
                 continue;
             }
 

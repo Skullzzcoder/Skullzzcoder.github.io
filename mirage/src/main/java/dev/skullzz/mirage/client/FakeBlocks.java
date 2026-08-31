@@ -441,7 +441,10 @@ public final class FakeBlocks {
     private static void reindex() {
         order.clear();
         order.addAll(showing.keySet());
-        cursor = 0;
+        // Kept where it was rather than sent back to the start. Every box a machine puts
+        // down rebuilds this list, and starting over each time meant a large build never
+        // reached its far side, so anything the server corrected out there stayed corrected.
+        if (cursor > order.size()) cursor = 0;
     }
 
     // -------------------------------------------------------------------- tick
