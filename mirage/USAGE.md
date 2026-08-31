@@ -221,8 +221,9 @@ up is two commands:
     (look at the left dispenser)  /fake dispenser watch
     (look at the right dispenser) /fake dispenser watch
 
-Sides are handed out in the order you watch them: the first is **Player**, the
-second is **Host**. Only those two — watched dispensers are shared by every rig,
+Sides are handed out in the order you **watch** them while the paper rig is
+active: the first is **Player**, the second is **Host**. A machine already
+watched for another game joins by being watched again, or by pressing `H` at it. Only those two — watched dispensers are shared by every rig,
 so a third machine is the roulette dropper standing nearby rather than a third
 player, and it is left showing its real contents. Put one in the game by hand
 with `/fake rig paper side <name>` if you ever want three. Both are laid out at once, so the left machine holds
@@ -296,8 +297,15 @@ right, with the multiplier going up as they go.
     (look at floor 1) /fake dispenser watch
     ... and so on up to floor 5
 
-Floors are handed out in the order you watch them. Got one wrong? Look at it and
-run `/fake rig tower floor 3`.
+Floors are handed out in the order you **watch** them while the tower rig is
+active. If a machine is already watched from another game, watching it again
+joins it to the tower — or just look at it and press `H`, which does the same.
+
+Got one wrong? Look at it and run `/fake rig tower floor 3`.
+
+Only machines you have set up this way are in the run. The rest of your watched
+dispensers — the roulette dropper, the coin flip — are left alone and show their
+real contents. `/fake dispenser status` lists which machine is which floor.
 
 ### Playing it
 

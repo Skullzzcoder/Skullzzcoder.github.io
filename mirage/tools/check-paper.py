@@ -168,7 +168,7 @@ check("load judges it only against known sides", "!profile.sideNames().isEmpty()
 # draws a round with nobody in it to give the high number to
 slip = re.search(r"private static FakeSpec paperSlip.*?\n    \}", disp, re.S).group(0)
 check("the side is resolved before the round is drawn",
-      slip.index("sideAt(pos, watched)") < slip.index("startRound"))
+      slip.index("sideOf(pos)") < slip.index("startRound"))
 
 fresh = Rig(SIDES[0])                        # Z pressed, no machine laid out yet
 fresh.start_round(random.Random(5), 0, known=[])
@@ -210,7 +210,8 @@ repair = re.search(r"private static void repair\(RigProfile profile\) \{(.*?)\n 
 paper_branch = re.search(r"if \(profile\.paper\) \{(.*?)\n        \}", repair, re.S).group(1)
 check("a paper rig carries no presets", "profile.presets.clear()" in paper_branch)
 
-fill = re.search(r"public static boolean fill\(BlockPos pos\) \{(.*?)\n    \}", disp, re.S).group(1)
+fill = re.search(r"public static boolean fill\(BlockPos pos, boolean join\) \{(.*?)\n    \}",
+                 disp, re.S).group(1)
 check("paper is laid out before any preset fallback",
       fill.index("profile.paper") < fill.index("profile.presets"))
 check("the player never draws at all", ties[SIDES[0] if HOUSE == SIDES[1] else SIDES[1]] == 0)

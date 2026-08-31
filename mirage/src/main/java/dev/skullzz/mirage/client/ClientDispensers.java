@@ -332,9 +332,10 @@ public final class ClientDispensers {
 
     public static boolean watch(BlockPos pos) {
         boolean added = watched.add(pos.toImmutable());
-        // Lay it out straight away: a watched dispenser that opens empty gives the whole
-        // thing away before it has fired once.
-        if (added) fill(pos);
+        // Laid out every time, not only the first: watching a machine is the deliberate act
+        // that joins it to whichever game is running, and a machine already watched for one
+        // game has to be able to join another.
+        fill(pos);
         return added;
     }
 
@@ -472,7 +473,7 @@ public final class ClientDispensers {
     private static FakeSpec paperSlip(RigProfile profile, BlockPos pos) {
         // The side first: it is settled here, and a round drawn before any machine had one
         // had no winner to give the high number to, so both took the low one.
-        String side = profile.sideAt(pos, watched);
+        String side = profile.sideOf(pos);
         if (side.isEmpty()) return null;
 
         // Added to the older side, never subtracted from the newer: the no-round-yet marker
@@ -500,7 +501,9 @@ public final class ClientDispensers {
      * out of order or twice cannot walk the run somewhere it never went.
      */
     private static FakeSpec towerBox(RigProfile profile, BlockPos pos) {
-        int floor = profile.floorAt(pos, watched);
+        // Read only: a machine that has never been set up as a floor is not one, and
+        // making it one at the moment it goes off would put a run somewhere it is not.
+        int floor = profile.floorOf(pos);
         if (floor == 0) return null;
 
         String colour = profile.bustsOn(floor)
@@ -618,6 +621,19 @@ public final class ClientDispensers {
      * the same whichever way it is currently rigged.
      */
     public static boolean fill(BlockPos pos) {
+        return fill(pos, true);
+    }
+
+    /**
+     * @param join whether a machine with no part in this game may be given one.
+     *
+     * <p>Watched dispensers belong to every rig at once, so laying a game out over all of
+     * them would hand its floors and sides to whichever machines happened to be watched
+     * first -- the roulette dropper and the coin flip included, leaving the machines the
+     * game is actually played on with no part in it. Joining a machine to a game is
+     * therefore something only a deliberate act does: watching it, or filling that one.
+     */
+    public static boolean fill(BlockPos pos, boolean join) {
         RigProfile profile = active();
         Map<Integer, FakeSpec> slots = new LinkedHashMap<>();
 
@@ -639,7 +655,8 @@ public final class ClientDispensers {
             Item first = SelfFakes.lookupItem(profile.towerA);
             Item second = SelfFakes.lookupItem(profile.towerB);
 
-            if (profile.floorAt(pos, watched) > 0 && first != null && second != null) {
+            int floor = join ? profile.floorAt(pos, watched) : profile.floorOf(pos);
+            if (floor > 0 && first != null && second != null) {
                 for (int i = 0; i < profile.towerEach; i++) {
                     slots.put(i, new FakeSpec(first, 1, ""));
                     slots.put(profile.towerEach + i, new FakeSpec(second, 1, ""));
@@ -648,7 +665,7 @@ public final class ClientDispensers {
         } else if (profile.paper) {
             // One slip per number, all named for the side this machine plays. A machine
             // with no side is one of the other games' and is left showing its real self.
-            String side = profile.sideAt(pos, watched);
+            String side = join ? profile.sideAt(pos, watched) : profile.sideOf(pos);
             Item slip = side.isEmpty() ? null : SelfFakes.lookupItem(profile.slipItem);
 
             if (slip != null) {
@@ -696,7 +713,7 @@ public final class ClientDispensers {
             // back to came up bare.
             Map<Integer, FakeSpec> slots = profile.stockAt(pos);
             if (slots != null && !slots.isEmpty()) continue;
-            if (fill(pos)) filled++;
+            if (fill(pos, false)) filled++;
         }
         return filled;
     }
@@ -705,9 +722,17 @@ public final class ClientDispensers {
     public static int refillWatched() {
         int filled = 0;
         for (BlockPos pos : watched) {
-            if (fill(pos)) filled++;
+            if (fill(pos, false)) filled++;
         }
         return filled;
+    }
+
+    /** @return how many machines are set up for the active game, or -1 if it has no parts. */
+    public static int partsInGame() {
+        RigProfile profile = active();
+        if (profile.tower) return profile.floorCount();
+        if (profile.paper) return profile.sideNames().size();
+        return -1;
     }
 
     public static boolean unfill(BlockPos pos) {

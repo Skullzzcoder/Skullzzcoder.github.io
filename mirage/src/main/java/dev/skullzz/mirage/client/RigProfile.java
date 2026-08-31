@@ -190,8 +190,8 @@ public final class RigProfile {
      * @return the floor, or zero for a machine that is not in this game.
      */
     public int floorAt(BlockPos pos, Set<BlockPos> live) {
-        Integer floor = this.towerFloors.get(pos);
-        if (floor != null) return floor;
+        int known = floorOf(pos);
+        if (known > 0) return known;
 
         Set<Integer> taken = new LinkedHashSet<>();
         for (Map.Entry<BlockPos, Integer> entry : this.towerFloors.entrySet()) {
@@ -204,6 +204,17 @@ public final class RigProfile {
             return candidate;
         }
         return 0;
+    }
+
+    /** The floor a machine already has, without handing it one. */
+    public int floorOf(BlockPos pos) {
+        Integer floor = this.towerFloors.get(pos);
+        return floor == null ? 0 : floor;
+    }
+
+    /** How many machines are in this run. */
+    public int floorCount() {
+        return this.towerFloors.size();
     }
 
     public void setFloor(BlockPos pos, int floor) {
@@ -253,8 +264,8 @@ public final class RigProfile {
      * @return the side, or empty for a machine that is not part of this game.
      */
     public String sideAt(BlockPos pos, Set<BlockPos> live) {
-        String side = this.sides.get(pos);
-        if (side != null) return side;
+        String side = sideOf(pos);
+        if (!side.isEmpty()) return side;
 
         Set<String> taken = new LinkedHashSet<>();
         for (Map.Entry<BlockPos, String> entry : this.sides.entrySet()) {
@@ -267,6 +278,12 @@ public final class RigProfile {
             return candidate;
         }
         return "";
+    }
+
+    /** The side a machine already plays, without giving it one. */
+    public String sideOf(BlockPos pos) {
+        String side = this.sides.get(pos);
+        return side == null ? "" : side;
     }
 
     /** Forgets sides belonging to machines that are no longer watched. */

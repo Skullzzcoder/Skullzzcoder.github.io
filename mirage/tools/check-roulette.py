@@ -65,7 +65,8 @@ check("no matching item is left alone", not deplete(stock, BLANK) and stock == {
 
 # A roulette rig must never be able to lay out nothing: unloaded, it fills no slots and
 # fires nothing, which is indistinguishable from the game being broken.
-fill = re.search(r"public static boolean fill\(BlockPos pos\) \{(.*?)\n    \}", src, re.S).group(1)
+fill = re.search(r"public static boolean fill\(BlockPos pos, boolean join\) \{(.*?)\n    \}",
+                 src, re.S).group(1)
 check("an unloaded roulette rig loads itself", 'defaultSpec("end_crystal")' in fill
       and 'defaultSpec("obsidian")' in fill)
 

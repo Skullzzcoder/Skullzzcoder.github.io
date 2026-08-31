@@ -70,7 +70,7 @@ check("no call yet still fires something", t.fire(1) == A)
 
 # --- and the source has to agree with all that --------------------------
 box = re.search(r"private static FakeSpec towerBox\(.*?\n    \}", disp, re.S).group(0)
-check("the floor comes from the machine, not a counter", "floorAt(pos, watched)" in box)
+check("the floor comes from the machine, not a counter", "floorOf(pos)" in box)
 check("a machine outside the run fires nothing", "if (floor == 0) return null;" in box)
 check("the call decides the colour", "profile.called()" in box and "otherColour" in box)
 
@@ -83,6 +83,35 @@ floor_at = re.search(r"public int floorAt\(BlockPos pos, Set<BlockPos> live\) \{
 check("floors only go to machines in play", "live.contains" in floor_at)
 check("no floor past the last one", "candidate <= this.floors" in floor_at)
 check("a machine past the run gets none", "return 0;" in floor_at)
+
+# Watched dispensers belong to every rig at once. Laying a game out over all of them handed
+# its floors to whichever machines were watched first -- the roulette dropper included --
+# leaving the machines it is actually played on with no part in the game.
+fill_sig = re.search(r"public static boolean fill\(BlockPos pos, boolean join\)", disp)
+check("filling can be told not to join a machine", fill_sig is not None)
+
+fillbody = re.search(r"public static boolean fill\(BlockPos pos, boolean join\) \{(.*?)\n    \}",
+                     disp, re.S).group(1)
+check("a floor is only handed out when joining", "join ? profile.floorAt" in fillbody)
+check("a side is only handed out when joining", "join ? profile.sideAt" in fillbody)
+
+for bulk in ("fillEmptyWatched", "refillWatched"):
+    body = re.search(r"public static int %s\(\) \{(.*?)\n    \}" % bulk, disp, re.S).group(1)
+    check("%s never joins a machine" % bulk, "fill(pos, false)" in body)
+
+watch = re.search(r"public static boolean watch\(BlockPos pos\) \{(.*?)\n    \}",
+                  disp, re.S).group(1)
+check("watching joins, even a machine already watched",
+      "fill(pos);" in watch and "if (added) fill" not in watch)
+
+# firing must never make a machine part of a game it was not set up for
+check("firing reads the floor rather than handing one out",
+      "profile.floorOf(pos)" in box and "floorAt" not in box)
+paper_slip = re.search(r"private static FakeSpec paperSlip\(.*?\n    \}", disp, re.S).group(0)
+check("firing reads the side rather than handing one out",
+      "profile.sideOf(pos)" in paper_slip and "sideAt" not in paper_slip)
+
+check("a game with no machines says so", "partsInGame" in disp and "partsInGame" in client)
 
 check("the arm key ends a tower run", "profile.bustNext = true;" in disp)
 check("the call keys are bound", "callFirst" in client and "callSecond" in client)

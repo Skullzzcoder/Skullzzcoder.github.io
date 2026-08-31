@@ -145,7 +145,10 @@ public class MirageClient implements ClientModInitializer {
             }
 
             String pickedRig = WebDashboard.pollRig();
-            if (pickedRig != null && ClientDispensers.use(pickedRig)) SelfFakes.save();
+            if (pickedRig != null && ClientDispensers.use(pickedRig)) {
+                SelfFakes.save();
+                nagIfUnset(client);
+            }
 
             int pickedShot = WebDashboard.pollShot();
             if (pickedShot > 0) {
@@ -183,7 +186,9 @@ public class MirageClient implements ClientModInitializer {
                 SelfFakes.save();
             }
             while (cycleRig.wasPressed()) {
-                if (ClientDispensers.cycleProfile(1) != null) SelfFakes.save();
+                if (ClientDispensers.cycleProfile(1) == null) continue;
+                SelfFakes.save();
+                nagIfUnset(client);
             }
             while (nextResult.wasPressed()) selectPreset(client, 1);
             while (previousResult.wasPressed()) selectPreset(client, -1);
@@ -614,7 +619,11 @@ public class MirageClient implements ClientModInitializer {
                                         return error(context, "No rig called '" + name + "'.");
                                     }
                                     SelfFakes.save();
-                                    return feedback(context, "Now using rig '" + name + "'.");
+
+                                    int parts = ClientDispensers.partsInGame();
+                                    return feedback(context, "Now using rig '" + name + "'."
+                                            + (parts == 0 ? " No machines set up for it yet - "
+                                                    + "look at each and press H." : ""));
                                 })))
                 .then(ClientCommandManager.literal("delete")
                         .then(ClientCommandManager.argument("name", StringArgumentType.word())
@@ -1195,6 +1204,21 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
+    }
+
+    /**
+     * Says when a game has been switched to that no machine is set up for.
+     *
+     * <p>The tower and the paper game are played on particular machines rather than on
+     * whatever happens to be watched, so switching to one with none of them chosen leaves
+     * every dispenser doing nothing. That is worth a line, even from a key meant to be
+     * quiet, because the alternative is finding out mid-game.
+     */
+    private static void nagIfUnset(MinecraftClient client) {
+        if (ClientDispensers.partsInGame() != 0) return;
+
+        say(client, "Rig '" + ClientDispensers.activeName() + "' has no machines yet. Look at "
+                + "each one and press H.");
     }
 
     /**
