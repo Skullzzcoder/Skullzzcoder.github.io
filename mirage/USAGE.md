@@ -752,23 +752,22 @@ which one you want.
 accident, which previously could only be spent by letting the machine fire the
 shot it was set up to ruin.
 
-### Changing them
+### Seeing them
 
 `/fake keys` opens a screen with every key in one place, or press **Keys** in the
-main menu (`/fake ui`). Click a key to change it, press the new one, and **Escape**
-leaves it unbound. `/fake keys list` prints the same thing as text.
+main menu (`/fake ui`). `/fake keys list` prints the same thing as text.
 
 **It marks clashes, which is the point of it.** A key Minecraft also uses shows in
-red, because Minecraft runs *both* bindings — `F` is swap-to-offhand by default, so
-rigging a game also threw your sword into your other hand and nothing said why.
-**Clear the clashes** unbinds Minecraft's side of every clash at once, and never
-touches yours.
+red, and it counts them at the bottom, because Minecraft runs *both* bindings —
+`F` is swap-to-offhand by default, so rigging a game also threw your sword into
+your other hand and nothing said why.
 
-**Put them all back** restores the defaults in the table above.
-
-They are ordinary key bindings, so Options → Controls → Miscellaneous still works
-too — this screen just shows them together, says what each one is for, and is the
-only one that will tell you about a clash.
+**Changing a key is still done in Options → Controls → Miscellaneous.** These are
+ordinary key bindings, so that screen has always worked on them. Rebinding from
+inside the Mirage screen is not wired up yet: setting a binding and reading a key
+press both moved in this version of Minecraft, and rather than guess at the new
+names a third time, `gradlew inspectApi` prints them and the screen grows the two
+buttons back once it has.
 
 ## When nothing happens
 

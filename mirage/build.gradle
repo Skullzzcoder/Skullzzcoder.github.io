@@ -221,6 +221,29 @@ tasks.register('inspectApi') {
                     if (server != null) dump(server, ['operator', 'permission', 'playermanager', 'host'], '')
                 },
                 { ->
+                    // Everything the keys screen touches. KeyBinding and the input events
+                    // were both reworked in this version, so these are dumped whole rather
+                    // than filtered: the names that replaced setKeyCode and
+                    // getTranslationKey cannot be searched for without knowing them.
+                    def binding = load('net.minecraft.client.option.KeyBinding')
+                    if (binding != null) dump(binding, [], '  <- the whole thing, on purpose')
+
+                    def options = load('net.minecraft.client.option.GameOptions')
+                    if (options != null) dump(options, ['key', 'write', 'save', 'bind'], '')
+
+                    def input = load('net.minecraft.client.util.InputUtil')
+                    if (input != null) dump(input, ['key', 'code', 'type', 'unknown'], '')
+
+                    // The two signatures that moved. Following them dumps whatever a key
+                    // press and a click now arrive as, which is what the overrides need.
+                    def screen = load('net.minecraft.client.gui.screen.Screen')
+                    if (screen != null) {
+                        dump(screen, ['key', 'mouse', 'click', 'char'], '')
+                        follow(screen, 'keyPressed')
+                        follow(screen, 'mouseClicked')
+                    }
+                },
+                { ->
                     // Client-side surfaces used by the fake-items GUI.
                     [
                             'net.minecraft.client.MinecraftClient'          : ['screen', 'execute', 'player', 'crosshair'],
