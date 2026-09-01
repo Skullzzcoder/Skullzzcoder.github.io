@@ -697,6 +697,35 @@ public final class ClientDispensers {
                             profile.slipName(slot + 1, side)));
                 }
             }
+        } else if (profile.mix) {
+            // The spread the game is played on, laid into the nine slots: four of one, four
+            // of another, one of the prize. The rarest item takes the middle so the odds can
+            // be read through the glass without counting, and the rest fill in round it.
+            int rare = profile.rarestPreset();
+
+            List<Integer> free = new ArrayList<>();
+            for (int slot = 0; slot < STOCK_SLOTS; slot++) {
+                if (rare < 0 || slot != MIDDLE_SLOT) free.add(slot);
+            }
+
+            int next = 0;
+            for (int i = 0; i < profile.presets.size(); i++) {
+                FakeSpec spec = profile.presets.get(i);
+                for (int held = 0; held < profile.mixCount(i); held++) {
+                    int slot;
+                    if (i == rare && held == 0) {
+                        slot = MIDDLE_SLOT;
+                    } else if (next < free.size()) {
+                        slot = free.get(next++);
+                    } else {
+                        // More items than the machine has room for. What is already in is
+                        // the spread as far as it goes; inventing a tenth slot is not.
+                        break;
+                    }
+                    // Each slot its own copy: they empty one at a time as it is played.
+                    slots.put(slot, spec.withCount(1));
+                }
+            }
         } else {
             FakeSpec fixed = profile.perDispenser.get(pos);
             if (fixed != null) {
@@ -808,6 +837,7 @@ public final class ClientDispensers {
 
         lines.add("Rig '" + profile.name + "'"
                 + (profile.tower ? ", tower" : "")
+                + (profile.mix ? ", 45/45/10" : "")
                 + (profile.paper ? ", paper" : "")
                 + (profile.roulette ? ", roulette" : "")
                 + (profile.roulette && profile.manualTrigger ? ", manual" : "")
@@ -824,6 +854,21 @@ public final class ClientDispensers {
                     + ", sides " + profile.sideNames());
             lines.add("  draws go to " + (profile.house.isEmpty() ? "nobody" : profile.house)
                     + ", drawn " + profile.tieChance + "% of the rounds it wins");
+        }
+        if (profile.mix) {
+            StringBuilder spread = new StringBuilder("  holds ");
+            for (int i = 0; i < profile.presets.size(); i++) {
+                if (i > 0) spread.append(", ");
+                spread.append(profile.mixCount(i)).append("x ")
+                        .append(profile.presets.get(i).describe())
+                        .append(" (").append(profile.mixChance(i)).append("%, pays ")
+                        .append(profile.mixPayout(i)).append("x)")
+                        // Which of the three is rigged, without having to turn the action
+                        // bar readback on. Three items on one key is one too many to keep
+                        // count of, and this is the answer that does not show on screen.
+                        .append(i == profile.presetIndex() ? " <- RIGGED" : "");
+            }
+            lines.add(spread.toString());
         }
         if (profile.roulette) {
             lines.add("  shot " + profile.shot + " of " + profile.chambers
@@ -1403,6 +1448,19 @@ public final class ClientDispensers {
                 json.add("paper", paper);
             }
 
+            if (profile.mix) {
+                JsonObject mix = new JsonObject();
+                JsonArray counts = new JsonArray();
+                JsonArray payouts = new JsonArray();
+                for (int i = 0; i < profile.presets.size(); i++) {
+                    counts.add(profile.mixCount(i));
+                    payouts.add(profile.mixPayout(i));
+                }
+                mix.add("counts", counts);
+                mix.add("payouts", payouts);
+                json.add("mix", mix);
+            }
+
             if (profile.roulette) {
                 JsonObject roulette = new JsonObject();
                 roulette.addProperty("chambers", profile.chambers);
@@ -1489,6 +1547,21 @@ public final class ClientDispensers {
             }
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
+
+        if (json.has("mix")) {
+            JsonObject mix = json.getAsJsonObject("mix");
+            profile.mix = true;
+            if (mix.has("counts")) {
+                for (JsonElement element : mix.getAsJsonArray("counts")) {
+                    profile.mixCounts.add(element.getAsInt());
+                }
+            }
+            if (mix.has("payouts")) {
+                for (JsonElement element : mix.getAsJsonArray("payouts")) {
+                    profile.mixPayouts.add(element.getAsInt());
+                }
+            }
+        }
 
         if (json.has("tower")) {
             JsonObject tower = json.getAsJsonObject("tower");
@@ -1616,6 +1689,28 @@ public final class ClientDispensers {
             tower.tower = true;
             tower.placeOutput = true;
             profiles.put(tower.name, tower);
+        }
+        if (needsSeeding("454510")) {
+            // 45/45/10: four diamonds, four emeralds and one crystal in the one machine.
+            // Guess the kind and it pays double, guess the crystal and it pays four times.
+            // No mode of its own beyond the layout -- what comes out is whichever item is
+            // selected, so the result key is already the rig.
+            RigProfile odds = new RigProfile("454510");
+            odds.mix = true;
+
+            String[] items = { "diamond", "emerald", "end_crystal" };
+            int[] counts = { 4, 4, 1 };
+            int[] payouts = { 2, 2, 4 };
+
+            for (int i = 0; i < items.length; i++) {
+                Item item = SelfFakes.lookupItem(items[i]);
+                if (item == null) continue;
+                odds.presets.add(new FakeSpec(item, 1, ""));
+                odds.mixCounts.add(counts[i]);
+                odds.mixPayouts.add(payouts[i]);
+            }
+            odds.setPresetIndex(odds.presets.isEmpty() ? -1 : 0);
+            profiles.put(odds.name, odds);
         }
         if (needsSeeding("roulette")) {
             // Set up for the usual arrangement: eight obsidian round one crystal, and the

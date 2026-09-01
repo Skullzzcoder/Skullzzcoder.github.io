@@ -99,6 +99,23 @@ public final class RigProfile {
     public boolean placeOutput;
 
     /**
+     * Mix mode: one machine holding a fixed spread of items, one of which comes out.
+     *
+     * <p>45/45/10 is the game it was written for -- four diamonds, four emeralds and one
+     * crystal in the nine slots, the player calling which they will get. The rigging is the
+     * plainest of all of them: the answer is simply whichever item is selected, so the
+     * result key already cycles it. What the mode adds is the shape of the machine. The
+     * ordinary layout puts one of each item in, which is right for a coin flip and wrong
+     * here: the whole game is the odds you can see through the glass, and three items in a
+     * nine-slot box are not odds at all.
+     */
+    public boolean mix;
+    /** How many of each item the machine holds. Runs alongside the presets. */
+    public final List<Integer> mixCounts = new ArrayList<>();
+    /** What each item pays, for the sake of saying so when it is picked. */
+    public final List<Integer> mixPayouts = new ArrayList<>();
+
+    /**
      * Roulette mode: instead of one answer, the dispenser cycles through a fixed number of
      * shots and the loaded one lands on a chosen position in that cycle.
      */
@@ -184,6 +201,60 @@ public final class RigProfile {
         this.chambers = Math.max(1, Math.min(this.chambers, 64));
         this.bulletAt = Math.max(1, Math.min(this.bulletAt, this.chambers));
         if (this.shot > this.chambers) this.shot = 0;
+    }
+
+    // --------------------------------------------------------------------- mix
+
+    /** How many of the item at an index the machine holds. */
+    public int mixCount(int index) {
+        if (index < 0 || index >= this.mixCounts.size()) return 1;
+        return Math.max(0, this.mixCounts.get(index));
+    }
+
+    /** What the item at an index pays, as a multiplier. */
+    public int mixPayout(int index) {
+        if (index < 0 || index >= this.mixPayouts.size()) return 1;
+        return Math.max(1, this.mixPayouts.get(index));
+    }
+
+    /** How many items a full machine holds, which is what the odds are out of. */
+    public int mixTotal() {
+        int total = 0;
+        for (int i = 0; i < this.presets.size(); i++) total += mixCount(i);
+        return total;
+    }
+
+    /**
+     * The one item there is least of, or -1 if nothing stands out.
+     *
+     * <p>It gets the middle slot, the way the roulette rig puts its loaded chamber there:
+     * the prize sitting in the centre of the glass is how a house would build it, and it
+     * makes the odds readable at a glance instead of having to count. A spread with no
+     * single rarest item -- three of each, say -- has no centre to give, so it is laid out
+     * in order and the question does not arise.
+     */
+    public int rarestPreset() {
+        int rarest = -1;
+        int fewest = Integer.MAX_VALUE;
+        int ties = 0;
+
+        for (int i = 0; i < this.presets.size(); i++) {
+            int held = mixCount(i);
+            if (held < fewest) {
+                fewest = held;
+                rarest = i;
+                ties = 1;
+            } else if (held == fewest) {
+                ties++;
+            }
+        }
+        return ties == 1 ? rarest : -1;
+    }
+
+    /** The chance of the item at an index coming out of an honest machine, in percent. */
+    public int mixChance(int index) {
+        int total = mixTotal();
+        return total <= 0 ? 0 : Math.round(mixCount(index) * 100.0F / total);
     }
 
     // ------------------------------------------------------------------- tower
@@ -401,6 +472,6 @@ public final class RigProfile {
     public boolean isEmpty() {
         return this.presets.isEmpty() && this.perDispenser.isEmpty()
                 && this.arrowTarget == null && !this.roulette && !this.paper && !this.tower
-                && this.stock.isEmpty();
+                && !this.mix && this.stock.isEmpty();
     }
 }

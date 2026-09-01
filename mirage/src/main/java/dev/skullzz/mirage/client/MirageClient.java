@@ -92,6 +92,20 @@ public class MirageClient implements ClientModInitializer {
                                     SelfFakes.setAutoCollect(false);
                                     return feedback(context, "Fakes will just vanish instead.");
                                 })))
+                        // The setting has been in the config file since the start with no
+                        // way to reach it, which made every readback in the mod dead by
+                        // default -- including the one that says which of three items
+                        // 45/45/10 is currently rigged to.
+                        .then(ClientCommandManager.literal("announce")
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    SelfFakes.setAnnounceSwitching(true);
+                                    return feedback(context, "Switching keys will say what they "
+                                            + "landed on, in your action bar. Only you see it.");
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    SelfFakes.setAnnounceSwitching(false);
+                                    return feedback(context, "Switching keys are silent again.");
+                                })))
                         .then(ClientCommandManager.literal("debug")
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     ClientDispensers.setDebug(true);
@@ -364,15 +378,31 @@ public class MirageClient implements ClientModInitializer {
 
     /** Flips to another preset result without opening anything anyone could see. */
     private static void selectPreset(MinecraftClient client, int delta) {
+        RigProfile profile = ClientDispensers.active();
         FakeSpec spec = ClientDispensers.cyclePreset(delta);
-        if (spec == null) return;
+
+        // A key that can do nothing has to say so. This one used to return in silence, and
+        // a rig with nothing to cycle looks exactly like a key that is not bound.
+        if (spec == null) {
+            say(client, profile.roulette || profile.paper || profile.tower
+                    ? "Rig '" + profile.name + "' does not pick its result this way."
+                    : "Rig '" + profile.name + "' has no items to cycle. "
+                            + "Add one with /fake rig add <item>.");
+            return;
+        }
 
         SelfFakes.save();
 
         // Off unless asked for. /fake list and the dashboard both report the selection.
         if (SelfFakes.announceSwitching() && client.player != null) {
-            client.player.sendMessage(Text.literal(spec.count + "x "
-                    + spec.stack().getName().getString()).formatted(Formatting.GRAY), true);
+            // In a game played on odds, what it pays is half of what you just chose, and
+            // reading it back is the difference between rigging the crystal on purpose and
+            // rigging it by miscounting presses.
+            String line = profile.mix
+                    ? spec.stack().getName().getString() + " - pays "
+                            + profile.mixPayout(profile.presetIndex()) + "x"
+                    : spec.count + "x " + spec.stack().getName().getString();
+            client.player.sendMessage(Text.literal(line).formatted(Formatting.GRAY), true);
         }
     }
 

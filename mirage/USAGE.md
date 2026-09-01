@@ -198,11 +198,12 @@ roulette settings, so several games stay configured at once.
     /fake rig new crates
     /fake rig delete crates
 
-Three come built in, and are put back if a config file is missing them:
+Five come built in, and are put back if a config file is missing them:
 
 | rig | for |
 |---|---|
 | `5050` | coin flip — gold block / diamond block |
+| `454510` | 45/45/10 — diamonds, emeralds and one crystal |
 | `paper` | the named-paper game |
 | `roulette` | the crystal game |
 | `tower` | the five-floor shulker box climb |
@@ -234,6 +235,78 @@ whichever entry is selected.
     /fake rig set diamond_block 1 Jackpot
 
 `/fake rig unset` puts the dispenser you are looking at back on the cycled item.
+
+---
+
+## 5a. 45/45/10
+
+One dispenser holding nine things: **four diamonds, four emeralds and one end
+crystal**. The player calls which kind will come out. Calling the kind right pays
+**2x**; calling the crystal right pays **4x**.
+
+    /fake rig use 454510
+    (look at the dispenser)
+    /fake dispenser watch
+    H
+
+The nine slots come out laid like this, with the prize in the middle where the
+odds can be read at a glance rather than counted:
+
+    D D D
+    D C E
+    E E E
+
+### Rigging it
+
+This one needs no rig of its own — **`F` and `R` are the rig**. Whichever of the
+three items is selected is what comes out, every time, and the machine still
+looks like a nine-slot spread whichever way it is set. Press `F` to step
+diamond → emerald → crystal and back round.
+
+It is **silent by default**, like every other switching key — you can step it
+mid-game with the machine open in front of somebody.
+
+Three items on one key is one more than you can keep count of, though, and losing
+count by a single press means handing out a 4x you meant to keep. So there are two
+ways to check without guessing:
+
+`/fake dispenser status` marks the one that is rigged (see below), and shows
+nothing to anybody else.
+
+Or turn the readback on and it names the item and its payout in your action bar
+each time you press:
+
+    /fake announce on
+
+    Emerald - pays 2x
+    End Crystal - pays 4x
+
+The action bar is the small line above your hotbar, on your screen only. Off
+again with `/fake announce off`.
+
+### Checking it
+
+`/fake dispenser status` prints the spread with the real odds worked out:
+
+    Rig '454510', 45/45/10
+      holds 4x diamond (44%, pays 2x), 4x emerald (44%, pays 2x) <- RIGGED, 1x end_crystal (11%, pays 4x)
+      fires emerald
+
+(Nine slots cannot split 45/45/10 exactly — four of nine is 44.4% — which is why
+the status line shows what is actually in there rather than the name.)
+
+### Changing the spread
+
+The counts and payouts are saved with the rig in `config/mirage-client.json`
+under `mix`, alongside the items:
+
+    "mix": { "counts": [4, 4, 1], "payouts": [2, 2, 4] }
+
+Edit those and restart the game (the client config is read once, at startup).
+The item with the fewest of it takes the middle slot; if nothing is rarest —
+three of each, say — they just fill in order. A fourth item added with
+`/fake preset add <item>` gets a count of 1 and a payout of 1x until you give it
+its own numbers there.
 
 ---
 
@@ -628,7 +701,7 @@ Client-only decoration for your base.
 
 | key | does |
 |---|---|
-| `F` / `R` | next / previous item in the current rig |
+| `F` / `R` | next / previous item in the current rig (45/45/10: what comes out) |
 | `\` | next rig |
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |
