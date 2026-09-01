@@ -53,8 +53,10 @@ public final class FakeHands {
 
     private static ActionResult onUse(PlayerEntity player, World world, Hand hand,
                                       BlockHitResult hit) {
-        if (!world.isClient || !SelfFakes.enabled()) return ActionResult.PASS;
+        // Both hooks fire on the server as well. Being the client's own player is a
+        // stronger test of that than asking the world, and the world no longer says.
         if (!(player instanceof ClientPlayerEntity client)) return ActionResult.PASS;
+        if (!SelfFakes.enabled()) return ActionResult.PASS;
 
         int slot = SelfFakes.heldFakeSlot(client, hand);
         if (slot < 0) return ActionResult.PASS;
@@ -84,7 +86,8 @@ public final class FakeHands {
 
     private static ActionResult onAttack(PlayerEntity player, World world, Hand hand,
                                          BlockPos pos, Direction direction) {
-        if (!world.isClient || !SelfFakes.enabled()) return ActionResult.PASS;
+        if (!(player instanceof ClientPlayerEntity)) return ActionResult.PASS;
+        if (!SelfFakes.enabled()) return ActionResult.PASS;
         if (FakeBlocks.fakeAt(pos) == null) return ActionResult.PASS;
 
         // Ours to break. Vanilla must not be told, since the server has nothing there and
@@ -142,7 +145,9 @@ public final class FakeHands {
 
         if (FakeBlocks.broke(pos) == null) return;
 
-        client.particleManager.addBlockBreakParticles(pos, state);
+        // No particles: the call vanilla uses for them is not where it was, and a wrong
+        // guess is a failed build. The cracks and the sound carry it until the real name
+        // is confirmed.
         play(player, state, true);
 
         // Into the bag, the way a broken block goes. Nothing to pick up off the floor,

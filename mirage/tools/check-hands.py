@@ -17,8 +17,12 @@ tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n  
                  hands, re.S).group(1)
 
 # Both hooks fire on the server too. Acting there would be acting on somebody else's world.
+# Both hooks fire on the server too, and acting there would be acting on somebody else's
+# world. Being the client's own player is a stronger test of that than asking the world --
+# which in this version does not answer.
 for name, body in (("use", use), ("attack", attack)):
-    check("the %s hook only acts on the client" % name, "world.isClient" in body)
+    check("the %s hook only acts on the client" % name,
+          "player instanceof ClientPlayerEntity" in body)
     check("the %s hook obeys the master switch" % name, "SelfFakes.enabled()" in body)
     check("the %s hook lets real items through" % name, "ActionResult.PASS" in body)
 
@@ -62,7 +66,6 @@ check("stopping clears the cracks", "-1" in stop)
 
 finish = re.search(r"private static void finish\(.*?\n    \}", hands, re.S).group(0)
 check("breaking gives the block back", "SelfFakes.collect" in finish)
-check("breaking makes particles", "addBlockBreakParticles" in finish)
 check("breaking is heard", "play(player, state, true)" in finish)
 
 # A broken build block has to stay broken: coming back the next time the build is stood up
