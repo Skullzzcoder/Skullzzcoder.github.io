@@ -75,6 +75,29 @@ check("inspectApi dumps KeyBinding whole, since the new names cannot be searched
 check("inspectApi follows both moved signatures",
       "follow(screen, 'keyPressed')" in gradle and "follow(screen, 'mouseClicked')" in gradle)
 
+# A focused version, because the full dump is a haystack to paste back and the answer is
+# four class listings. It has to cover the same ground and follow the same two signatures.
+check("there is a focused task", "tasks.register('inspectKeys')" in gradle)
+keys_task = gradle[gradle.index("tasks.register('inspectKeys')"):gradle.index("tasks.register('inspectApi')")]
+for name in ("net.minecraft.client.option.KeyBinding",
+             "net.minecraft.client.option.GameOptions",
+             "net.minecraft.client.gui.screen.Screen"):
+    check("inspectKeys covers %s" % name.rsplit(".", 1)[1], name in keys_task)
+check("inspectKeys names the input classes from the signatures rather than guessing",
+      "['keyPressed', 'mouseClicked'].each" in keys_task and "method.parameterTypes.each" in keys_task)
+check("inspectKeys dumps KeyBinding whole",
+      "list('net.minecraft.client.option.KeyBinding', [])" in keys_task)
+check("inspectKeys writes a file, not just console output",
+      "file.text = out.toString()" in keys_task)
+
+# Both tasks must make the logs directory first, or Minecraft's logger buries the answer
+# in stack traces that look like a failure.
+for task in ("inspectKeys", "inspectApi"):
+    start = gradle.index("tasks.register('%s')" % task)
+    end = gradle.index("tasks.register('inspectApi')", start + 10) if task == "inspectKeys" else len(gradle)
+    check("%s makes room for the logger" % task,
+          "new File(projectDir, 'logs').mkdirs()" in gradle[start:end])
+
 # ------------------------------------------------------------------- clashes
 # The reason this screen exists: F is vanilla's swap-to-offhand and Minecraft runs both.
 same = body(ui, "private static boolean sameKey(KeyBinding one, KeyBinding two) {")

@@ -75,6 +75,102 @@ jar {
  * remapped compile classpath. Run this when a "cannot find symbol" error means a yarn name
  * moved between versions: gradlew inspectApi
  */
+/**
+ * The four things the keys screen needs and nothing else.
+ *
+ * <p>inspectApi prints everything, which is right when you do not know where to look and
+ * wrong when you do: the answer here is four class listings and the rest is a haystack.
+ * Writes a file as well as printing, so the output does not depend on redirecting a shell
+ * that Minecraft's logger is also writing to.
+ */
+tasks.register('inspectKeys') {
+    group = 'help'
+    description = 'Prints only what the keys screen needs: KeyBinding, GameOptions, and the input events.'
+    notCompatibleWithConfigurationCache('Loads classes from the compile classpath.')
+
+    def compileClasspath = sourceSets.main.compileClasspath
+    def report = layout.buildDirectory.file('mirage-keys-api.txt')
+
+    doLast {
+        // Minecraft's logger starts up as soon as one of its classes is touched and wants
+        // this directory. Without it the console fills with stack traces that look like a
+        // failure and are not.
+        new File(projectDir, 'logs').mkdirs()
+
+        def urls = compileClasspath.files.collect { it.toURI().toURL() }
+        def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
+        def out = new StringBuilder()
+
+        def say = { String line -> out.append(line).append('\n') }
+
+        def list = { String className, List filters ->
+            say('')
+            say("== ${className}")
+            try {
+                def type = loader.loadClass(className)
+                def lines = [] as TreeSet
+
+                type.methods.each { method ->
+                    try {
+                        if (method.declaringClass == Object.class) return
+                        if (!filters.isEmpty()
+                                && !filters.any { method.name.toLowerCase().contains(it) }) return
+                        def params = method.parameterTypes.collect { it.simpleName }.join(', ')
+                        lines << "  ${method.returnType.simpleName} ${method.name}(${params})"
+                    } catch (Throwable ignored) {
+                    }
+                }
+                type.fields.each { field ->
+                    try {
+                        if (!filters.isEmpty()
+                                && !filters.any { field.name.toLowerCase().contains(it) }) return
+                        lines << "  [field] ${field.type.simpleName} ${field.name}"
+                    } catch (Throwable ignored) {
+                    }
+                }
+                type.constructors.each { ctor ->
+                    try {
+                        def params = ctor.parameterTypes.collect { it.simpleName }.join(', ')
+                        lines << "  [ctor] ${type.simpleName}(${params})"
+                    } catch (Throwable ignored) {
+                    }
+                }
+                lines.each { say(it) }
+                if (lines.isEmpty()) say('  <nothing matched>')
+                return type
+            } catch (Throwable failure) {
+                say("  <could not load: ${failure}>")
+                return null
+            }
+        }
+
+        list('net.minecraft.client.option.KeyBinding', [])
+        list('net.minecraft.client.option.GameOptions', ['key', 'bind', 'write', 'save'])
+        list('net.minecraft.client.util.InputUtil', ['key', 'code', 'unknown'])
+
+        // Whatever a key press and a click now arrive as. Named from the signatures rather
+        // than guessed at, then listed whole.
+        def screen = list('net.minecraft.client.gui.screen.Screen', ['key', 'mouse', 'click'])
+        if (screen != null) {
+            def seen = [] as Set
+            ['keyPressed', 'mouseClicked'].each { name ->
+                screen.methods.findAll { it.name == name }.each { method ->
+                    method.parameterTypes.each { param ->
+                        if (!param.isPrimitive() && seen.add(param.name)) list(param.name, [])
+                    }
+                }
+            }
+        }
+
+        println out.toString()
+        def file = report.get().asFile
+        file.parentFile.mkdirs()
+        file.text = out.toString()
+        println ""
+        println "Written to ${file}"
+    }
+}
+
 tasks.register('inspectApi') {
     group = 'help'
     description = 'Prints members of the Minecraft classes this mod depends on.'
@@ -83,6 +179,11 @@ tasks.register('inspectApi') {
     def compileClasspath = sourceSets.main.compileClasspath
 
     doLast {
+        // Minecraft's logger starts up as soon as one of its classes is touched and wants
+        // this directory. Without it the console fills with stack traces that look like a
+        // failure and are not.
+        new File(projectDir, 'logs').mkdirs()
+
         def urls = compileClasspath.files.collect { it.toURI().toURL() }
         def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
 
