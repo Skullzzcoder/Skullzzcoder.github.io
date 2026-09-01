@@ -752,7 +752,23 @@ which one you want.
 accident, which previously could only be spent by letting the machine fire the
 shot it was set up to ruin.
 
-Rebindable in Options → Controls → Miscellaneous.
+### Changing them
+
+`/fake keys` opens a screen with every key in one place, or press **Keys** in the
+main menu (`/fake ui`). Click a key to change it, press the new one, and **Escape**
+leaves it unbound. `/fake keys list` prints the same thing as text.
+
+**It marks clashes, which is the point of it.** A key Minecraft also uses shows in
+red, because Minecraft runs *both* bindings — `F` is swap-to-offhand by default, so
+rigging a game also threw your sword into your other hand and nothing said why.
+**Clear the clashes** unbinds Minecraft's side of every clash at once, and never
+touches yours.
+
+**Put them all back** restores the defaults in the table above.
+
+They are ordinary key bindings, so Options → Controls → Miscellaneous still works
+too — this screen just shows them together, says what each one is for, and is the
+only one that will tell you about a clash.
 
 ## When nothing happens
 

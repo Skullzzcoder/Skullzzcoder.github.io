@@ -97,7 +97,14 @@ public class MirageClient implements ClientModInitializer {
                         // default -- including the one that says which of three items
                         // 45/45/10 is currently rigged to.
                         .then(ClientCommandManager.literal("keys")
-                                .executes(MirageClient::listKeys))
+                                .executes(context -> {
+                                    // Opened on the next tick: a screen cannot be put up
+                                    // from inside the command that is still running.
+                                    openKeys = true;
+                                    return feedback(context, "Opening the keys screen.");
+                                })
+                                .then(ClientCommandManager.literal("list")
+                                        .executes(MirageClient::listKeys)))
                         .then(ClientCommandManager.literal("announce")
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     SelfFakes.setAnnounceSwitching(true);
@@ -216,6 +223,10 @@ public class MirageClient implements ClientModInitializer {
             while (nextResult.wasPressed()) rigResult(client, 1);
             while (previousResult.wasPressed()) rigResult(client, -1);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
+            if (openKeys) {
+                openKeys = false;
+                client.setScreen(new MirageKeysScreen());
+            }
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -230,59 +241,73 @@ public class MirageClient implements ClientModInitializer {
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
 
+    /**
+     * One key the mod owns: the binding, what it is for in plain words, and where it began.
+     *
+     * <p>The default is kept here rather than asked of the binding, so putting one back is
+     * answered by the same line that set it up.
+     */
+    public record Bind(KeyBinding binding, String label, int defaultCode) {
+    }
+
+    private static final List<Bind> BINDS = new ArrayList<>();
+
+    /** Every key the mod owns, in the order they are worth reading. */
+    public static List<Bind> binds() {
+        return BINDS;
+    }
+
     private static void registerKeys() {
         // A key binding's category is an object rather than a string in this version, so
         // reuse a vanilla one instead of registering our own. The keys land under
         // Miscellaneous in Controls, which costs a heading and risks nothing.
         KeyBinding.Category category = KeyBinding.Category.MISC;
 
-        nextResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.next_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_F, category));
-        previousResult = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.prev_result", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_R, category));
-        armNext = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.arm_next", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_SEMICOLON, category));
-        fireNow = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.fire_now", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_APOSTROPHE, category));
-        refill = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.refill", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_H, category));
-        clearFakes = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.clear_fakes", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_K, category));
-        cycleWinner = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.cycle_winner", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_M, category));
-        winFirst = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.win_first", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_Z, category));
-        winSecond = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.win_second", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_X, category));
-        power = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.power", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_N, category));
-        cutBlock = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.cut_block", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_B, category));
-        callFirst = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.call_first", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_LEFT_BRACKET, category));
-        callSecond = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.call_second", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_BRACKET, category));
-        cycleRig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.cycle_rig", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_BACKSLASH, category));
+        nextResult = bind("next_result", GLFW.GLFW_KEY_F, category,
+                "Rig forward (changes with the rig)");
+        previousResult = bind("prev_result", GLFW.GLFW_KEY_R, category,
+                "Rig back (changes with the rig)");
+        armNext = bind("arm_next", GLFW.GLFW_KEY_SEMICOLON, category,
+                "Arm the next shot");
+        fireNow = bind("fire_now", GLFW.GLFW_KEY_APOSTROPHE, category,
+                "Fire the machine you are looking at");
+        refill = bind("refill", GLFW.GLFW_KEY_H, category,
+                "Refill the machine you are looking at");
+        clearFakes = bind("clear_fakes", GLFW.GLFW_KEY_K, category,
+                "Clear every fake from your inventory");
+        cycleWinner = bind("cycle_winner", GLFW.GLFW_KEY_M, category,
+                "Paper game: step the winner");
+        winFirst = bind("win_first", GLFW.GLFW_KEY_Z, category,
+                "Paper game: Player wins");
+        winSecond = bind("win_second", GLFW.GLFW_KEY_X, category,
+                "Paper game: Host wins");
+        power = bind("power", GLFW.GLFW_KEY_N, category,
+                "Everything off / back on");
+        cutBlock = bind("cut_block", GLFW.GLFW_KEY_B, category,
+                "Open a hole in the build you are looking at");
+        callFirst = bind("call_first", GLFW.GLFW_KEY_LEFT_BRACKET, category,
+                "Tower: they called the first colour");
+        callSecond = bind("call_second", GLFW.GLFW_KEY_RIGHT_BRACKET, category,
+                "Tower: they called the second colour");
+        cycleRig = bind("cycle_rig", GLFW.GLFW_KEY_BACKSLASH, category,
+                "Next rig");
         // Unbound by default: the menu has a command, and an accidental clash is worse.
-        openMenu = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.mirage.open_menu", InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN, category));
+        // It can be given a key in the keys screen like any of the others.
+        openMenu = bind("open_menu", GLFW.GLFW_KEY_UNKNOWN, category,
+                "Open the Mirage menu");
     }
+
+    /** Registers one key and remembers it, so the keys screen has the whole set. */
+    private static KeyBinding bind(String id, int code, KeyBinding.Category category,
+                                   String label) {
+        KeyBinding binding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.mirage." + id, InputUtil.Type.KEYSYM, code, category));
+        BINDS.add(new Bind(binding, label, code));
+        return binding;
+    }
+
+    /** Set by the command, acted on by the next tick, since a command cannot open a screen. */
+    private static boolean openKeys;
 
     private static String lastPublished = "";
 

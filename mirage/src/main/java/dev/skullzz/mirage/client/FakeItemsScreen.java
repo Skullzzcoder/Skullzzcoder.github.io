@@ -260,10 +260,16 @@ public class FakeItemsScreen extends Screen {
             SelfFakes.clearAll(player);
             SelfFakes.clearAllContainers(player);
             this.status = Text.literal("Cleared every fake item.").formatted(Formatting.GREEN);
-        }).dimensions(this.width / 2 - 152, y, 150, 20).build());
+        }).dimensions(this.width / 2 - 230, y, 150, 20).build());
+
+        // Handed this screen to come back to, so the keys are a step into the menu rather
+        // than a different place you have to find your way back from.
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Keys"), button -> {
+            if (this.client != null) this.client.setScreen(new MirageKeysScreen(this));
+        }).dimensions(this.width / 2 - 76, y, 150, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> this.close())
-                .dimensions(this.width / 2 + 2, y, 150, 20).build());
+                .dimensions(this.width / 2 + 78, y, 150, 20).build());
     }
 
     private void addExtra(List<ClickableWidget> group, String label, int x, int y, int width,
