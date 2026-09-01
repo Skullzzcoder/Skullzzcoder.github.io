@@ -540,6 +540,32 @@ public final class FakeBlocks {
         return true;
     }
 
+    /** What is being faked at a position, or null if nothing is. */
+    public static BlockState fakeAt(BlockPos pos) {
+        return showing.get(pos);
+    }
+
+    /**
+     * Takes a block away because it was broken.
+     *
+     * <p>One a machine put down simply goes. One belonging to a build is cut out of it, so
+     * the hole stays where it was put rather than coming back the next time the build is
+     * stood up -- which is what breaking a block means.
+     *
+     * @return what was there, or null if nothing of ours was.
+     */
+    public static BlockState broke(BlockPos pos) {
+        BlockState was = showing.get(pos);
+        if (was == null) return null;
+
+        if (underfootOnly.contains(pos)) {
+            unplace(pos);
+        } else {
+            cut(pos, 0);
+        }
+        return was;
+    }
+
     /** Takes one placed block away, putting the real world back. */
     public static boolean unplace(BlockPos pos) {
         if (!underfootOnly.remove(pos)) return false;

@@ -26,6 +26,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 
 import dev.skullzz.mirage.Mirage;
@@ -241,6 +242,39 @@ public final class SelfFakes {
     public static void setAnnounceSwitching(boolean announce) {
         announceSwitching = announce;
         save();
+    }
+
+    /**
+     * Which slot a hand is holding a fake in, or -1.
+     *
+     * <p>By identity against what we painted, not by what the stack looks like: a real item
+     * of the same kind in the same hand is somebody else's and must be left alone.
+     */
+    public static int heldFakeSlot(ClientPlayerEntity player, Hand hand) {
+        ItemStack held = player.getStackInHand(hand);
+
+        for (Map.Entry<Integer, ItemStack> entry : applied.entrySet()) {
+            if (held == entry.getValue() && fakes.containsKey(entry.getKey())) {
+                return entry.getKey();
+            }
+        }
+        return -1;
+    }
+
+    /** Takes one off a fake, the way placing a block does. @return what was taken. */
+    public static FakeSpec takeOne(int slot) {
+        FakeSpec spec = fakes.get(slot);
+        if (spec == null) return null;
+
+        if (spec.count > 1) {
+            fakes.put(slot, spec.withCount(spec.count - 1));
+        } else {
+            fakes.remove(slot);
+        }
+        // The stack in the slot is still the one we wrote, so nothing would repaint it.
+        applied.remove(slot);
+        save();
+        return spec.withCount(1);
     }
 
     public static void set(int slot, FakeSpec spec) {

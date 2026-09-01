@@ -118,6 +118,7 @@ public class MirageClient implements ClientModInitializer {
             ClientDispensers.tick(client);
             ClientDecor.tick(client.world);
             FakeBlocks.tick(client);
+            FakeHands.tick(client);
             // A price that arrived from the API rebuilds the fakes once, not every tick.
             if (PriceApi.consumeDirty()) SelfFakes.rebuildAll();
 
@@ -203,6 +204,7 @@ public class MirageClient implements ClientModInitializer {
         });
 
         FakeClicks.register();
+        FakeHands.register();
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
 

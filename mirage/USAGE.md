@@ -563,7 +563,28 @@ cannot mine a fake block (there is nothing there to break), and if the server
 sends a real update for a position it flickers back for up to a second before
 the sweep repaints it.
 
-## 11. Item frames and armour stands
+## 11. Placing and breaking
+
+A fake in your hand behaves like the real thing.
+
+**Right-click** to place it. The block goes down where a real one would, against
+the face you clicked, the stack drops by one, your hand swings and it makes the
+right sound. Anything that is not a block does nothing.
+
+**Hold left-click** to break it back out. The cracks appear, it takes as long as
+a real one would for whatever you are swinging, particles fly, and the block goes
+back into your bag. Let go or look away and the progress resets, same as vanilla.
+
+Breaking a block that belongs to a **build** cuts it out permanently — the hole
+stays where you broke it rather than coming back the next time you stand the
+build up, which is what breaking something means. Breaking one a machine put down
+just removes it.
+
+None of this reaches the server. Every interaction with a fake is cancelled
+before it becomes a packet: the slot the server sees is empty, and a click on an
+empty slot is worse than no click at all.
+
+## 12. Item frames and armour stands
 
 Client-only decoration for your base.
 
