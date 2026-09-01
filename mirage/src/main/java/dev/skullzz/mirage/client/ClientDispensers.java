@@ -427,14 +427,16 @@ public final class ClientDispensers {
             if (result == null) {
                 warn("Rig '" + profile.name + "' has nothing to fire.");
             } else {
-                if (profile.placeOutput) {
-                    stand(world, fire.pos(), result);
-                } else {
-                    spawn(world, fire.pos(), result);
-                }
+                // Only once something has actually come out. A machine with no room in
+                // front of it used to take the item off its count anyway, so its stock
+                // drained while nothing ever appeared.
+                boolean out = profile.placeOutput
+                        ? stand(world, fire.pos(), result)
+                        : spawn(world, fire.pos(), result);
+
                 // Take it out of what the dispenser looks like it is holding, so opening
                 // the thing afterwards agrees with what everyone just watched come out.
-                deplete(profile, fire.pos(), result);
+                if (out) deplete(profile, fire.pos(), result);
             }
             if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
@@ -1003,9 +1005,9 @@ public final class ClientDispensers {
         client.player.sendMessage(Text.literal(message).formatted(Formatting.GRAY), true);
     }
 
-    private static void spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
+    private static boolean spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DispenserBlock)) return;
+        if (!(state.getBlock() instanceof DispenserBlock)) return false;
 
         Direction facing = state.get(DispenserBlock.FACING);
         double x = pos.getX() + 0.5 + facing.getOffsetX() * 0.7;
@@ -1031,6 +1033,7 @@ public final class ClientDispensers {
 
         world.addEntity(entity);
         spawned.add(new SpawnedItem(entity, result, tick));
+        return true;
     }
 
     /**
@@ -1039,9 +1042,9 @@ public final class ClientDispensers {
      * <p>One per machine: the next round takes the last one away first, which is what
      * clearing the floor between rounds looks like.
      */
-    private static void stand(ClientWorld world, BlockPos pos, FakeSpec result) {
+    private static boolean stand(ClientWorld world, BlockPos pos, FakeSpec result) {
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DispenserBlock)) return;
+        if (!(state.getBlock() instanceof DispenserBlock)) return false;
 
         BlockPos was = standing.remove(pos);
         if (was != null) FakeBlocks.unplace(was);
@@ -1050,16 +1053,17 @@ public final class ClientDispensers {
                 Registries.ITEM.getId(result.item).getPath());
         if (block == null) {
             warn("A " + result.describe() + " is not something a machine can place.");
-            return;
+            return false;
         }
 
         // Where a real dispenser would put it: the block it faces.
         BlockPos target = pos.offset(state.get(DispenserBlock.FACING));
         if (!FakeBlocks.place(target, block.getDefaultState())) {
-            note("no room in front of " + text(pos) + " to put it down");
-            return;
+            warn("No room in front of " + text(pos) + " to put it down.");
+            return false;
         }
         standing.put(pos.toImmutable(), target);
+        return true;
     }
 
     /** Clears the answers standing in front of the machines. */

@@ -40,9 +40,17 @@ being unsure which state you are in is the one thing worse than no switch.
     /fake set hotbar1 diamond_block 64
     /fake set hotbar1 netherite_sword 1 sharpness:5,mending:1
 
-Slot names tab-complete (`hotbar1`–`hotbar9`, `main1`–`main27`, `offhand`,
-armour slots). A slot holding a **real** item is never touched, so nothing of
-yours can be lost or hidden.
+Slot names tab-complete: `hotbar1`–`hotbar9`, `inv1`–`inv27`, and the worn
+slots — `helmet`, `chest`, `legs`, `boots`, `offhand`.
+
+The worn ones show **on your player model**, not just in the screen, so a fake
+netherite set is on you in third person and in your own hand:
+
+    /fake set helmet netherite_helmet
+    /fake set chest netherite_chestplate 1 protection:4
+
+A slot holding a **real** item is never touched, so nothing of yours can be lost
+or hidden, and anything picked up goes to the bag rather than onto your head.
 
 `/fake list` shows what is set. `/fake clear` wipes the lot.
 

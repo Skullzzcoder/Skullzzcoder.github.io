@@ -11,7 +11,7 @@ def check(name, cond):
 # The renderer draws between where a thing was last tick and where it is now. A freshly
 # built entity has no last tick, so its first frame is drawn from wherever those fields
 # started -- usually the world origin, as a streak across the map.
-spawn = re.search(r"private static void spawn\(.*?\n    \}", disp, re.S).group(0)
+spawn = re.search(r"private static boolean spawn\(.*?\n    \}", disp, re.S).group(0)
 check("a thrown item starts where it is", "refreshPositionAndAngles" in spawn)
 launch = re.search(r"private static void launchArrow\(.*?\n    \}", disp, re.S).group(0)
 check("an arrow starts where it is", "refreshPositionAndAngles" in launch)

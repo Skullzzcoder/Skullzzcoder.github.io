@@ -38,7 +38,12 @@ import dev.skullzz.mirage.Mirage;
  * so the server's view is untouched and nobody else sees any of this.
  */
 public final class SelfFakes {
-    public static final int SLOT_COUNT = 36;
+    /** Everything a player carries: 36 of inventory, then the armour, then the offhand. */
+    public static final int SLOT_COUNT = 41;
+    /** Where the carried part ends. A pickup never lands past here. */
+    public static final int CARRIED_SLOTS = 36;
+    /** Worn slots, in the order the inventory keeps them: feet upwards, then the offhand. */
+    private static final String[] WORN = { "boots", "legs", "chest", "helmet", "offhand" };
     /** Container sizes we keep separate sets of fakes for. */
     public static final int DISPENSER = 9;
     public static final int ENDER_CHEST = 27;
@@ -85,12 +90,24 @@ public final class SelfFakes {
         } catch (NumberFormatException ignored) {
             // fall through
         }
+
+        // What is worn shows on the player model as well as in the screen, so these are
+        // the slots that put a fake on you rather than merely in your bag.
+        for (int i = 0; i < WORN.length; i++) {
+            if (WORN[i].equals(cleaned)) return CARRIED_SLOTS + i;
+        }
+        if (cleaned.equals("leggings")) return CARRIED_SLOTS + 1;
+        if (cleaned.equals("chestplate")) return CARRIED_SLOTS + 2;
+        if (cleaned.equals("head")) return CARRIED_SLOTS + 3;
         return -1;
     }
 
     public static String slotName(int index) {
         if (index >= 0 && index <= 8) return "hotbar" + (index + 1);
         if (index >= 9 && index <= 35) return "inv" + (index - 8);
+        if (index >= CARRIED_SLOTS && index < CARRIED_SLOTS + WORN.length) {
+            return WORN[index - CARRIED_SLOTS];
+        }
         return "slot" + index;
     }
 
@@ -98,6 +115,7 @@ public final class SelfFakes {
         List<String> names = new ArrayList<>();
         for (int i = 1; i <= 9; i++) names.add("hotbar" + i);
         for (int i = 1; i <= 27; i++) names.add("inv" + i);
+        names.addAll(java.util.Arrays.asList(WORN));
         return names;
     }
 
@@ -269,7 +287,8 @@ public final class SelfFakes {
             }
         }
 
-        for (int slot = 0; slot < SLOT_COUNT; slot++) {
+        // Only the carried part: something walked over belongs in the bag, never worn.
+        for (int slot = 0; slot < CARRIED_SLOTS; slot++) {
             if (fakes.containsKey(slot)) continue;
             if (player != null && !player.getInventory().getStack(slot).isEmpty()) continue;
 
@@ -347,7 +366,7 @@ public final class SelfFakes {
 
         for (Map.Entry<Integer, ItemStack> entry : applied.entrySet()) {
             int slot = entry.getKey();
-            if (slot < 0 || slot >= SLOT_COUNT) continue;
+            if (slot < 0 || slot >= Math.min(SLOT_COUNT, inventory.size())) continue;
             // Only where it is still the very stack we wrote; anything else is the server's.
             if (inventory.getStack(slot) != entry.getValue()) continue;
 
@@ -368,7 +387,9 @@ public final class SelfFakes {
 
         for (Map.Entry<Integer, FakeSpec> entry : fakes.entrySet()) {
             int slot = entry.getKey();
-            if (slot < 0 || slot >= SLOT_COUNT) continue;
+            // Against the inventory's own size, not ours: how many slots a player carries
+            // has moved between versions, and reaching past the end would throw.
+            if (slot < 0 || slot >= Math.min(SLOT_COUNT, inventory.size())) continue;
 
             ItemStack current = inventory.getStack(slot);
             // Identity, not equality: if this is not the very stack we wrote, the server has

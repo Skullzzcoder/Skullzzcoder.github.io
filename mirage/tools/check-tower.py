@@ -124,15 +124,20 @@ check("a game with no machines says so", "partsInGame" in disp and "partsInGame"
 # stands on the ground in front of the machine instead of bouncing out of it.
 blocks = io.open("src/main/java/dev/skullzz/mirage/client/FakeBlocks.java", encoding="utf-8").read()
 check("the tower places its answer", "tower.placeOutput = true" in disp)
-stand = re.search(r"private static void stand\(.*?\n    \}", disp, re.S).group(0)
+stand = re.search(r"private static boolean stand\(.*?\n    \}", disp, re.S).group(0)
 check("it goes where the machine faces", "pos.offset(state.get(DispenserBlock.FACING))" in stand)
 check("one per machine, the last taken away", "FakeBlocks.unplace(was)" in stand)
 check("only where there is room", "FakeBlocks.place(target" in stand)
 
-# The if-branch alone: matching to the end of the else would catch the throwing case too
-# and pass whichever way round they were.
-fire = re.search(r"if \(profile\.placeOutput\) \{(.*?)\n\s*\} else \{(.*?)\n\s*\}",
-                 disp, re.S)
+# A machine with something already in front of it used to take the item off its count
+# anyway, so its stock drained while nothing ever appeared.
+check("placing reports whether it happened", "private static boolean stand(" in disp)
+check("throwing reports whether it happened", "private static boolean spawn(" in disp)
+check("nothing is taken off the count unless it came out", "if (out) deplete(" in disp)
+
+# Each arm on its own: reading the whole choice would match both calls and pass whichever
+# way round they were.
+fire = re.search(r"profile\.placeOutput\s*\?(.*?):(.*?);", disp, re.S)
 check("placing is what the flag does", "stand(world" in fire.group(1)
       and "spawn(world" not in fire.group(1))
 check("throwing is what it does otherwise", "spawn(world" in fire.group(2)
