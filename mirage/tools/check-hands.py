@@ -39,6 +39,21 @@ check("the use hook obeys the master switch", "SelfFakes.enabled()" in use)
 check("breaking takes over exactly where paint is showing",
       "FakeBlocks.paintedAt(pos)" in attack and "FakeBlocks.fakeAt(" not in attack)
 
+# The rule that had to be learned the hard way, and cost three rounds of "nothing works".
+# UseBlockCallback fires on EVERY right-click on EVERY block, and any answer but PASS
+# cancels what vanilla would have done. Taking the click merely because a fake was in hand
+# therefore took the button that fires the machines, the lever, the door and the dispenser's
+# own screen with it -- the whole mod switched off by holding one of its own items.
+#
+# Vanilla gives the block first refusal unless the player is sneaking, so placing lives on
+# that gesture and nothing else is ever intercepted. The test is not that the check exists
+# but that it comes FIRST: after the held slot is known there is no way back to PASS, so a
+# sneak test below that point would still swallow every click made holding a fake.
+check("a right-click is only taken while sneaking", "!client.isSneaking()" in use)
+sneak, held_slot = use.find("isSneaking"), use.find("heldFakeSlot")
+check("and the block gets first refusal before anything else",
+      0 <= sneak < held_slot)
+
 # Holding a fake, nothing may reach the server: the slot it sees is empty, and a click on
 # an empty slot is worse than no click at all.
 # The real rule, and the one a looser check missed: once a fake is known to be held, no
@@ -68,6 +83,15 @@ check("the last one leaves the slot", "fakes.remove(slot)" in take)
 check("taking one forces a repaint", "applied.remove(slot)" in take)
 
 # breaking is driven from the tick, because the attack fires once and breaking is a hold
+# The fire key is the one thing that tells a wiring problem apart from a rigging one, so
+# it has to report either way: fired-and-nothing-came-out reading the same as never-fired
+# is what made each "nothing dispenses" start from nothing.
+fire = re.search(r"private static void fireLookedAtOrAll\(MinecraftClient client\) \{"
+                 r"(.*?)\n    \}", client, re.S).group(1)
+check("firing says so when it worked", fire.count("say(client,") >= 2
+      and "Fired " in fire)
+check("and still says so when there was nothing to fire", "fired == 0" in fire)
+
 check("breaking is advanced from the tick", "FakeHands.tick(client)" in client)
 check("breaking uses vanilla's own rate", "calcBlockBreakingDelta" in tick)
 check("breaking shows the cracks", "setBlockBreakingInfo" in tick)

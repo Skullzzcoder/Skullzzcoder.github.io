@@ -1371,12 +1371,19 @@ public class MirageClient implements ClientModInitializer {
         BlockHitResult hit = lookedAt(64.0);
         if (hit != null && ClientDispensers.watchedPositions().contains(hit.getBlockPos())) {
             ClientDispensers.fireNow(hit.getBlockPos());
+            say(client, "Fired the dispenser you are looking at.");
             return;
         }
 
-        if (ClientDispensers.fireAllWatched() == 0) {
-            say(client, "No dispensers watched. Look at one and run /fake dispenser watch.");
-        }
+        // Always, not only when there are none. This key is the one thing that tells a
+        // wiring problem apart from a rigging one, and it could only ever answer half of
+        // that: fired-and-produced-nothing looked the same as never-fired-at-all, so
+        // every "nothing dispenses" started from scratch.
+        int fired = ClientDispensers.fireAllWatched();
+        say(client, fired == 0
+                ? "No dispensers watched. Look at one and run /fake dispenser watch."
+                : "Fired " + fired + " machine" + (fired == 1 ? "" : "s")
+                        + ". Nothing coming out means the rig, not the wiring.");
     }
 
     /**

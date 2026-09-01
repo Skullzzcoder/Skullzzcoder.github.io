@@ -59,11 +59,23 @@ public final class FakeHands {
         if (!(player instanceof ClientPlayerEntity client)) return ActionResult.PASS;
         if (!SelfFakes.enabled()) return ActionResult.PASS;
 
+        // Vanilla gives the block first refusal on a right-click, and only sneaking says
+        // otherwise: a button, a lever, a door or a dispenser is being used, not built
+        // against. Taking every right-click merely because a fake was in hand took the
+        // button that fires the machines with it, and the machines could not be opened
+        // either -- the whole mod switched off by holding one of its own items, which is
+        // exactly as much of it as was working.
+        //
+        // So placing lives on the gesture vanilla already reserves for it. Nothing else is
+        // ever intercepted, and this cannot come back.
+        if (!client.isSneaking()) return ActionResult.PASS;
+
         int slot = SelfFakes.heldFakeSlot(client, hand);
         if (slot < 0) return ActionResult.PASS;
 
-        // Held a fake, so nothing about this reaches the server whatever happens next: the
-        // slot the server sees is empty, and a click on an empty slot is worse than none.
+        // Held a fake and asked to build with it, so nothing about this reaches the server
+        // whatever happens next: the slot the server sees is empty, and a click on an
+        // empty slot is worse than none.
         FakeSpec spec = SelfFakes.all().get(slot);
         Block block = spec == null ? null : blockOf(spec.item);
         if (block == null) return ActionResult.FAIL;

@@ -663,9 +663,17 @@ hitting, which is put back every tick instead — see section 11.
 
 A fake in your hand behaves like the real thing.
 
-**Right-click** to place it. The block goes down where a real one would, against
-the face you clicked, the stack drops by one, your hand swings and it makes the
-right sound. Anything that is not a block does nothing.
+**Sneak + right-click** to place it. The block goes down where a real one would,
+against the face you clicked, the stack drops by one, your hand swings and it
+makes the right sound. Anything that is not a block does nothing.
+
+> **Sneak is required, and this is why.** A plain right-click belongs to the block
+> you clicked — a button, a lever, a door, a dispenser's own screen. Placing used
+> to take every right-click while a fake was in hand, which meant the button that
+> fires the machines could not be pressed and the machines could not be opened.
+> Holding one of the mod's own items switched the rest of the mod off. Placing now
+> lives on the gesture vanilla already reserves for building, so it can never take
+> an interaction that was not meant for it.
 
 **Hold left-click** to break it back out. The cracks appear, it takes as long as
 a real one would for whatever you are swinging, it makes the right sound, and the
@@ -727,6 +735,7 @@ which one you want.
 | key | does |
 |---|---|
 | `F` / `R` | rig the current game forward / back (table above) |
+| sneak + right-click | place the fake block you are holding |
 | `\` | next rig — and `F` / `R` change with it |
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |
@@ -758,6 +767,15 @@ run, and it names every way this can go wrong:
 | `not a dispenser any more` | it was broken or moved. Rewatch it. |
 | `chunk not loaded` | go closer |
 | `fires nothing` | the rig has no item selected — press `F` |
+
+Then press `'`. It now always says what it did, and that single line splits the
+problem in half:
+
+- **"Fired 3 machines"** and nothing came out → the rig, not the wiring. Check
+  what `status` says it fires.
+- **"No dispensers watched"** → nothing is set up. Look at each machine, press `H`.
+- **the button works but redstone never fires it** → the dispenser is being worked
+  by something your client cannot see. Use the key.
 
 Then:
 
