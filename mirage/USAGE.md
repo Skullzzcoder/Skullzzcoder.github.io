@@ -575,10 +575,10 @@ go.
 ### It will not get you flagged
 
 Your movement stays identical to a client with no mod on it: you never stand on
-or walk into anything the server does not also have. Two smaller things — you
-cannot mine a fake block (there is nothing there to break), and if the server
-sends a real update for a position it flickers back for up to a second before
-the sweep repaints it.
+or walk into anything the server does not also have. One smaller thing: if the
+server sends a real update for a position it flickers back for up to a second
+before the sweep repaints it. The one exception is a block you are actually
+hitting, which is put back every tick instead — see section 11.
 
 ## 11. Placing and breaking
 
@@ -589,8 +589,17 @@ the face you clicked, the stack drops by one, your hand swings and it makes the
 right sound. Anything that is not a block does nothing.
 
 **Hold left-click** to break it back out. The cracks appear, it takes as long as
-a real one would for whatever you are swinging, particles fly, and the block goes
-back into your bag. Let go or look away and the progress resets, same as vanilla.
+a real one would for whatever you are swinging, it makes the right sound, and the
+block goes back into your bag. Let go or look away and the progress resets, same
+as vanilla. (No break particles yet: the call the game uses for them has moved,
+and a wrong guess at the new name is a build that will not start.)
+
+In **creative** it goes in one hit, the way creative does. That is deliberate:
+creative decides a block is broken *before* the hook this mod answers, so left
+alone the block would simply vanish about a quarter of a second after you clicked
+— no cracks, no item, and a real break sent to the server for whatever is really
+behind the paint. Breaking it ourselves first means there is nothing left there
+for the game to find.
 
 Breaking a block that belongs to a **build** cuts it out permanently — the hole
 stays where you broke it rather than coming back the next time you stand the
@@ -599,7 +608,9 @@ just removes it.
 
 None of this reaches the server. Every interaction with a fake is cancelled
 before it becomes a packet: the slot the server sees is empty, and a click on an
-empty slot is worse than no click at all.
+empty slot is worse than no click at all. A block is only taken over when the
+paint is actually on the screen there — a fake held back from underfoot, or one
+the master switch has taken down, is a real block again and breaks normally.
 
 ## 12. Item frames and armour stands
 

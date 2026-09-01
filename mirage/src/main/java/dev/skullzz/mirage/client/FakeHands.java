@@ -10,6 +10,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.util.ActionResult;
@@ -87,14 +88,15 @@ public final class FakeHands {
     private static ActionResult onAttack(PlayerEntity player, World world, Hand hand,
                                          BlockPos pos, Direction direction) {
         if (!(player instanceof ClientPlayerEntity)) return ActionResult.PASS;
-        if (!SelfFakes.enabled()) return ActionResult.PASS;
-        if (FakeBlocks.fakeAt(pos) == null) return ActionResult.PASS;
+        if (FakeBlocks.paintedAt(pos) == null) return ActionResult.PASS;
 
-        // Ours to break. Vanilla must not be told, since the server has nothing there and
-        // would answer by putting the real block straight back.
+        // Ours to break, whatever the master switch says about anything else: what is being
+        // hit is paint. The server has a different block there, or none, and letting vanilla
+        // mine it would send a real break for whatever is really underneath.
         if (!pos.equals(breaking)) {
             breaking = pos.toImmutable();
             progress = 0.0F;
+            FakeBlocks.pin(breaking);
         }
         return ActionResult.SUCCESS;
     }
@@ -111,14 +113,29 @@ public final class FakeHands {
         ClientWorld world = client.world;
         if (player == null || world == null || breaking == null) return;
 
-        if (!SelfFakes.enabled() || !client.options.attackKey.isPressed() || !aimedAt(client)) {
+        if (!client.options.attackKey.isPressed() || !aimedAt(client)) {
             stop(world);
             return;
         }
 
-        BlockState state = FakeBlocks.fakeAt(breaking);
+        // What is on the screen there, not merely what we mean to be showing. The sweep has
+        // already run this tick and put the pinned block back, so if it is still not paint
+        // the illusion is off and the block being hit is the real one.
+        BlockState state = FakeBlocks.paintedAt(breaking);
         if (state == null) {
             stop(world);
+            return;
+        }
+
+        // Creative takes a block out the instant it is hit, and it does so before the hook
+        // our callback answers -- the check for creative sits above it, so no answer we give
+        // is ever heard. Left alone, five ticks after the click vanilla mines its own copy
+        // and the block simply vanishes: no cracks, no item, and a real break sent for
+        // whatever the server has underneath. So the break is finished here first. The paint
+        // comes off because we took it and the item lands in the bag, and by the time vanilla
+        // looks there is nothing of ours left at that position to mine.
+        if (player.isCreative()) {
+            finish(client, player, world, state);
             return;
         }
 
@@ -142,6 +159,7 @@ public final class FakeHands {
         world.setBlockBreakingInfo(BREAKER_ID, pos, -1);
         breaking = null;
         progress = 0.0F;
+        FakeBlocks.pin(null);
 
         if (FakeBlocks.broke(pos) == null) return;
 
@@ -153,7 +171,7 @@ public final class FakeHands {
         // Into the bag, the way a broken block goes. Nothing to pick up off the floor,
         // since the floor is the server's and it never knew the block was there.
         Item item = state.getBlock().asItem();
-        if (item != null) SelfFakes.collect(new FakeSpec(item, 1, ""), player);
+        if (item != Items.AIR) SelfFakes.collect(new FakeSpec(item, 1, ""), player);
     }
 
     private static void stop(ClientWorld world) {
@@ -162,6 +180,7 @@ public final class FakeHands {
         world.setBlockBreakingInfo(BREAKER_ID, breaking, -1);
         breaking = null;
         progress = 0.0F;
+        FakeBlocks.pin(null);
     }
 
     /** Vanilla's own volume and pitch for putting a block down or taking one out. */

@@ -97,6 +97,17 @@ public final class FakeBlocks {
     private static final List<BlockPos> order = new ArrayList<>();
     private static int cursor;
 
+    /**
+     * The one position being broken by hand, if any.
+     *
+     * <p>The sweep comes round to a position about once a second, which is fine for the
+     * server correcting something out at the edge of a build and far too slow for a block
+     * being hit: vanilla takes its own copy out from under us the moment it decides the
+     * block is gone, and a second of nothing is exactly the block disappearing. So the one
+     * being broken is put back every tick instead, before a frame is ever drawn without it.
+     */
+    private static BlockPos pinned;
+
     private static final Gson GSON = new GsonBuilder().create();
 
     private static BlockPos cornerOne;
@@ -469,25 +480,41 @@ public final class FakeBlocks {
         int slice = Math.min(order.size(),
                 Math.max(MIN_SLICE, Math.min(MAX_SLICE, order.size() / SWEEP_TICKS)));
 
+        if (pinned != null) refresh(world, player, pinned);
+
         for (int i = 0; i < slice; i++) {
             if (cursor >= order.size()) cursor = 0;
-            BlockPos pos = order.get(cursor++);
-
-            if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
-
-            BlockState wanted = showing.get(pos);
-            if (wanted == null || world.getBlockState(pos) == wanted) continue;
-
-            // Held back only where the server has nothing. Over a real block the paint is
-            // just a change of skin: both sides agree something solid is there, so it can
-            // be stood on and walked into exactly as it looks. Over air it cannot, so near
-            // the player it comes off rather than have them stand on nothing.
-            if (tooClose(player, pos) && beneath(world, pos).isAir()) {
-                restore(world, pos);
-                continue;
-            }
-            paint(world, pos, wanted);
+            refresh(world, player, order.get(cursor++));
         }
+    }
+
+    /** Puts one position back to what it should be showing, if it has drifted. */
+    private static void refresh(ClientWorld world, ClientPlayerEntity player, BlockPos pos) {
+        if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) return;
+
+        BlockState wanted = showing.get(pos);
+        if (wanted == null || world.getBlockState(pos) == wanted) return;
+
+        // Held back only where the server has nothing. Over a real block the paint is
+        // just a change of skin: both sides agree something solid is there, so it can
+        // be stood on and walked into exactly as it looks. Over air it cannot, so near
+        // the player it comes off rather than have them stand on nothing.
+        if (tooClose(player, pos) && beneath(world, pos).isAir()) {
+            restore(world, pos);
+            return;
+        }
+        paint(world, pos, wanted);
+    }
+
+    /**
+     * Marks the position being broken, or clears it with null.
+     *
+     * <p>Two things follow from a position being pinned: it is repainted every tick rather
+     * than on the sweep's turn, and what vanilla leaves there is not mistaken for the
+     * server's word on it.
+     */
+    public static void pin(BlockPos pos) {
+        pinned = pos == null ? null : pos.toImmutable();
     }
 
     /** Whether a position is inside the space kept clear around the player. */
@@ -546,6 +573,22 @@ public final class FakeBlocks {
     }
 
     /**
+     * What is being faked at a position and actually on the screen there.
+     *
+     * <p>The difference matters to a hand. A fake held back from underfoot, or one the
+     * master switch has taken down, is not on the screen: the block being hit there is the
+     * real one, and it is vanilla's to break in the ordinary way. Only paint that is
+     * showing is ours to intercept.
+     */
+    public static BlockState paintedAt(BlockPos pos) {
+        BlockState wanted = showing.get(pos);
+        if (wanted == null) return null;
+
+        ClientWorld world = MinecraftClient.getInstance().world;
+        return world != null && world.getBlockState(pos) == wanted ? wanted : null;
+    }
+
+    /**
      * Takes a block away because it was broken.
      *
      * <p>One a machine put down simply goes. One belonging to a build is cut out of it, so
@@ -578,10 +621,18 @@ public final class FakeBlocks {
 
     private static void paint(ClientWorld world, BlockPos pos, BlockState state) {
         try {
-            // Only ever reached when what is there is not what we painted, so what is there
-            // is the server's word on it -- including a block just placed by hand under a
-            // fake, which is how a real floor comes to hold up a painted one.
-            real.put(pos.toImmutable(), world.getBlockState(pos));
+            // Normally only reached when what is there is not what we painted, so what is
+            // there is the server's word on it -- including a block just placed by hand
+            // under a fake, which is how a real floor comes to hold up a painted one.
+            //
+            // While a position is being broken it is not. Vanilla mines its own copy of the
+            // block and leaves air, and taking that for the server's word would put air
+            // back over a real wall the moment the build came down. So the first answer is
+            // kept and everything vanilla does to the position afterwards is ignored.
+            BlockPos key = pos.toImmutable();
+            BlockState there = world.getBlockState(pos);
+            if (key.equals(pinned)) real.putIfAbsent(key, there);
+            else real.put(key, there);
             world.setBlockState(pos, state);
         } catch (RuntimeException e) {
             showing.remove(pos);
@@ -623,6 +674,7 @@ public final class FakeBlocks {
     /** Leaving a world takes the client's copy with it, so the shadows mean nothing. */
     public static void reset() {
         real.clear();
+        pinned = null;
         cursor = 0;
     }
 

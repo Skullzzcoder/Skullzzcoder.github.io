@@ -11,6 +11,10 @@ fails = []
 def check(name, cond):
     if not cond: fails.append(name)
 
+def stop_body(src):
+    return re.search(r"private static void stop\(ClientWorld world\) \{(.*?)\n    \}",
+                     src, re.S).group(1)
+
 use = re.search(r"private static ActionResult onUse\(.*?\n    \}", hands, re.S).group(0)
 attack = re.search(r"private static ActionResult onAttack\(.*?\n    \}", hands, re.S).group(0)
 tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n    \}",
@@ -23,8 +27,17 @@ tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n  
 for name, body in (("use", use), ("attack", attack)):
     check("the %s hook only acts on the client" % name,
           "player instanceof ClientPlayerEntity" in body)
-    check("the %s hook obeys the master switch" % name, "SelfFakes.enabled()" in body)
     check("the %s hook lets real items through" % name, "ActionResult.PASS" in body)
+
+check("the use hook obeys the master switch", "SelfFakes.enabled()" in use)
+
+# Breaking answers to what is on the screen rather than to the switch. The two agree --
+# nothing is painted while the illusion is off -- but only one of them is the question
+# being asked. A block being hit is ours exactly when the thing being hit is our paint:
+# any less and vanilla mines a block the server has something else at, sending a real
+# break for whatever is really underneath; any more and it steals a real block's break.
+check("breaking takes over exactly where paint is showing",
+      "FakeBlocks.paintedAt(pos)" in attack and "FakeBlocks.fakeAt(" not in attack)
 
 # Holding a fake, nothing may reach the server: the slot it sees is empty, and a click on
 # an empty slot is worse than no click at all.
@@ -60,6 +73,37 @@ check("breaking uses vanilla's own rate", "calcBlockBreakingDelta" in tick)
 check("breaking shows the cracks", "setBlockBreakingInfo" in tick)
 check("letting go stops it", "attackKey.isPressed()" in tick and "stop(world)" in tick)
 check("looking away stops it", "aimedAt(client)" in tick)
+check("breaking follows the paint, not the intent",
+      "FakeBlocks.paintedAt(breaking)" in tick and "FakeBlocks.fakeAt(" not in tick)
+
+# Creative mines a block the moment it is hit, and it decides that above the hook the
+# attack callback answers -- so in creative no answer we give is ever heard, and the block
+# vanishes five ticks after the click with no cracks and no item. Finishing the break
+# ourselves first leaves vanilla nothing of ours at that position to find.
+check("creative is finished before vanilla gets there",
+      re.search(r"isCreative\(\)\)\s*\{\s*finish\(", tick) is not None)
+
+# The sweep comes round to a position about once a second. That is far too slow for one
+# being hit, so the position being broken is pinned and put back every tick instead.
+check("the block being broken is pinned", "FakeBlocks.pin(breaking)" in attack)
+check("stopping unpins it", "FakeBlocks.pin(null)" in stop_body(hands))
+check("finishing unpins it", "FakeBlocks.pin(null)" in
+      re.search(r"private static void finish\(.*?\n    \}", hands, re.S).group(0))
+
+blocks_tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n    \}",
+                        blocks, re.S).group(1)
+check("the pinned block is repainted outside the sweep",
+      "refresh(world, player, pinned)" in blocks_tick)
+check("and the sweep still runs", "order.get(cursor++)" in blocks_tick)
+
+# Vanilla still takes its own copy of the block out from under us for the tick before the
+# pin puts it back. What it leaves there is air, and remembering that as the server's word
+# would put air back over a real wall the moment the build came down.
+paint = re.search(r"private static void paint\(ClientWorld world, BlockPos pos, "
+                  r"BlockState state\) \{(.*?)\n    \}", blocks, re.S).group(1)
+check("a break cannot rewrite what was really there",
+      "if (key.equals(pinned)) real.putIfAbsent(key, there);" in paint
+      and "else real.put(key, there);" in paint)
 stop = re.search(r"private static void stop\(ClientWorld world\) \{(.*?)\n    \}",
                  hands, re.S).group(1)
 check("stopping clears the cracks", "-1" in stop)

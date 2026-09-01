@@ -61,9 +61,17 @@ for px in (0.0, 0.5, -0.3, 12.9, -7.5):
 
 # the sweep has to act on that, not merely compute it
 tick = re.search(r"public static void tick\(MinecraftClient client\) \{(.*?)\n    \}", blocks, re.S).group(1)
-check("the sweep puts a too-close block back", "tooClose(player, pos)" in tick and "restore(world, pos)" in tick)
-check("holding back is only over air", "beneath(world, pos).isAir()" in tick)
-check("the sweep skips unloaded chunks", "isChunkLoaded" in tick)
+# One position is put right in one place, and the sweep is what walks the positions past
+# it. Both routes in have to go through it: the slice, and the block being broken, which
+# cannot wait the second the sweep would take to come round to it.
+refresh = re.search(r"private static void refresh\(ClientWorld world, ClientPlayerEntity player, "
+                    r"BlockPos pos\) \{(.*?)\n    \}", blocks, re.S).group(1)
+check("the sweep goes through it", "refresh(world, player, order.get(cursor++))" in tick)
+check("and so does the block being broken", "refresh(world, player, pinned)" in tick)
+check("the sweep puts a too-close block back",
+      "tooClose(player, pos)" in refresh and "restore(world, pos)" in refresh)
+check("holding back is only over air", "beneath(world, pos).isAir()" in refresh)
+check("the sweep skips unloaded chunks", "isChunkLoaded" in refresh)
 check("the sweep is sliced", "MAX_SLICE" in tick and "MIN_SLICE" in tick)
 
 # The slice scales with the build, so a bigger one is still painted in about the same time
@@ -95,8 +103,12 @@ paint = re.search(r"private static void paint\(.*?\n    \}", blocks, re.S).group
 # Refreshed on every paint, not just the first: a block placed by hand under a fake arrives
 # as a server update, and treating that as still-air would keep holding the fake back and
 # the floor would never become standable.
-check("the real state is refreshed each paint", "real.put(pos.toImmutable(), world.getBlockState(pos))" in paint)
+check("the real state is refreshed each paint", "else real.put(key, there);" in paint)
 check("the real state is not stale-guarded", "!real.containsKey(pos)" not in paint)
+# The one exception, and it may only be that one: while a position is being broken, what is
+# there is not the server's word but whatever vanilla just mined out of the client's copy.
+check("with the block being broken the only exception",
+      paint.count("putIfAbsent") == 1 and "if (key.equals(pinned)) real.putIfAbsent" in paint)
 restore = re.search(r"private static void restore\(.*?\n    \}", blocks, re.S).group(0)
 check("restoring writes the real state back", "world.setBlockState(pos, was)" in restore)
 check("restoring forgets the shadow", "real.remove(pos)" in restore)
