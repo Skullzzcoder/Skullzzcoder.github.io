@@ -1111,6 +1111,17 @@ public final class ClientDispensers {
         return text.toString();
     }
 
+    /**
+     * Whether a machine has an answer of its own rather than the rig's cycled one.
+     *
+     * <p>Worth being able to ask, because it is the only thing that turns a coin flip's
+     * one-of-each layout into nine of a single block, and from in front of the dispenser
+     * the two look like the same key having done something different each time.
+     */
+    public static boolean hasFixedAnswer(BlockPos pos) {
+        return active().perDispenser.containsKey(pos);
+    }
+
     private static FakeSpec defaultSpec(String id) {
         Item item = SelfFakes.lookupItem(id);
         return item == null ? null : new FakeSpec(item, 1, "");

@@ -1612,6 +1612,15 @@ public class MirageClient implements ClientModInitializer {
         ClientDispensers.watch(pos);
         ClientDispensers.setOpenDispenser(pos);
         SelfFakes.save();
+
+        // Says what actually went in. This key succeeded in silence, so a coin flip that
+        // laid out nine of one block instead of one of each looked exactly like a coin flip
+        // that had laid out one of each -- until you opened it. Naming the one setting that
+        // does that saves working backwards from a full dispenser.
+        say(client, "Laid out " + ClientDispensers.describeStock(pos)
+                + (ClientDispensers.hasFixedAnswer(pos)
+                        ? ". This machine has its own answer - /fake rig unset clears it."
+                        : ""));
     }
 
     /**

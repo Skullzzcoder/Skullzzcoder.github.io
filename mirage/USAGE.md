@@ -221,7 +221,10 @@ dispenser fires the selected one.
     /fake preset clear
 
 `F` and `R` step through that list. Nothing shows on screen when you do, so you
-can switch mid-game. Adding an item the rig already has is ignored — a repeat is
+can switch mid-game. The dispenser holds **one of each** — a coin flip is the two
+things you could win sitting side by side, not a box full of them, and holding
+both means switching which one is rigged never changes what the machine looks
+like. Adding an item the rig already has is ignored — a repeat is
 not a second option, it is one more press of `F` that appears to do nothing.
 
 > `F` is vanilla's swap-with-offhand. Minecraft will mark it as a conflict and
@@ -235,6 +238,14 @@ whichever entry is selected.
     /fake rig set diamond_block 1 Jackpot
 
 `/fake rig unset` puts the dispenser you are looking at back on the cycled item.
+
+> **A machine with its own answer holds nine of it.** That is deliberate — a
+> dispenser that always pays a diamond block looks like a box of diamond blocks —
+> but it is also the only way a coin flip stops showing one of each. If `H` fills
+> all nine slots with the same thing when you wanted one gold and one diamond,
+> that dispenser has an answer set on it: look at it, `/fake rig unset`, then `H`.
+>
+> `H` now says what it laid out, and names this setting when it is what did it.
 
 ---
 

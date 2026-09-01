@@ -92,6 +92,14 @@ check("firing says so when it worked", fire.count("say(client,") >= 2
       and "Fired " in fire)
 check("and still says so when there was nothing to fire", "fired == 0" in fire)
 
+# Laying a machine out succeeded in silence, which is how a coin flip showing nine of one
+# block reads as the same key doing the same thing. What went in has to be said.
+refill = re.search(r"private static void refillLookedAt\(MinecraftClient client\) \{"
+                   r"(.*?)\n    \}", client, re.S).group(1)
+check("laying out says what went in", "ClientDispensers.describeStock(pos)" in refill)
+check("and names the one setting that fills all nine",
+      "ClientDispensers.hasFixedAnswer(pos)" in refill and "/fake rig unset" in refill)
+
 check("breaking is advanced from the tick", "FakeHands.tick(client)" in client)
 check("breaking uses vanilla's own rate", "calcBlockBreakingDelta" in tick)
 check("breaking shows the cracks", "setBlockBreakingInfo" in tick)
