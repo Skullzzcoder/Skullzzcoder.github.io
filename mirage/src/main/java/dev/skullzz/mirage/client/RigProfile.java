@@ -145,6 +145,58 @@ public final class RigProfile {
         this.name = name;
     }
 
+    // -------------------------------------------------------------------- keys
+
+    /**
+     * Which shape of rigging the result keys drive on this game.
+     *
+     * <p>Every game is rigged by one pair of keys, and what that pair means changes with the
+     * game: two items to pick between, two sides to hand the round to, two colours to have
+     * been called, or armed and not armed. Working that out in one place rather than at each
+     * of the three that need it -- the keys themselves, what they are labelled, and what the
+     * status line says -- is the only way the label and the key can be trusted to agree.
+     */
+    public enum Keys { TOWER, PAPER, ROULETTE, CYCLED }
+
+    public Keys keys() {
+        // Ordered, because a rig may carry more than one mode flag: an older file can hold
+        // a paper rig that was once a roulette one. First match wins, everywhere.
+        if (this.tower) return Keys.TOWER;
+        if (this.paper) return Keys.PAPER;
+        if (this.roulette) return Keys.ROULETTE;
+        return Keys.CYCLED;
+    }
+
+    /** What game this is, in a word, for saying which one you have just switched to. */
+    public String mode() {
+        switch (keys()) {
+            case TOWER: return "tower";
+            case PAPER: return "paper game";
+            case ROULETTE: return "roulette";
+            default: return this.mix ? "45/45/10" : "cycled";
+        }
+    }
+
+    /** What the forward result key does right now. */
+    public String forwardLabel() {
+        switch (keys()) {
+            case TOWER: return "they called " + this.towerA;
+            case PAPER: return "next winner";
+            case ROULETTE: return "arm the loaded shot";
+            default: return "next item";
+        }
+    }
+
+    /** What the back result key does right now. */
+    public String backLabel() {
+        switch (keys()) {
+            case TOWER: return "they called " + this.towerB;
+            case PAPER: return "previous winner";
+            case ROULETTE: return "cancel the arm";
+            default: return "previous item";
+        }
+    }
+
     public int presetIndex() {
         return this.presetIndex;
     }
@@ -454,11 +506,28 @@ public final class RigProfile {
 
     /** Steps the rigged winner on to the next side, then to chance, then round again. */
     public String cycleWinner() {
+        return cycleWinner(1);
+    }
+
+    /**
+     * Steps the rigged winner either way.
+     *
+     * <p>The ring it walks is the sides with chance on the end, so stepping back from the
+     * first side lands on chance rather than falling off. Both directions matter once the
+     * two result keys drive this: overshooting by one press and having to go all the way
+     * round again is the thing a back key is for.
+     */
+    public String cycleWinner(int delta) {
         List<String> names = sideNames();
         if (names.isEmpty()) return "";
 
-        int index = names.indexOf(this.winner) + 1;
-        this.winner = index >= names.size() ? "" : names.get(index);
+        // Chance sits one past the last side, and is where an unknown winner counts from.
+        int chance = names.size();
+        int index = this.winner.isEmpty() ? chance : names.indexOf(this.winner);
+        if (index < 0) index = chance;
+
+        index = Math.floorMod(index + delta, chance + 1);
+        this.winner = index >= chance ? "" : names.get(index);
         // Whatever was drawn belongs to the old setting.
         this.roundTick = Long.MIN_VALUE;
         return this.winner;

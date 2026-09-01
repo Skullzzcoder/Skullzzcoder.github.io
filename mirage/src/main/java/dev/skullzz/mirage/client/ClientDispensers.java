@@ -548,7 +548,11 @@ public final class ClientDispensers {
 
     /** Steps who the paper game is rigged for, and says who that is now. */
     public static String cycleWinner() {
-        String winner = active().cycleWinner();
+        return cycleWinner(1);
+    }
+
+    public static String cycleWinner(int delta) {
+        String winner = active().cycleWinner(delta);
         SelfFakes.save();
         return winner;
     }
@@ -842,6 +846,9 @@ public final class ClientDispensers {
                 + (profile.roulette ? ", roulette" : "")
                 + (profile.roulette && profile.manualTrigger ? ", manual" : "")
                 + (profile.armed ? ", ARMED" : ""));
+        // The one pair of keys whose meaning moves with the rig, so the answer to "what
+        // does F do right now" is in the same place as everything else about the rig.
+        lines.add("  F " + profile.forwardLabel() + ", R " + profile.backLabel());
         if (profile.tower) {
             lines.add("  " + profile.floors + " floors, ends on "
                     + (profile.bustAt > 0 ? "floor " + profile.bustAt : "the armed one")

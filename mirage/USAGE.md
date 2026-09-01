@@ -258,10 +258,11 @@ odds can be read at a glance rather than counted:
 
 ### Rigging it
 
-This one needs no rig of its own — **`F` and `R` are the rig**. Whichever of the
-three items is selected is what comes out, every time, and the machine still
-looks like a nine-slot spread whichever way it is set. Press `F` to step
-diamond → emerald → crystal and back round.
+This one needs no rig of its own — **`F` and `R` are the rig**, the same pair that
+rigs every other game. Whichever of the three items is selected is what comes out,
+every time, and the machine still looks like a nine-slot spread whichever way it
+is set. `F` steps diamond → emerald → crystal and back round; `R` goes the other
+way.
 
 It is **silent by default**, like every other switching key — you can step it
 mid-game with the machine open in front of somebody.
@@ -699,10 +700,29 @@ Client-only decoration for your base.
 
 ## Keys
 
+**`F` and `R` rig whatever game is on.** They keep their place on the keyboard and
+change meaning with the rig, so switching game with `\` switches what they do:
+
+| rig | `F` | `R` |
+|---|---|---|
+| `5050` | next item | previous item |
+| `454510` | next item | previous item |
+| `paper` | next winner (Player → Host → chance) | previous winner |
+| `roulette` | arm the loaded shot | cancel the arm |
+| `tower` | they called the first colour | they called the second colour |
+
+`\` says which game you have landed on and what `F` and `R` now mean, in your
+action bar. `/fake keys` prints the lot, and `/fake dispenser status` carries the
+same line.
+
+Every game's own dedicated key still works — this is one more way in, not a
+replacement. A key per outcome is still the surest thing when you already know
+which one you want.
+
 | key | does |
 |---|---|
-| `F` / `R` | next / previous item in the current rig (45/45/10: what comes out) |
-| `\` | next rig |
+| `F` / `R` | rig the current game forward / back (table above) |
+| `\` | next rig — and `F` / `R` change with it |
 | `;` | arm the next spin |
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
@@ -713,6 +733,10 @@ Client-only decoration for your base.
 | `Z` / `X` | paper game: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |
+
+`;` now has a way back: on roulette and the tower, `R` cancels an arming made by
+accident, which previously could only be spent by letting the machine fire the
+shot it was set up to ruin.
 
 Rebindable in Options → Controls → Miscellaneous.
 

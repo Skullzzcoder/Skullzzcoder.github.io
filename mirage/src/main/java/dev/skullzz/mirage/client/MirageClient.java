@@ -96,6 +96,8 @@ public class MirageClient implements ClientModInitializer {
                         // way to reach it, which made every readback in the mod dead by
                         // default -- including the one that says which of three items
                         // 45/45/10 is currently rigged to.
+                        .then(ClientCommandManager.literal("keys")
+                                .executes(MirageClient::listKeys))
                         .then(ClientCommandManager.literal("announce")
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     SelfFakes.setAnnounceSwitching(true);
@@ -196,7 +198,7 @@ public class MirageClient implements ClientModInitializer {
             while (cutBlock.wasPressed()) cutLookedAt(client);
             while (callFirst.wasPressed()) takeCall(client, true);
             while (callSecond.wasPressed()) takeCall(client, false);
-            while (cycleWinner.wasPressed()) stepWinner(client);
+            while (cycleWinner.wasPressed()) stepWinner(client, 1);
             while (winFirst.wasPressed()) setWinner(client, 0);
             while (winSecond.wasPressed()) setWinner(client, 1);
             if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
@@ -207,10 +209,12 @@ public class MirageClient implements ClientModInitializer {
             while (cycleRig.wasPressed()) {
                 if (ClientDispensers.cycleProfile(1) == null) continue;
                 SelfFakes.save();
-                nagIfUnset(client);
+                // The more urgent of the two wins the action bar: a rig with no machines
+                // cannot be played at all, so what its keys would have meant can wait.
+                if (!nagIfUnset(client)) announceRig(client);
             }
-            while (nextResult.wasPressed()) selectPreset(client, 1);
-            while (previousResult.wasPressed()) selectPreset(client, -1);
+            while (nextResult.wasPressed()) rigResult(client, 1);
+            while (previousResult.wasPressed()) rigResult(client, -1);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
         });
 
@@ -377,6 +381,83 @@ public class MirageClient implements ClientModInitializer {
     }
 
     /** Flips to another preset result without opening anything anyone could see. */
+    /**
+     * What the two result keys do, decided by the game that is on.
+     *
+     * <p>Every game is rigged by the same pair of keys. Which pair that is used to depend on
+     * the game -- one for the coin flip, another for the paper game, another for the tower --
+     * which meant knowing the game, remembering its keys, and getting it wrong under a table
+     * with somebody watching. Now the keys stay put and their meaning follows the rig, so
+     * switching game with the rig key switches what they do with it.
+     *
+     * <p>The game's own dedicated keys all still work. This is one more way in, not a
+     * replacement: a key per outcome is still the surest thing when you know which you want.
+     */
+    private static void rigResult(MinecraftClient client, int delta) {
+        switch (ClientDispensers.active().keys()) {
+            case TOWER:
+                takeCall(client, delta > 0);
+                break;
+            case PAPER:
+                stepWinner(client, delta);
+                break;
+            case ROULETTE:
+                setArmed(client, delta > 0);
+                break;
+            default:
+                selectPreset(client, delta);
+                break;
+        }
+    }
+
+    /**
+     * Prints every key and what it does on the rig that is on.
+     *
+     * <p>The pair that changes meaning is printed first and named for this game, since that
+     * is the question this answers; the rest are the same whatever is on.
+     */
+    private static int listKeys(CommandContext<FabricClientCommandSource> context) {
+        RigProfile profile = ClientDispensers.active();
+
+        StringBuilder text = new StringBuilder("Rig '" + profile.name + "' - "
+                + profile.mode() + "\n");
+        text.append("  F  ").append(profile.forwardLabel()).append('\n');
+        text.append("  R  ").append(profile.backLabel()).append('\n');
+        text.append("  \\  next rig (and these two change with it)\n");
+        text.append("  '  fire the dispenser you are looking at\n");
+        text.append("  H  refill the dispenser you are looking at\n");
+        text.append("  ;  arm the next shot     K  clear your fakes\n");
+        text.append("  N  everything off / on   B  open up a fake block\n");
+        text.append("  Z / X  paper: Player / Host wins    M  paper: step winner\n");
+        text.append("  [ / ]  tower: they called the first / second colour");
+        return feedback(context, text.toString());
+    }
+
+    /** Says which game the rig key has just landed on, and what the result keys now mean. */
+    private static void announceRig(MinecraftClient client) {
+        RigProfile profile = ClientDispensers.active();
+        say(client, profile.name + " - " + profile.mode()
+                + " | F " + profile.forwardLabel() + " | R " + profile.backLabel());
+    }
+
+    /**
+     * Arms the next shot, or takes the arming back off.
+     *
+     * <p>Arming had no way back: a press made by accident stayed made, and the only way to
+     * spend it was to let the machine fire the shot it had been set up to ruin.
+     */
+    private static void setArmed(MinecraftClient client, boolean on) {
+        if (on) {
+            ClientDispensers.armNext();
+        } else {
+            ClientDispensers.disarm();
+        }
+        if (!SelfFakes.announceSwitching() || client.player == null) return;
+
+        client.player.sendMessage(Text.literal(on ? "armed" : "not armed")
+                .formatted(Formatting.GRAY), true);
+    }
+
     private static void selectPreset(MinecraftClient client, int delta) {
         RigProfile profile = ClientDispensers.active();
         FakeSpec spec = ClientDispensers.cyclePreset(delta);
@@ -714,8 +795,11 @@ public class MirageClient implements ClientModInitializer {
                                     }
                                     SelfFakes.save();
 
+                                    RigProfile profile = ClientDispensers.active();
                                     int parts = ClientDispensers.partsInGame();
-                                    return feedback(context, "Now using rig '" + name + "'."
+                                    return feedback(context, "Now using rig '" + name + "' ("
+                                            + profile.mode() + "). F: " + profile.forwardLabel()
+                                            + ". R: " + profile.backLabel() + "."
                                             + (parts == 0 ? " No machines set up for it yet - "
                                                     + "look at each and press H." : ""));
                                 })))
@@ -1321,11 +1405,13 @@ public class MirageClient implements ClientModInitializer {
      * every dispenser doing nothing. That is worth a line, even from a key meant to be
      * quiet, because the alternative is finding out mid-game.
      */
-    private static void nagIfUnset(MinecraftClient client) {
-        if (ClientDispensers.partsInGame() != 0) return;
+    /** @return whether it had something to say, so nothing else writes over it. */
+    private static boolean nagIfUnset(MinecraftClient client) {
+        if (ClientDispensers.partsInGame() != 0) return false;
 
         say(client, "Rig '" + ClientDispensers.activeName() + "' has no machines yet. Look at "
                 + "each one and press H.");
+        return true;
     }
 
     /**
@@ -1440,11 +1526,11 @@ public class MirageClient implements ClientModInitializer {
      * <p>Silent by default like the other switches, since the whole point is deciding it
      * while everyone is watching the machines rather than your chat.
      */
-    private static void stepWinner(MinecraftClient client) {
+    private static void stepWinner(MinecraftClient client, int delta) {
         RigProfile profile = ClientDispensers.active();
         if (!profile.paper || client.player == null) return;
 
-        String winner = ClientDispensers.cycleWinner();
+        String winner = ClientDispensers.cycleWinner(delta);
         if (!SelfFakes.announceSwitching()) return;
 
         client.player.sendMessage(Text.literal(winner.isEmpty() ? "chance" : winner + " wins")
