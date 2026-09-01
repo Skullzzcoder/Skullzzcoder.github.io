@@ -223,7 +223,12 @@ up is two commands:
 
 Sides are handed out in the order you **watch** them while the paper rig is
 active: the first is **Player**, the second is **Host**. A machine already
-watched for another game joins by being watched again, or by pressing `H` at it. Only those two — watched dispensers are shared by every rig,
+watched for another game joins by being watched again, by pressing `H` at it, or
+simply **by going off** during a paper game — a machine firing while the game is
+on is the plainest sign it belongs to it.
+
+Only two are ever taken. Once both sides are spoken for, any other machine that
+fires says so and stays out. Only those two — watched dispensers are shared by every rig,
 so a third machine is the roulette dropper standing nearby rather than a third
 player, and it is left showing its real contents. Put one in the game by hand
 with `/fake rig paper side <name>` if you ever want three. Both are laid out at once, so the left machine holds
@@ -303,9 +308,11 @@ joins it to the tower — or just look at it and press `H`, which does the same.
 
 Got one wrong? Look at it and run `/fake rig tower floor 3`.
 
-Only machines you have set up this way are in the run. The rest of your watched
-dispensers — the roulette dropper, the coin flip — are left alone and show their
-real contents. `/fake dispenser status` lists which machine is which floor.
+A machine also joins simply **by going off** during a run, up to the five the run
+has. Past that it says so and stays out, so the roulette dropper and the coin
+flip are left alone and keep showing their real contents.
+
+`/fake dispenser status` lists which machine is which floor.
 
 ### Playing it
 

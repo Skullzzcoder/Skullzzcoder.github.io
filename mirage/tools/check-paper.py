@@ -103,7 +103,10 @@ side_at = re.search(r"public String sideAt\(BlockPos pos, Set<BlockPos> live\) \
 check("a machine with no side left is not named", '"Side "' not in side_at)
 check("only live machines hold a name", "live.contains" in side_at)
 check("a sideless machine lays out nothing", "side.isEmpty() ? null" in disp)
-check("a sideless machine fires nothing", "if (side.isEmpty()) return null;" in disp)
+check("a sideless machine fires nothing",
+      re.search(r"if \(side\.isEmpty\(\)\) \{[^}]*return null;",
+                re.search(r"private static FakeSpec paperSlip.*?\n    \}", disp, re.S).group(0),
+                re.S) is not None)
 check("sides are pruned when a machine stops being watched", "profile.sides.remove(pos)" in disp)
 
 def side_at_py(sides, pos, live):
@@ -168,7 +171,7 @@ check("load judges it only against known sides", "!profile.sideNames().isEmpty()
 # draws a round with nobody in it to give the high number to
 slip = re.search(r"private static FakeSpec paperSlip.*?\n    \}", disp, re.S).group(0)
 check("the side is resolved before the round is drawn",
-      slip.index("sideOf(pos)") < slip.index("startRound"))
+      slip.index("sideAt(pos, watched)") < slip.index("startRound"))
 
 fresh = Rig(SIDES[0])                        # Z pressed, no machine laid out yet
 fresh.start_round(random.Random(5), 0, known=[])

@@ -70,8 +70,10 @@ check("no call yet still fires something", t.fire(1) == A)
 
 # --- and the source has to agree with all that --------------------------
 box = re.search(r"private static FakeSpec towerBox\(.*?\n    \}", disp, re.S).group(0)
-check("the floor comes from the machine, not a counter", "floorOf(pos)" in box)
-check("a machine outside the run fires nothing", "if (floor == 0) return null;" in box)
+check("the floor comes from the machine, not a counter",
+      "floorAt(pos, watched)" in box and "++profile" not in box)
+check("a machine outside the run fires nothing",
+      re.search(r"if \(floor == 0\) \{[^}]*return null;", box, re.S) is not None)
 check("the call decides the colour", "profile.called()" in box and "otherColour" in box)
 
 busts = re.search(r"public boolean bustsOn\(int floor\) \{(.*?)\n    \}", rig, re.S).group(1)
@@ -104,12 +106,17 @@ watch = re.search(r"public static boolean watch\(BlockPos pos\) \{(.*?)\n    \}"
 check("watching joins, even a machine already watched",
       "fill(pos);" in watch and "if (added) fill" not in watch)
 
-# firing must never make a machine part of a game it was not set up for
-check("firing reads the floor rather than handing one out",
-      "profile.floorOf(pos)" in box and "floorAt" not in box)
+# A machine going off during a game is the plainest sign it belongs to it, so firing may
+# hand out a part -- but only through the capped methods, which give nothing once the game
+# is full. What could not be allowed was the bulk fill above doing it to every watched
+# dispenser at once.
+check("firing may join, through the capped method", "profile.floorAt(pos, watched)" in box)
+check("a full tower turns a machine away", "floors are taken" in box)
+
 paper_slip = re.search(r"private static FakeSpec paperSlip\(.*?\n    \}", disp, re.S).group(0)
-check("firing reads the side rather than handing one out",
-      "profile.sideOf(pos)" in paper_slip and "sideAt" not in paper_slip)
+check("firing may join a side, through the capped method",
+      "profile.sideAt(pos, watched)" in paper_slip)
+check("a full paper game turns a machine away", "sides are taken" in paper_slip)
 
 check("a game with no machines says so", "partsInGame" in disp and "partsInGame" in client)
 

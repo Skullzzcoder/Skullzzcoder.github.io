@@ -479,10 +479,18 @@ public final class ClientDispensers {
      * side always has the higher one.
      */
     private static FakeSpec paperSlip(RigProfile profile, BlockPos pos) {
-        // The side first: it is settled here, and a round drawn before any machine had one
-        // had no winner to give the high number to, so both took the low one.
-        String side = profile.sideOf(pos);
-        if (side.isEmpty()) return null;
+        // The side first: a round drawn before any machine had one has no winner to give
+        // the high number to, so both machines take the low one.
+        //
+        // A machine going off during the game is the plainest sign there is that it belongs
+        // to it, so this is one of the places allowed to hand a side out. What could not be
+        // allowed was laying the rig out over every watched dispenser at once, which gave
+        // the sides to whichever machines had been watched earliest.
+        String side = profile.sideAt(pos, watched);
+        if (side.isEmpty()) {
+            warn("Both sides are taken, so " + text(pos) + " is not in the paper game.");
+            return null;
+        }
 
         // Added to the older side, never subtracted from the newer: the no-round-yet marker
         // is Long.MIN_VALUE, and subtracting that overflows to a huge negative, which reads
@@ -509,10 +517,14 @@ public final class ClientDispensers {
      * out of order or twice cannot walk the run somewhere it never went.
      */
     private static FakeSpec towerBox(RigProfile profile, BlockPos pos) {
-        // Read only: a machine that has never been set up as a floor is not one, and
-        // making it one at the moment it goes off would put a run somewhere it is not.
-        int floor = profile.floorOf(pos);
-        if (floor == 0) return null;
+        // As with the paper game's sides: a machine going off during a run is the plainest
+        // sign it is part of it, and only as many floors as the run has are ever handed out.
+        int floor = profile.floorAt(pos, watched);
+        if (floor == 0) {
+            warn("All " + profile.floors + " floors are taken, so " + text(pos)
+                    + " is not in the tower.");
+            return null;
+        }
 
         String colour = profile.bustsOn(floor)
                 ? profile.otherColour(profile.called())
