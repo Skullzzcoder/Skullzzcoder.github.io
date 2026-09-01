@@ -170,6 +170,8 @@ public class MirageClient implements ClientModInitializer {
             }
 
             rememberOpenDispenser(client);
+            // Nothing may be left held once the screen it was picked up in has gone.
+            if (client.currentScreen == null) FakeClicks.closed(client.player);
 
             while (armNext.wasPressed()) ClientDispensers.armNext();
             while (fireNow.wasPressed()) fireLookedAtOrAll(client);

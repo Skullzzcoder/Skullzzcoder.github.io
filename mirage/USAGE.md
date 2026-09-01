@@ -88,20 +88,24 @@ everyone just watched come out. This is on for every game, not only roulette.
 
 ### Moving items by hand
 
-**Shift-click** works in both directions while a dispenser is open:
+While a dispenser is open, fakes move like anything else.
 
-- shift-click a fake in your inventory → it loads into the dispenser
-- shift-click one in the dispenser → it comes back to your inventory
+**Drag them.** Left-click picks the whole stack onto your pointer, right-click
+takes half. Left-click lays the lot down, right-click lays one. Like onto like
+merges up to 64; unlike swaps places. The carried stack is drawn under your
+pointer with its count, exactly as a real one would be.
 
-It stacks onto a matching slot first and takes the next free slot otherwise,
-same as loading a real dispenser. So the loop closes: the crystal fires, lands
-in your inventory, and you shift-click it back into the middle for the next
-round without typing anything.
+**Shift-click** still moves a whole stack across in one go — into the dispenser
+from your inventory, or back out of it.
 
-A plain (non-shift) click on a faked slot does nothing at all, deliberately.
-Vanilla would send that click to the server, which sees the slot's **real**
-contents — so a click aimed at something that is not there could move something
-that is. Real items are untouched and still click normally.
+Close the screen or click off the board and whatever you were carrying goes back
+to your bag. There is no ground to throw a fake onto, so nothing is ever lost.
+
+**A slot holding something real is never written to.** What is in it belongs to
+the server, and covering it would only last until the server said otherwise —
+so real items are untouched and still behave normally. Nothing in any of this
+reaches the server: a click on a slot it thinks is empty is worse than no click
+at all.
 
 ### Commands, if you want them
 

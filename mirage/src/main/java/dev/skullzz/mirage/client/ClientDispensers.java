@@ -897,6 +897,36 @@ public final class ClientDispensers {
         return slots != null && slots.containsKey(slot);
     }
 
+    /** What the open dispenser is faking in one slot, or null. */
+    public static FakeSpec stockAt(ClientPlayerEntity player, int slot) {
+        Map<Integer, FakeSpec> slots = openStock(player);
+        return slots == null ? null : slots.get(slot);
+    }
+
+    /**
+     * Puts a fake into one slot of the open dispenser, or clears it.
+     *
+     * <p>For moving things about by hand. A machine that has never been laid out gets a
+     * layout the moment something is put in it, which is how a dispenser fills up.
+     */
+    public static boolean setStock(ClientPlayerEntity player, int slot, FakeSpec spec) {
+        BlockPos pos = targetDispenser(player);
+        if (pos == null) return false;
+
+        Map<Integer, FakeSpec> slots = active().stock
+                .computeIfAbsent(pos.toImmutable(), key -> new LinkedHashMap<>());
+
+        if (spec == null) {
+            slots.remove(slot);
+        } else {
+            slots.put(slot, spec);
+        }
+
+        SelfFakes.repaintContainer();
+        SelfFakes.save();
+        return true;
+    }
+
     /** Shift-clicking a laid-out slot takes it into the inventory, like emptying a dispenser. */
     public static boolean takeFromStock(ClientPlayerEntity player, int slot) {
         BlockPos pos = targetDispenser(player);
