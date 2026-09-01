@@ -108,6 +108,18 @@ public final class FakeBlocks {
      */
     private static BlockPos pinned;
 
+    /**
+     * Positions no build may ever cover.
+     *
+     * <p>The machines the games are played on. Everything this mod does with a dispenser it
+     * does by reading the client's own copy of the world -- whether one just went off, which
+     * way it faces, where to put what comes out, which machine an open screen belongs to.
+     * That copy is the same one builds are painted into, so a build block landing on a
+     * dispenser does not hide the machine: it deletes it, as far as the rest of the mod can
+     * tell. Every rig stops at once and nothing says why.
+     */
+    private static final Set<BlockPos> keepClear = new HashSet<>();
+
     private static final Gson GSON = new GsonBuilder().create();
 
     private static BlockPos cornerOne;
@@ -488,9 +500,46 @@ public final class FakeBlocks {
         }
     }
 
+    /**
+     * The positions builds must keep off, replacing whatever was set before.
+     *
+     * <p>Anything already painted there comes off at once rather than waiting for the sweep,
+     * because until it does the machine underneath does not exist.
+     */
+    public static void keepClear(Set<BlockPos> positions) {
+        keepClear.clear();
+        for (BlockPos pos : positions) keepClear.add(pos.toImmutable());
+
+        ClientWorld world = MinecraftClient.getInstance().world;
+        if (world == null) return;
+
+        for (BlockPos pos : keepClear) {
+            // The entry in showing stays: this is a position held back, not one taken out
+            // of the build, so unwatching the machine brings the wall back.
+            if (showing.containsKey(pos)) restore(world, pos);
+        }
+    }
+
+    /** Whether a position is one the paint is kept off. */
+    public static boolean isKeptClear(BlockPos pos) {
+        return keepClear.contains(pos);
+    }
+
+    /** What the server really has at a position, painted over or not. */
+    public static BlockState realAt(ClientWorld world, BlockPos pos) {
+        return beneath(world, pos);
+    }
+
     /** Puts one position back to what it should be showing, if it has drifted. */
     private static void refresh(ClientWorld world, ClientPlayerEntity player, BlockPos pos) {
         if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) return;
+
+        // Before the has-it-drifted test, not after: a machine already covered is showing
+        // exactly what was asked of it, so that test would call it settled and leave it.
+        if (keepClear.contains(pos)) {
+            restore(world, pos);
+            return;
+        }
 
         BlockState wanted = showing.get(pos);
         if (wanted == null || world.getBlockState(pos) == wanted) return;
@@ -675,6 +724,7 @@ public final class FakeBlocks {
     public static void reset() {
         real.clear();
         pinned = null;
+        keepClear.clear();
         cursor = 0;
     }
 

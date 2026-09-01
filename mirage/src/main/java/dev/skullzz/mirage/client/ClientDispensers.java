@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.HashSet;
 import java.util.Set;
 
 import com.google.gson.JsonArray;
@@ -82,6 +83,8 @@ public final class ClientDispensers {
     /** Slots in a dispenser, and the middle one that a ring is built around. */
     public static final int STOCK_SLOTS = 9;
     private static final int MIDDLE_SLOT = 4;
+    /** How often the machines are re-checked for scenery painted over them. */
+    private static final int GUARD_TICKS = 20;
     /** No dispenser can be opened from further away than this, squared. */
     private static final double REACH_SQUARED = 49.0;
 
@@ -334,8 +337,40 @@ public final class ClientDispensers {
 
     // ----------------------------------------------------------------- watching
 
+    /**
+     * Tells the builds which positions they may never paint over.
+     *
+     * <p>The machines themselves, and the cell each one fires into. A build block on a
+     * dispenser switches every rig off at once, because the whole mod finds its machines by
+     * reading the client's world and a painted one is not a dispenser any more. A build
+     * block in front of one is milder and still wrong: what a machine puts down goes there,
+     * and it cannot be put into a wall.
+     *
+     * <p>Worked out again as it goes rather than only when a machine is watched, because
+     * which way a dispenser faces cannot be read until its chunk has arrived.
+     */
+    private static void guardMachines() {
+        ClientWorld world = MinecraftClient.getInstance().world;
+        Set<BlockPos> clear = new HashSet<>();
+
+        for (BlockPos pos : watched) {
+            clear.add(pos.toImmutable());
+            if (world == null || !world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+                continue;
+            }
+            // The real block, not the painted one: once something is covering the machine
+            // the painted answer is the thing we are trying to get rid of.
+            BlockState state = FakeBlocks.realAt(world, pos);
+            if (state.getBlock() instanceof DispenserBlock) {
+                clear.add(pos.offset(state.get(DispenserBlock.FACING)));
+            }
+        }
+        FakeBlocks.keepClear(clear);
+    }
+
     public static boolean watch(BlockPos pos) {
         boolean added = watched.add(pos.toImmutable());
+        guardMachines();
         // Laid out every time, not only the first: watching a machine is the deliberate act
         // that joins it to whichever game is running, and a machine already watched for one
         // game has to be able to join another.
@@ -354,7 +389,10 @@ public final class ClientDispensers {
         lastTriggered.remove(pos);
         lastPowered.remove(pos);
         lastFire.remove(pos);
-        return watched.remove(pos);
+        boolean removed = watched.remove(pos);
+        // The wall it was holding back comes home now it is nobody's machine.
+        guardMachines();
+        return removed;
     }
 
     public static void unwatchAll() {
@@ -363,6 +401,7 @@ public final class ClientDispensers {
         lastPowered.clear();
         lastFire.clear();
         pending.clear();
+        guardMachines();
     }
 
     public static boolean debug() {
@@ -395,6 +434,9 @@ public final class ClientDispensers {
 
         tidySpawned(client);
         flyArrows();
+        // Once a second is plenty: it only changes when a machine is watched, dropped, or
+        // its chunk finally arrives and says which way it faces.
+        if (tick % GUARD_TICKS == 0) guardMachines();
         watchTick(world);
 
         Iterator<PendingFire> iterator = pending.iterator();
@@ -407,7 +449,7 @@ public final class ClientDispensers {
             // that call spends a chamber, and spending one on a dispenser that has been
             // broken or walked away from would quietly desync the count.
             if (!isDispenser(world, fire.pos())) {
-                warn("No dispenser at " + text(fire.pos()) + " - moved, or too far away.");
+                warn(whyNotDispensing(world, fire.pos()));
                 continue;
             }
 
@@ -555,6 +597,25 @@ public final class ClientDispensers {
         String winner = active().cycleWinner(delta);
         SelfFakes.save();
         return winner;
+    }
+
+    /**
+     * Why a position the mod thinks is a machine is not answering as one.
+     *
+     * <p>Three different problems used to share one sentence about the block having moved,
+     * and only one of them was that. The one worth naming is a build painted over it: it is
+     * the mod standing on its own foot, it takes every rig down at once, and the fix is one
+     * key press.
+     */
+    private static String whyNotDispensing(ClientWorld world, BlockPos pos) {
+        if (world == null || !world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+            return "Too far from the dispenser at " + text(pos) + " - go closer.";
+        }
+        if (FakeBlocks.fakeAt(pos) != null) {
+            return "One of your builds is painted over the dispenser at " + text(pos)
+                    + ". Look at it and press B to open a hole.";
+        }
+        return "No dispenser at " + text(pos) + " - moved, or broken.";
     }
 
     private static boolean isDispenser(ClientWorld world, BlockPos pos) {
@@ -905,7 +966,9 @@ public final class ClientDispensers {
             } else {
                 BlockState state = world.getBlockState(pos);
                 if (!(state.getBlock() instanceof DispenserBlock)) {
-                    line.append("not a dispenser any more - rewatch it");
+                    line.append(FakeBlocks.fakeAt(pos) != null
+                            ? "COVERED by one of your builds - press B on it"
+                            : "not a dispenser any more - rewatch it");
                 } else {
                     line.append("ok, ")
                             .append(world.isReceivingRedstonePower(pos)
@@ -1089,7 +1152,13 @@ public final class ClientDispensers {
 
     private static boolean spawn(ClientWorld world, BlockPos pos, FakeSpec result) {
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DispenserBlock)) return false;
+        // Was silent, and this is the last gate anything passes on its way out: a fire that
+        // got all the way here and then produced nothing looked exactly like a mod that was
+        // not loaded, which is the report that has come in three times now.
+        if (!(state.getBlock() instanceof DispenserBlock)) {
+            warn(whyNotDispensing(world, pos));
+            return false;
+        }
 
         Direction facing = state.get(DispenserBlock.FACING);
         double x = pos.getX() + 0.5 + facing.getOffsetX() * 0.7;
@@ -1126,7 +1195,10 @@ public final class ClientDispensers {
      */
     private static boolean stand(ClientWorld world, BlockPos pos, FakeSpec result) {
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof DispenserBlock)) return false;
+        if (!(state.getBlock() instanceof DispenserBlock)) {
+            warn(whyNotDispensing(world, pos));
+            return false;
+        }
 
         BlockPos was = standing.remove(pos);
         if (was != null) FakeBlocks.unplace(was);
@@ -1514,6 +1586,8 @@ public final class ClientDispensers {
         if (!profiles.containsKey(activeName)) {
             activeName = profiles.keySet().iterator().next();
         }
+        // The machines are back, so the builds have to be told to keep off them again.
+        guardMachines();
     }
 
     private static void readProfile(JsonObject json) {

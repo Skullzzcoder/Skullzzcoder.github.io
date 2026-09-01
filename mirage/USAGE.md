@@ -605,6 +605,11 @@ on the server — then put it wherever you like.
 
 ### Making room for real machines
 
+> Watched dispensers look after themselves — a build will not paint over one, or
+> over the block it fires into. This section is for everything else: chests,
+> buttons, signs, a doorway.
+
+
 `B`, or `/fake build cut`, opens up the fake block you are looking at: the real
 world comes back there and you can place a dispenser, a chest, a sign — whatever
 has to genuinely be there. `/fake build cut <radius>` opens a cube around it, up
@@ -742,12 +747,36 @@ Rebindable in Options → Controls → Miscellaneous.
 
 ## When nothing happens
 
-1. `/fake dispenser status` — is anything watched, is it still a dispenser, is
-   the chunk loaded, does the rig have something to fire?
-2. `/fake rig list` — is the rig you think you are on the active one?
-3. `/fake debug on`, then set the dispenser off — does the watcher see it?
-4. `'` — if the key produces the item but the redstone does not, the dispenser
+**`/fake dispenser status` answers all of it in one go.** It is the first thing to
+run, and it names every way this can go wrong:
+
+| what it says | what it means |
+|---|---|
+| `EVERYTHING IS OFF` | the master switch. Press `N`. |
+| `No dispensers watched` | look at each machine and press `H` |
+| `COVERED by one of your builds` | scenery painted over the machine — press `B` on it |
+| `not a dispenser any more` | it was broken or moved. Rewatch it. |
+| `chunk not loaded` | go closer |
+| `fires nothing` | the rig has no item selected — press `F` |
+
+Then:
+
+1. `/fake rig list` — is the rig you think you are on the active one?
+2. `/fake debug on`, then set the dispenser off — does the watcher see it?
+3. `'` — if the key produces the item but the redstone does not, the dispenser
    is being worked by something the client cannot see. Use the key.
+
+### Builds never cover a machine
+
+A build block painted over a watched dispenser used to switch **every rig off at
+once**, silently. The mod finds its machines by reading your client's copy of the
+world — the same copy builds are painted into — so a covered dispenser was not
+hidden, it had stopped existing as far as the rest of the mod could tell.
+
+Builds now keep off every watched machine and the block it fires into,
+automatically. You do not need to cut holes for the machines any more; watching
+one is enough, and the wall comes back if you unwatch it. Anything already
+painted over a machine comes off within a second of the mod noticing.
 
 ## A note on who sees what
 
