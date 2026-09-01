@@ -77,7 +77,11 @@ why = body(disp, "private static String whyNotDispensing(ClientWorld world, Bloc
 check("being covered is named as its own cause", "FakeBlocks.fakeAt(pos) != null" in why)
 check("and says how to fix it", "press B" in why)
 check("too far is told apart from gone", "isChunkLoaded" in why and "moved, or broken" in why)
-check("the fire loop uses it", "warn(whyNotDispensing(world, fire.pos()));" in disp)
+# Asked of the loop rather than of one spelling of the call: the reason a fire stopped is
+# now both said and logged, so pinning the exact line meant a check that failed on a change
+# that kept the rule.
+fire_loop = re.search(r"Iterator<PendingFire> iterator.*?\n        \}", disp, re.S).group(0)
+check("the fire loop uses it", "whyNotDispensing(world, fire.pos())" in fire_loop)
 check("the status list names it too", "COVERED by one of your builds" in disp)
 
 print("FAILED: " + "; ".join(fails) if fails else

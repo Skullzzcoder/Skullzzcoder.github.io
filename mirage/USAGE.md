@@ -782,7 +782,38 @@ buttons back once it has.
 
 ## When nothing happens
 
-**`/fake dispenser status` answers all of it in one go.** It is the first thing to
+## `/fake doctor`
+
+**Run this first.** It walks the whole chain a fake has to travel and marks the first
+thing that is wrong, with the key that fixes it:
+
+    --- Mirage doctor ---
+    1. Master switch   ON
+    2. Rig             '5050' (cycled)   F next item
+    3. Rig has answer  yes
+    4. Machines        2
+         100 64 -20  would fire 1x gold_block; holds 1x gold_block, 1x diamond_block
+         103 64 -20  COVERED by a build  <-- look at it and press B
+    5. Last fires      t8120  100 64 -20  fired by hand
+         t8120  100 64 -20  fired 1x gold_block
+    6. Collect fakes   on
+
+Three lines carry most of the answer:
+
+- **Line 1 `OFF`** — the master switch. Everything else is dead while it is. Press `N`.
+- **Line 4 `would fire ...`** — what the rig *would* produce right now, worked out
+  without spending anything. If that is the right item and nothing comes out, the
+  rigging is fine and the problem is downstream. If it says `nothing`, the rig is
+  the problem.
+- **Line 5 `NONE SEEN YET`** — no machine has gone off at all, so nothing is even
+  reaching the rig. Press `'` while looking at one; if that logs a fire and
+  redstone never does, your wiring is something the client cannot see, and the key
+  is the answer.
+
+Every fire is recorded there whatever becomes of it, including the ones that
+stopped — `STOPPED:` lines say exactly where and why.
+
+**`/fake dispenser status`** goes into more detail on the machines themselves. It is the first thing to
 run, and it names every way this can go wrong:
 
 | what it says | what it means |

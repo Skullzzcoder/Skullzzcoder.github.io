@@ -1,6 +1,8 @@
 package dev.skullzz.mirage.client;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -92,8 +94,21 @@ public final class ClientDispensers {
     /** Prints what the watcher is seeing, for working out why nothing fired. */
     private static boolean debug;
     /** How long a complaint about an empty rig keeps quiet for. */
+    /**
+     * The last handful of fire attempts and what came of each.
+     *
+     * <p>Written on every attempt, never throttled and never conditional on debug being on.
+     * The action-bar warning is one line every three seconds, which is right for playing and
+     * useless for working out why nothing happens: firing five machines at once produced one
+     * message about one of them. This is the record that answers, afterwards, whether the
+     * watcher saw anything at all and what became of it.
+     */
+    private static final Deque<String> fireLog = new ArrayDeque<>();
+    private static final int FIRE_LOG_SIZE = 12;
+
     private static final int WARN_GAP_TICKS = 60;
     private static long lastWarn = Long.MIN_VALUE / 2;
+    private static String lastWarnText = "";
 
     /** The dispenser last looked at, which is the one whose GUI is open if one is. */
     private static BlockPos openDispenser;
@@ -449,7 +464,9 @@ public final class ClientDispensers {
             // that call spends a chamber, and spending one on a dispenser that has been
             // broken or walked away from would quietly desync the count.
             if (!isDispenser(world, fire.pos())) {
-                warn(whyNotDispensing(world, fire.pos()));
+                String why = whyNotDispensing(world, fire.pos());
+                warn(why);
+                logFire(fire.pos(), "STOPPED: " + why);
                 continue;
             }
 
@@ -468,6 +485,7 @@ public final class ClientDispensers {
             }
             if (result == null) {
                 warn("Rig '" + profile.name + "' has nothing to fire.");
+                logFire(fire.pos(), "STOPPED: rig '" + profile.name + "' had no answer for it");
             } else {
                 // Only once something has actually come out. A machine with no room in
                 // front of it used to take the item off its count anyway, so its stock
@@ -479,6 +497,8 @@ public final class ClientDispensers {
                 // Take it out of what the dispenser looks like it is holding, so opening
                 // the thing afterwards agrees with what everyone just watched come out.
                 if (out) deplete(profile, fire.pos(), result);
+                logFire(fire.pos(), out ? "fired " + describeSpec(result)
+                        : "STOPPED: " + describeSpec(result) + " could not come out");
             }
             if (profile.arrowTarget != null) launchArrow(world, fire.pos(), profile.arrowTarget);
         }
@@ -632,6 +652,7 @@ public final class ClientDispensers {
         lastFire.put(key, tick);
         pending.add(new PendingFire(key, tick + DISPENSE_DELAY_TICKS));
         note("fire spotted at " + text(key) + " (" + why + ")");
+        logFire(key, "spotted by " + why);
         return true;
     }
 
@@ -645,6 +666,7 @@ public final class ClientDispensers {
         BlockPos key = pos.toImmutable();
         lastFire.put(key, tick);
         pending.add(new PendingFire(key, tick));
+        logFire(key, "fired by hand");
         return true;
     }
 
@@ -1127,6 +1149,45 @@ public final class ClientDispensers {
         return item == null ? null : new FakeSpec(item, 1, "");
     }
 
+    /**
+     * What a machine would fire if it went off right now, spending nothing.
+     *
+     * <p>The rigging is invisible until something comes out, so "is it rigged correctly" and
+     * "does anything come out at all" have always been the same question asked twice. This
+     * answers the first on its own: a machine that would fire the right thing and does not is
+     * a different fault from one that has nothing to fire.
+     */
+    public static String preview(BlockPos pos) {
+        RigProfile profile = active();
+
+        if (profile.roulette) {
+            if (profile.armed) return describeSpec(profile.bullet) + " - ARMED";
+            if (profile.manualTrigger) {
+                return describeSpec(profile.blank) + " (press ; for the loaded one)";
+            }
+            int next = profile.shot + 1 > profile.chambers ? 1 : profile.shot + 1;
+            return describeSpec(next == profile.bulletAt ? profile.bullet : profile.blank)
+                    + " (shot " + next + " of " + profile.chambers + ")";
+        }
+        if (profile.paper) {
+            String side = profile.sideOf(pos);
+            if (side.isEmpty()) return "nothing - not in the paper game";
+            return "a " + profile.slipItem + " for " + side + ", "
+                    + (profile.winner.isEmpty() ? "winner left to chance"
+                            : "rigged for " + profile.winner);
+        }
+        if (profile.tower) {
+            int floor = profile.floorOf(pos);
+            if (floor == 0) return "nothing - not in the tower";
+
+            boolean busts = profile.bustNext
+                    || (profile.bustAt > 0 && floor == profile.bustAt);
+            return (busts ? profile.otherColour(profile.called()) : profile.called())
+                    + " (floor " + floor + ", they called " + profile.called() + ")";
+        }
+        return describeSpec(profile.resultFor(pos));
+    }
+
     private static String describeSpec(FakeSpec spec) {
         return spec == null ? "nothing" : spec.count + "x " + spec.describe();
     }
@@ -1152,9 +1213,25 @@ public final class ClientDispensers {
      * loaded, which has now cost more than one evening. Throttled, since a jammed setup
      * can go off repeatedly.
      */
+    /** Records what happened to one fire attempt, for the doctor to read back. */
+    private static void logFire(BlockPos pos, String outcome) {
+        while (fireLog.size() >= FIRE_LOG_SIZE) fireLog.removeFirst();
+        fireLog.addLast("t" + tick + "  " + text(pos) + "  " + outcome);
+    }
+
+    /** The fire log, oldest first. */
+    public static List<String> fireLog() {
+        return new ArrayList<>(fireLog);
+    }
+
     private static void warn(String message) {
-        if (tick - lastWarn < WARN_GAP_TICKS) return;
+        // Throttled per message rather than outright. Firing five machines at once resolves
+        // all five in one tick, and a flat throttle showed the first and threw the other
+        // four away -- so four different faults could hide behind one line about a fifth.
+        // A repeat of the same message is still held back; that is what the throttle is for.
+        if (message.equals(lastWarnText) && tick - lastWarn < WARN_GAP_TICKS) return;
         lastWarn = tick;
+        lastWarnText = message;
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;

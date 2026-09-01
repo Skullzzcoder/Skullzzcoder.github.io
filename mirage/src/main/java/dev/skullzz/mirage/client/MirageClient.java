@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -97,6 +98,8 @@ public class MirageClient implements ClientModInitializer {
                         // way to reach it, which made every readback in the mod dead by
                         // default -- including the one that says which of three items
                         // 45/45/10 is currently rigged to.
+                        .then(ClientCommandManager.literal("doctor")
+                                .executes(MirageClient::doctor))
                         .then(ClientCommandManager.literal("keys")
                                 .executes(context -> {
                                     // Opened on the next tick: a screen cannot be put up
@@ -434,6 +437,77 @@ public class MirageClient implements ClientModInitializer {
                 selectPreset(client, delta);
                 break;
         }
+    }
+
+    /**
+     * Walks the whole chain a fake has to travel, and says where it stops.
+     *
+     * <p>Nine things have to be true for something to come out of a machine, and until now
+     * each of them announced itself somewhere different, or not at all: the master switch in
+     * one place, the watched list in another, the rig's answer nowhere, and the reason a fire
+     * produced nothing in an action-bar line that lasts three seconds and is thrown away.
+     * Every report of "it does not work" therefore started from nothing and cost a round of
+     * guessing. This prints the lot in order, marks the first thing that is wrong, and reads
+     * back the log of what actually happened the last dozen times a machine went off.
+     */
+    private static int doctor(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        RigProfile profile = ClientDispensers.active();
+        StringBuilder out = new StringBuilder("--- Mirage doctor ---");
+
+        // 1. the master switch, which turns every other answer into a lie if it is off
+        boolean on = SelfFakes.enabled();
+        out.append("\n1. Master switch   ").append(on ? "ON" : "OFF  <-- press N");
+
+        // 2. which game is on, and what its keys do
+        out.append("\n2. Rig             '").append(profile.name).append("' (")
+                .append(profile.mode()).append(")   F ").append(profile.forwardLabel());
+
+        // 3. whether that rig has an answer to give at all
+        String answer = ClientDispensers.presets().isEmpty() && !profile.roulette
+                && !profile.paper && !profile.tower
+                ? "NO ITEMS  <-- /fake preset add <item>"
+                : ClientDispensers.result() == null && !profile.roulette && !profile.paper
+                        && !profile.tower
+                        ? "nothing selected  <-- press F"
+                        : "yes";
+        out.append("\n3. Rig has answer  ").append(answer);
+
+        // 4. the machines, each with what it would fire if it went off now
+        Set<BlockPos> watched = ClientDispensers.watchedPositions();
+        out.append("\n4. Machines        ").append(watched.size());
+        if (watched.isEmpty()) {
+            out.append("  <-- look at each and press H");
+        }
+        for (BlockPos pos : watched) {
+            out.append("\n     ").append(pos.getX()).append(" ").append(pos.getY())
+                    .append(" ").append(pos.getZ()).append("  ");
+
+            if (client.world == null) {
+                out.append("no world");
+            } else if (!client.world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+                out.append("chunk not loaded - go closer");
+            } else if (!(client.world.getBlockState(pos).getBlock() instanceof DispenserBlock)) {
+                out.append(FakeBlocks.fakeAt(pos) != null
+                        ? "COVERED by a build  <-- look at it and press B"
+                        : "not a dispenser any more  <-- rewatch it");
+            } else {
+                out.append("would fire ").append(ClientDispensers.preview(pos));
+                out.append("; holds ").append(ClientDispensers.describeStock(pos));
+            }
+        }
+
+        // 5. what actually happened the last few times one went off
+        List<String> log = ClientDispensers.fireLog();
+        out.append("\n5. Last fires      ");
+        if (log.isEmpty()) {
+            out.append("NONE SEEN YET. Press ' while looking at a machine.");
+        } else {
+            for (String line : log) out.append("\n     ").append(line);
+        }
+
+        out.append("\n6. Collect fakes   ").append(SelfFakes.autoCollect() ? "on" : "off");
+        return feedback(context, out.toString());
     }
 
     /**
@@ -1409,7 +1483,7 @@ public class MirageClient implements ClientModInitializer {
         say(client, fired == 0
                 ? "No dispensers watched. Look at one and run /fake dispenser watch."
                 : "Fired " + fired + " machine" + (fired == 1 ? "" : "s")
-                        + ". Nothing coming out means the rig, not the wiring.");
+                        + ". If nothing came out, run /fake doctor.");
     }
 
     /**
