@@ -21,6 +21,7 @@ import org.lwjgl.glfw.GLFW;
 
 import net.minecraft.block.DispenserBlock;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.CommandSource;
@@ -71,6 +72,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(ClientCommandManager.literal("ui").executes(MirageClient::openUi))
                         .then(inventoryBranch())
                         .then(enderBranch())
+                        .then(wearBranch())
                         .then(dispenserBranch())
                         .then(arrowBranch())
                         .then(presetBranch())
@@ -390,6 +392,59 @@ public class MirageClient implements ClientModInitializer {
                                                 .executes(context -> setInventory(context,
                                                         IntegerArgumentType.getInteger(context, "count"),
                                                         StringArgumentType.getString(context, "enchants")))))));
+    }
+
+    /** A whole set in one go, since nobody wants to name four slots to put armour on. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> wearBranch() {
+        return ClientCommandManager.literal("wear")
+                .then(ClientCommandManager.literal("off").executes(MirageClient::wearNothing))
+                .then(ClientCommandManager.argument("material", StringArgumentType.word())
+                        .suggests((context, builder) -> CommandSource.suggestMatching(
+                                List.of("netherite", "diamond", "iron", "gold", "chainmail",
+                                        "leather"), builder))
+                        .executes(context -> wear(context, ""))
+                        .then(ClientCommandManager.argument("enchants",
+                                StringArgumentType.greedyString())
+                                .executes(context -> wear(context,
+                                        StringArgumentType.getString(context, "enchants")))));
+    }
+
+    private static int wear(CommandContext<FabricClientCommandSource> context, String enchants) {
+        String material = StringArgumentType.getString(context, "material");
+        String[] pieces = SelfFakes.armourSet(material);
+
+        int worn = 0;
+        for (int i = 0; i < pieces.length; i++) {
+            FakeSpec spec = SelfFakes.buildSpec(pieces[i], 1, enchants, null);
+            if (spec == null) continue;
+
+            // The worn slots run boots upwards, which is the order the pieces come in.
+            SelfFakes.set(SelfFakes.CARRIED_SLOTS + i, spec);
+            worn++;
+        }
+
+        if (worn == 0) {
+            return error(context, "There is no " + material + " armour. Try netherite, "
+                    + "diamond, iron, gold, chainmail or leather.");
+        }
+        return feedback(context, "Wearing " + worn + " pieces of " + material
+                + (enchants.isEmpty() ? "" : ", " + enchants) + ".");
+    }
+
+    private static int wearNothing(CommandContext<FabricClientCommandSource> context) {
+        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+
+        int taken = 0;
+        for (int i = 0; i < 5; i++) {
+            int slot = SelfFakes.CARRIED_SLOTS + i;
+            if (!SelfFakes.has(slot)) continue;
+
+            SelfFakes.clear(slot, player);
+            taken++;
+        }
+
+        if (taken == 0) return error(context, "You are not wearing any fakes.");
+        return feedback(context, "Took off " + taken + ".");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> enderBranch() {

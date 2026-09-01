@@ -20,6 +20,7 @@ import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
@@ -45,6 +46,16 @@ public final class SelfFakes {
     public static final int CARRIED_SLOTS = 36;
     /** Worn slots, in the order the inventory keeps them: feet upwards, then the offhand. */
     private static final String[] WORN = { "boots", "legs", "chest", "helmet", "offhand" };
+    /**
+     * The same slots as the model knows them.
+     *
+     * <p>What a player is wearing is drawn from what they have equipped, and where that is
+     * read from has moved between versions. Writing both the slot and the equipment costs
+     * nothing and means a fake set is actually on you either way.
+     */
+    private static final EquipmentSlot[] WORN_SLOTS = {
+            EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST,
+            EquipmentSlot.HEAD, EquipmentSlot.OFFHAND };
     /** Container sizes we keep separate sets of fakes for. */
     public static final int DISPENSER = 9;
     public static final int ENDER_CHEST = 27;
@@ -261,6 +272,21 @@ public final class SelfFakes {
         return -1;
     }
 
+    /**
+     * The four pieces of a set, from the name of what it is made of.
+     *
+     * <p>Named the way a player would say it rather than the way the registry does, since
+     * "gold" is not what the items are called and nobody says "golden".
+     */
+    public static String[] armourSet(String material) {
+        String cleaned = material.toLowerCase(Locale.ROOT).trim();
+        if (cleaned.equals("gold")) cleaned = "golden";
+
+        return new String[] {
+                cleaned + "_boots", cleaned + "_leggings",
+                cleaned + "_chestplate", cleaned + "_helmet" };
+    }
+
     /** Takes one off a fake, the way placing a block does. @return what was taken. */
     public static FakeSpec takeOne(int slot) {
         FakeSpec spec = fakes.get(slot);
@@ -287,8 +313,20 @@ public final class SelfFakes {
         if (fakes.remove(slot) == null) return;
         ItemStack real = shadowed.remove(slot);
         applied.remove(slot);
-        if (player != null && real != null) player.getInventory().setStack(slot, real);
+
+        if (player != null && real != null) {
+            player.getInventory().setStack(slot, real);
+            wear(player, slot, real);
+        }
         save();
+    }
+
+    /** Puts what is in a worn slot onto the model as well as into the screen. */
+    private static void wear(ClientPlayerEntity player, int slot, ItemStack stack) {
+        int worn = slot - CARRIED_SLOTS;
+        if (worn < 0 || worn >= WORN_SLOTS.length) return;
+
+        player.equipStack(WORN_SLOTS[worn], stack);
     }
 
     public static void clearAll(ClientPlayerEntity player) {
@@ -296,7 +334,11 @@ public final class SelfFakes {
             fakes.remove(slot);
             ItemStack real = shadowed.remove(slot);
             applied.remove(slot);
-            if (player != null && real != null) player.getInventory().setStack(slot, real);
+
+            if (player != null && real != null) {
+                player.getInventory().setStack(slot, real);
+                wear(player, slot, real);
+            }
         }
         save();
     }
@@ -405,7 +447,9 @@ public final class SelfFakes {
             if (inventory.getStack(slot) != entry.getValue()) continue;
 
             ItemStack real = shadowed.get(slot);
-            inventory.setStack(slot, real == null ? ItemStack.EMPTY : real);
+            ItemStack back = real == null ? ItemStack.EMPTY : real;
+            inventory.setStack(slot, back);
+            wear(player, slot, back);
         }
         applied.clear();
         shadowed.clear();
@@ -432,6 +476,7 @@ public final class SelfFakes {
                 shadowed.put(slot, current.copy());
                 ItemStack copy = entry.getValue().stack().copy();
                 inventory.setStack(slot, copy);
+                wear(player, slot, copy);
                 applied.put(slot, copy);
             }
         }

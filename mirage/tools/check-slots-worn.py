@@ -35,6 +35,31 @@ check("a pickup never reaches the worn slots", "slot < SLOT_COUNT" not in collec
 names = re.search(r"public static List<String> slotNames\(\) \{(.*?)\n    \}",
                   self_, re.S).group(1)
 check("worn slots are offered by name", "WORN" in names)
+
+# What a player is wearing is drawn from what they have equipped, and where that is read
+# from has moved between versions. Writing the slot alone is not enough to be sure it shows.
+EQUIP = re.findall(r"EquipmentSlot\.(\w+)", re.search(r"WORN_SLOTS = \{([^}]*)\}",
+                                                      self_, re.S).group(1))
+check("every worn slot has a model slot", len(EQUIP) == len(WORN))
+check("they line up with the names", EQUIP == ["FEET", "LEGS", "CHEST", "HEAD", "OFFHAND"])
+
+wear = re.search(r"private static void wear\(.*?\n    \}", self_, re.S).group(0)
+check("wearing goes onto the model", "player.equipStack(WORN_SLOTS[worn]" in wear)
+check("wearing ignores the carried slots", "worn < 0" in wear)
+
+apply_ = re.search(r"private static void applyInventory\(.*?\n    \}", self_, re.S).group(0)
+check("painting a worn slot also equips it", "wear(player, slot, copy)" in apply_)
+revert = re.search(r"private static void revert\(.*?\n    \}", self_, re.S).group(0)
+check("taking it off puts the real one back on", "wear(player, slot, back)" in revert)
+clear = re.search(r"public static void clear\(int slot, ClientPlayerEntity player\) \{(.*?)\n    \}",
+                  self_, re.S).group(1)
+check("clearing a worn slot unequips it", "wear(player, slot, real)" in clear)
+
+# a whole set in one go, in the order the slots run
+armour = re.search(r"public static String\[\] armourSet\(.*?\n    \}", self_, re.S).group(0)
+check("a set is boots upwards", armour.index("_boots") < armour.index("_leggings")
+      < armour.index("_chestplate") < armour.index("_helmet"))
+check("gold is spelt the way the items are", '"golden"' in armour)
 index = re.search(r"public static int slotIndex\(.*?\n    \}", self_, re.S).group(0)
 for alias in ("leggings", "chestplate", "head"):
     check("the everyday name '%s' works too" % alias, '"%s"' % alias in index)

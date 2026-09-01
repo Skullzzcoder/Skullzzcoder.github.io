@@ -44,10 +44,23 @@ Slot names tab-complete: `hotbar1`–`hotbar9`, `inv1`–`inv27`, and the worn
 slots — `helmet`, `chest`, `legs`, `boots`, `offhand`.
 
 The worn ones show **on your player model**, not just in the screen, so a fake
-netherite set is on you in third person and in your own hand:
+set is on you in third person and in your own hand.
+
+A whole set in one go:
+
+    /fake wear netherite
+    /fake wear diamond protection:4, unbreaking:3
+    /fake wear off
+
+Or a piece at a time:
 
     /fake set helmet netherite_helmet
-    /fake set chest netherite_chestplate 1 protection:4
+    /fake set chest elytra
+    /fake set offhand totem_of_undying
+
+What you are wearing is drawn from what you have **equipped**, and where that is
+read from has moved between versions, so the mod writes both the slot and the
+equipment. Costs nothing and means it is actually on you either way.
 
 A slot holding a **real** item is never touched, so nothing of yours can be lost
 or hidden, and anything picked up goes to the bag rather than onto your head.
