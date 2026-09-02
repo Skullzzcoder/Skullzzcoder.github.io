@@ -303,6 +303,42 @@ public final class ClientDispensers {
         if (profile.presetIndex() < 0) profile.setPresetIndex(0);
     }
 
+    /**
+     * Turns the tower back into an ordinary coin flip on the same machines.
+     *
+     * <p>A tower rig carries no presets -- the two colours live in their own fields and the
+     * repair pass clears the preset list, because a run is not a thing you pick between. So
+     * simply switching the mode off left a rig that fired nothing, and the way out was to
+     * know that and retype both colours.
+     *
+     * <p>The colours become the two sides of the flip, and the answer keeps standing on the
+     * ground rather than being thrown, which is the whole reason the game was played with
+     * shulker boxes. Nothing about the machines changes: they stay watched, and their floors
+     * are kept in case the tower is ever wanted back.
+     *
+     * @return the two items it is now a flip between.
+     */
+    public static List<String> towerToFlip() {
+        RigProfile profile = active();
+        profile.tower = false;
+
+        List<String> colours = new ArrayList<>();
+        for (String colour : new String[] { profile.towerA, profile.towerB }) {
+            Item item = SelfFakes.lookupItem(colour);
+            if (item == null) continue;
+
+            addPreset(new FakeSpec(item, 1, ""));
+            colours.add(colour);
+        }
+        // What a machine holding shulker boxes is for.
+        profile.placeOutput = true;
+        if (profile.presetIndex() < 0 && !profile.presets.isEmpty()) profile.setPresetIndex(0);
+
+        // The layout is a floor's worth of boxes until it is laid out as a flip's.
+        refillWatched();
+        return colours;
+    }
+
     public static void clearPresets() {
         RigProfile profile = active();
         profile.presets.clear();
@@ -1622,6 +1658,12 @@ public final class ClientDispensers {
                         + profile.arrowTarget.y + "," + profile.arrowTarget.z);
             }
 
+            // Written for every rig rather than inside the tower's own block. A coin flip
+            // played with shulker boxes wants its answer standing on the ground just as much
+            // as the tower did, and keeping the setting in there meant turning the tower off
+            // silently threw it away.
+            json.addProperty("place", profile.placeOutput);
+
             // Written whether it is on or off. Writing it only when on made a rig that
             // had been turned off look identical to one that had never heard of the game,
             // and there is no way to tell those apart on the way back in.
@@ -1762,6 +1804,11 @@ public final class ClientDispensers {
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
+        // After the tower block below would be wrong -- this has to lose to nothing, and an
+        // older file carries the setting only in there. Read here, overwritten there only
+        // when the file predates this line.
+        if (json.has("place")) profile.placeOutput = json.get("place").getAsBoolean();
+
         if (json.has("mix")) {
             JsonObject mix = json.getAsJsonObject("mix");
             profile.mix = true;
@@ -1786,8 +1833,11 @@ public final class ClientDispensers {
             if (tower.has("each")) profile.towerEach = tower.get("each").getAsInt();
             if (tower.has("bustAt")) profile.bustAt = tower.get("bustAt").getAsInt();
             if (tower.has("call")) profile.call = tower.get("call").getAsString();
-            // Older files predate the setting, and the game it belongs to always wanted it.
-            profile.placeOutput = !tower.has("place") || tower.get("place").getAsBoolean();
+            // Older files predate the top-level setting and carry it only here, so this
+            // fills in for them. A file new enough to have written both agrees with itself.
+            if (!json.has("place")) {
+                profile.placeOutput = !tower.has("place") || tower.get("place").getAsBoolean();
+            }
 
             if (tower.has("at")) {
                 for (Map.Entry<String, JsonElement> entry

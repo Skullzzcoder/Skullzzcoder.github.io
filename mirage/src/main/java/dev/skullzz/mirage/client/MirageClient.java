@@ -945,6 +945,19 @@ public class MirageClient implements ClientModInitializer {
                 .then(paperBranch())
                 .then(towerBranch())
                 .then(rouletteBranch())
+                .then(ClientCommandManager.literal("place")
+                        .then(ClientCommandManager.literal("on").executes(context -> {
+                            ClientDispensers.active().placeOutput = true;
+                            SelfFakes.save();
+                            return feedback(context, "Answers are put down as blocks in front"
+                                    + " of the machine, the way a dispenser places a shulker"
+                                    + " box.");
+                        }))
+                        .then(ClientCommandManager.literal("off").executes(context -> {
+                            ClientDispensers.active().placeOutput = false;
+                            SelfFakes.save();
+                            return feedback(context, "Answers are thrown out as items again.");
+                        })))
                 .then(ClientCommandManager.literal("set")
                         .then(ClientCommandManager.argument("item", StringArgumentType.word())
                                 .executes(context -> setDispenserResult(context, 1))
@@ -965,9 +978,18 @@ public class MirageClient implements ClientModInitializer {
                             + "then /fake dispenser fill each one.");
                 }))
                 .then(ClientCommandManager.literal("off").executes(context -> {
-                    ClientDispensers.active().tower = false;
+                    List<String> colours = ClientDispensers.towerToFlip();
                     SelfFakes.save();
-                    return feedback(context, "Tower off for this rig.");
+
+                    return colours.size() < 2
+                            ? feedback(context, "Tower off. Its colours are not real items, so"
+                                    + " add two with /fake preset add <item>.")
+                            : feedback(context, "Tower off. Rig '"
+                                    + ClientDispensers.activeName() + "' is now a coin flip"
+                                    + " between " + colours.get(0) + " and " + colours.get(1)
+                                    + ". F and R switch which one comes out, and it still"
+                                    + " stands on the ground rather than being thrown."
+                                    + " Press H on each machine to lay it out.");
                 }))
                 .then(ClientCommandManager.literal("floors")
                         .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 9))

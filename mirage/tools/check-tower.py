@@ -182,6 +182,37 @@ check("a tower rig carries no presets", "profile.presets.clear()" in tower_branc
 check("floors are kept inside the run", "profile.bustAt = 0" in tower_branch)
 check("an unknown colour falls back", "white_shulker_box" in tower_branch)
 
+# ----------------------------------------------- turning it back into a coin flip
+# A tower rig carries no presets: the two colours live in their own fields and the repair
+# pass clears the preset list. So switching the mode off used to leave a rig that fired
+# nothing at all, and the way out was to know that and retype both colours.
+mc = io.open("src/main/java/dev/skullzz/mirage/client/MirageClient.java", encoding="utf-8").read()
+flip = re.search(r"public static List<String> towerToFlip\(\) \{(.*?)\n    \}",
+                 disp, re.S).group(1)
+check("the mode goes off", "profile.tower = false;" in flip)
+check("both colours become the two sides", "profile.towerA, profile.towerB" in flip
+      and "addPreset(" in flip)
+check("something is selected, so it has an answer", "setPresetIndex(0)" in flip)
+# The whole reason the game used shulker boxes: the answer stands on the ground.
+check("the answer still stands rather than being thrown", "profile.placeOutput = true;" in flip)
+check("the machines are laid out again as a flip", "refillWatched()" in flip)
+# Nothing about the machines themselves may change, or the setup has to be rebuilt.
+for destructive in ("watched.clear", "unwatch", "towerFloors.clear", "stock.clear"):
+    check("converting does not disturb %s" % destructive, destructive not in flip)
+check("the off command converts", "ClientDispensers.towerToFlip()" in mc)
+
+# placeOutput used to live inside the tower's own saved block, so turning the tower off
+# threw it away on the next load -- the setting outliving the mode is the point.
+save = re.search(r"public static void save\(JsonObject root\) \{(.*?)\n    \}",
+                 disp, re.S).group(1)
+check("placing is saved for every rig", 'json.addProperty("place", profile.placeOutput);' in save)
+read = re.search(r"private static void readProfile\(JsonObject json\) \{(.*?)\n    \}",
+                 disp, re.S).group(1)
+check("and read back for every rig", 'json.has("place")' in read)
+check("an older file still gets it from the tower block", '!json.has("place")' in read)
+check("placing can be switched by hand", 'literal("place")' in mc
+      and "placeOutput = true;" in mc and "placeOutput = false;" in mc)
+
 print("FAILED: " + "; ".join(dict.fromkeys(fails)) if fails else
       "tower: %d floors, %dx%s and %dx%s each, call fires back, arming or floor %s ends it"
       % (FLOORS, EACH, A, EACH, B, "n"))

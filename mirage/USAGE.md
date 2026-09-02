@@ -425,6 +425,27 @@ named for the setup they were made with.
 
 ## 5c. The tower
 
+### Or play it as a coin flip
+
+If your machines hold **one white and one black** rather than two of each, you do
+not want tower mode at all — you want the coin flip, with shulker boxes:
+
+    /fake rig use tower
+    /fake tower off
+
+That converts the rig in place. The two colours become the two sides, `F` and `R`
+switch which one comes out, and the answer still **stands on the ground** rather
+than being thrown, which is the whole reason the game uses shulker boxes. Your
+machines stay watched and their floors are remembered in case you want the tower
+back. Press `H` on each machine to lay it out as one of each.
+
+Placing is its own setting now, on any rig:
+
+    /fake dispenser place on      (put the answer down as a block)
+    /fake dispenser place off     (throw it out as an item)
+
+
+
 Five machines, one per floor, each holding **two white and two black shulker
 boxes**. The player calls a colour before each floor and climbs while they are
 right, with the multiplier going up as they go.
