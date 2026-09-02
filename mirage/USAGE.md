@@ -491,6 +491,16 @@ machine fires the other colour instead.
 Arming beats everything and is spent by the floor it lands on, so you can end a
 run at any point without changing the setup.
 
+### How long it takes to break
+
+The box a machine puts down breaks on its own clock, with the cracks showing:
+
+    /fake dispenser breaktime 1.5     (seconds; 0 goes back to the block's own hardness)
+
+Default is **1.5 seconds**. Without it a shulker box gives way in about two ticks
+to any decent pickaxe, which is not mining it — it is it vanishing. This applies
+in creative too, since creative is where the instant break comes from.
+
 ### The box is placed, not thrown
 
 A dispenser holding shulker boxes **places** them, so a floor's answer stands on
@@ -828,6 +838,30 @@ inside the Mirage screen is not wired up yet: setting a binding and reading a ke
 press both moved in this version of Minecraft, and rather than guess at the new
 names a third time, `gradlew inspectApi` prints them and the screen grows the two
 buttons back once it has.
+
+## Playing with nothing on your screen
+
+    /fake quiet on
+
+Every message the mod would put in your action bar stops appearing. **Nothing is
+lost** — it all goes to the dashboard instead, on your other screen:
+
+    http://127.0.0.1:25599
+
+The dashboard now shows everything the text used to, live:
+
+- **which game is on**, and what `F` and `R` do on it right now
+- a **red bar** when the rig cannot produce anything at all, saying why
+- **every machine** — where it is, whether it is ok, what it would fire if it went
+  off this second, and what it is holding. A machine that is covered, unloaded or
+  no longer a dispenser turns red.
+- **what the machines did** — the last dozen fires, with `STOPPED` lines in red
+- **messages** — everything the mod has said lately, newest first
+- the current game's settings: the tower's floors and call, the 45/45/10 spread
+  with real odds, the paper winner, whether answers are placed and how long they
+  take to break
+
+`/fake quiet off` puts the messages back on screen.
 
 ## When nothing happens
 

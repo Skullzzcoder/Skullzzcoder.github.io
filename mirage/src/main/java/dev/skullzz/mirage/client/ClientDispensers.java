@@ -106,6 +106,17 @@ public final class ClientDispensers {
     private static final Deque<String> fireLog = new ArrayDeque<>();
     private static final int FIRE_LOG_SIZE = 12;
 
+    /**
+     * Everything the mod would have said, whether or not it said it.
+     *
+     * <p>Quiet mode takes the messages off the screen, and a message that is merely dropped
+     * is the failure this whole thing has been fighting: three evenings went on a machine
+     * that did nothing and would not say why. So they are written here first and shown
+     * second, and the dashboard reads them back on the other screen where nobody is looking.
+     */
+    private static final Deque<String> notices = new ArrayDeque<>();
+    private static final int NOTICE_SIZE = 40;
+
     private static final int WARN_GAP_TICKS = 60;
     private static long lastWarn = Long.MIN_VALUE / 2;
     private static String lastWarnText = "";
@@ -1221,6 +1232,19 @@ public final class ClientDispensers {
      * one-of-each layout into nine of a single block, and from in front of the dispenser
      * the two look like the same key having done something different each time.
      */
+    /**
+     * How long a block a machine put down should take to break, in ticks.
+     *
+     * <p>Zero for anything else, which leaves the block's own hardness to decide as it always
+     * has. Only the answer standing in front of a machine gets a time of its own.
+     */
+    public static int placedBreakTicks(BlockPos pos) {
+        if (!FakeBlocks.isPlaced(pos)) return 0;
+
+        double seconds = active().breakSeconds;
+        return seconds <= 0 ? 0 : Math.max(1, (int) Math.round(seconds * 20.0));
+    }
+
     public static boolean hasFixedAnswer(BlockPos pos) {
         return active().perDispenser.containsKey(pos);
     }
@@ -1342,7 +1366,23 @@ public final class ClientDispensers {
         return new ArrayList<>(fireLog);
     }
 
+    /** Records something worth reading, shown on screen or not. */
+    public static void notice(String message) {
+        while (notices.size() >= NOTICE_SIZE) notices.removeFirst();
+        notices.addLast("t" + tick + "  " + message);
+    }
+
+    /** What the mod has had to say lately, oldest first. */
+    public static List<String> notices() {
+        return new ArrayList<>(notices);
+    }
+
     private static void warn(String message) {
+        // Kept before anything that might swallow it. The throttle and the quiet switch both
+        // decide whether it reaches the screen; neither may decide whether it happened.
+        notice(message);
+        if (SelfFakes.quiet()) return;
+
         // Throttled per message rather than outright. Firing five machines at once resolves
         // all five in one tick, and a flat throttle showed the first and threw the other
         // four away -- so four different faults could hide behind one line about a fifth.
@@ -1700,6 +1740,7 @@ public final class ClientDispensers {
             // as the tower did, and keeping the setting in there meant turning the tower off
             // silently threw it away.
             json.addProperty("place", profile.placeOutput);
+            json.addProperty("breakSeconds", profile.breakSeconds);
 
             // Written whether it is on or off. Writing it only when on made a rig that
             // had been turned off look identical to one that had never heard of the game,
@@ -1845,6 +1886,9 @@ public final class ClientDispensers {
         // older file carries the setting only in there. Read here, overwritten there only
         // when the file predates this line.
         if (json.has("place")) profile.placeOutput = json.get("place").getAsBoolean();
+        if (json.has("breakSeconds")) {
+            profile.breakSeconds = json.get("breakSeconds").getAsDouble();
+        }
 
         if (json.has("mix")) {
             JsonObject mix = json.getAsJsonObject("mix");

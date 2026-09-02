@@ -109,6 +109,17 @@ public class MirageClient implements ClientModInitializer {
                                 })
                                 .then(ClientCommandManager.literal("list")
                                         .executes(MirageClient::listKeys)))
+                        .then(ClientCommandManager.literal("quiet")
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    SelfFakes.setQuiet(true);
+                                    return feedback(context, "Nothing more will appear on your"
+                                            + " screen. The dashboard carries all of it -"
+                                            + " open http://127.0.0.1:25599");
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    SelfFakes.setQuiet(false);
+                                    return feedback(context, "Messages are back on screen.");
+                                })))
                         .then(ClientCommandManager.literal("announce")
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     SelfFakes.setAnnounceSwitching(true);
@@ -319,6 +330,7 @@ public class MirageClient implements ClientModInitializer {
     private static void publishDashboard() {
         if (!WebDashboard.isRunning()) return;
 
+        MinecraftClient client = MinecraftClient.getInstance();
         RigProfile profile = ClientDispensers.active();
         StringBuilder json = new StringBuilder("{\"on\":")
                 .append(SelfFakes.enabled())
@@ -386,13 +398,90 @@ public class MirageClient implements ClientModInitializer {
             }
             json.append(']');
         }
-        json.append("}}");
+        json.append('}');
+
+        // Everything the action bar used to carry, so quiet mode loses nothing: which game
+        // is on, what the two result keys mean on it, whether the rig can answer at all,
+        // every machine and what it would fire, and the running record of both.
+        json.append(",\"mode\":\"").append(WebDashboard.escape(shown.mode()))
+                .append("\",\"forward\":\"").append(WebDashboard.escape(shown.forwardLabel()))
+                .append("\",\"back\":\"").append(WebDashboard.escape(shown.backLabel()))
+                .append("\",\"quiet\":").append(SelfFakes.quiet())
+                .append(",\"place\":").append(shown.placeOutput)
+                .append(",\"breakSeconds\":").append(shown.breakSeconds);
+
+        String missing = ClientDispensers.noAnswer();
+        json.append(",\"answer\":\"")
+                .append(WebDashboard.escape(missing == null ? "yes" : missing)).append('"');
+
+        json.append(",\"tower\":{\"on\":").append(shown.tower);
+        if (shown.tower) {
+            json.append(",\"floors\":").append(shown.floors)
+                    .append(",\"bustAt\":").append(shown.bustAt)
+                    .append(",\"armed\":").append(shown.bustNext)
+                    .append(",\"called\":\"").append(WebDashboard.escape(shown.called()))
+                    .append("\",\"a\":\"").append(WebDashboard.escape(shown.towerA))
+                    .append("\",\"b\":\"").append(WebDashboard.escape(shown.towerB))
+                    .append('"');
+        }
+        json.append("},\"mix\":{\"on\":").append(shown.mix);
+        if (shown.mix) {
+            json.append(",\"items\":[");
+            for (int i = 0; i < shown.presets.size(); i++) {
+                if (i > 0) json.append(',');
+                json.append("{\"name\":\"")
+                        .append(WebDashboard.escape(shown.presets.get(i).label()))
+                        .append("\",\"held\":").append(shown.mixCount(i))
+                        .append(",\"chance\":").append(shown.mixChance(i))
+                        .append(",\"pays\":").append(shown.mixPayout(i)).append('}');
+            }
+            json.append(']');
+        }
+        json.append("},\"machines\":[");
+
+        first = true;
+        for (BlockPos pos : ClientDispensers.watchedPositions()) {
+            if (!first) json.append(',');
+            first = false;
+            json.append("{\"pos\":\"").append(pos.getX()).append(' ').append(pos.getY())
+                    .append(' ').append(pos.getZ()).append("\",\"state\":\"")
+                    .append(WebDashboard.escape(machineState(client, pos)))
+                    .append("\",\"fires\":\"")
+                    .append(WebDashboard.escape(ClientDispensers.preview(pos)))
+                    .append("\",\"holds\":\"")
+                    .append(WebDashboard.escape(ClientDispensers.describeStock(pos)))
+                    .append("\"}");
+        }
+        json.append("],\"fires\":[");
+        appendLines(json, ClientDispensers.fireLog());
+        json.append("],\"notices\":[");
+        appendLines(json, ClientDispensers.notices());
+        json.append("]}");
 
         String built = json.toString();
         if (!built.equals(lastPublished)) {
             lastPublished = built;
             WebDashboard.publish(built);
         }
+    }
+
+    private static void appendLines(StringBuilder json, List<String> lines) {
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) json.append(',');
+            json.append('"').append(WebDashboard.escape(lines.get(i))).append('"');
+        }
+    }
+
+    /** How a machine is doing, in the same words the doctor uses. */
+    private static String machineState(MinecraftClient client, BlockPos pos) {
+        if (client.world == null) return "no world";
+        if (!client.world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+            return "chunk not loaded";
+        }
+        if (!(client.world.getBlockState(pos).getBlock() instanceof DispenserBlock)) {
+            return FakeBlocks.fakeAt(pos) != null ? "covered by a build" : "not a dispenser";
+        }
+        return "ok";
     }
 
     /** Applies a pick made in the browser, on the client thread where it is safe to. */
@@ -923,6 +1012,22 @@ public class MirageClient implements ClientModInitializer {
                             + "'. They go to the machines you fill or fire next - press H on"
                             + " the ones you actually want in the game, in order.");
                 }))
+                .then(ClientCommandManager.literal("breaktime")
+                        .then(ClientCommandManager.argument("seconds",
+                                        com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.0, 30.0))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.breakSeconds = com.mojang.brigadier.arguments
+                                            .DoubleArgumentType.getDouble(context, "seconds");
+                                    SelfFakes.save();
+
+                                    return feedback(context, profile.breakSeconds <= 0
+                                            ? "What a machine puts down breaks at its own"
+                                                    + " speed again."
+                                            : "What a machine puts down takes "
+                                                    + profile.breakSeconds
+                                                    + "s to break, with the cracks showing.");
+                                })))
                 .then(ClientCommandManager.literal("place")
                         .then(ClientCommandManager.literal("on").executes(context -> {
                             ClientDispensers.active().placeOutput = true;
@@ -965,6 +1070,22 @@ public class MirageClient implements ClientModInitializer {
                             + "'. They go to the machines you fill or fire next - press H on"
                             + " the ones you actually want in the game, in order.");
                 }))
+                .then(ClientCommandManager.literal("breaktime")
+                        .then(ClientCommandManager.argument("seconds",
+                                        com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.0, 30.0))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.breakSeconds = com.mojang.brigadier.arguments
+                                            .DoubleArgumentType.getDouble(context, "seconds");
+                                    SelfFakes.save();
+
+                                    return feedback(context, profile.breakSeconds <= 0
+                                            ? "What a machine puts down breaks at its own"
+                                                    + " speed again."
+                                            : "What a machine puts down takes "
+                                                    + profile.breakSeconds
+                                                    + "s to break, with the cracks showing.");
+                                })))
                 .then(ClientCommandManager.literal("place")
                         .then(ClientCommandManager.literal("on").executes(context -> {
                             ClientDispensers.active().placeOutput = true;
@@ -1757,7 +1878,12 @@ public class MirageClient implements ClientModInitializer {
      * but one that fails in silence is what sent the last two evenings sideways.
      */
     private static void say(MinecraftClient client, String message) {
-        if (client.player == null) return;
+        // Kept first, shown second. Quiet mode moves these to the dashboard rather than
+        // throwing them away: a message that is merely dropped is the exact failure that
+        // cost this mod three evenings of a machine doing nothing and not saying why.
+        ClientDispensers.notice(message);
+        if (SelfFakes.quiet() || client.player == null) return;
+
         client.player.sendMessage(Text.literal(message).formatted(Formatting.GRAY), true);
     }
 

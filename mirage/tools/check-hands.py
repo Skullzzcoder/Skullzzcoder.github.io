@@ -112,8 +112,11 @@ check("breaking follows the paint, not the intent",
 # attack callback answers -- so in creative no answer we give is ever heard, and the block
 # vanishes five ticks after the click with no cracks and no item. Finishing the break
 # ourselves first leaves vanilla nothing of ours at that position to find.
+# Asked as "the creative branch finishes it" rather than as one spelling: a comment now
+# sits between the test and the call, and a placed answer takes its own time ahead of both.
+creative = re.search(r"isCreative\(\)\) \{(.*?)\n        \}", tick, re.S)
 check("creative is finished before vanilla gets there",
-      re.search(r"isCreative\(\)\)\s*\{\s*finish\(", tick) is not None)
+      creative is not None and "finish(client, player, world, state);" in creative.group(1))
 
 # The sweep comes round to a position about once a second. That is far too slow for one
 # being hit, so the position being broken is pinned and put back every tick instead.

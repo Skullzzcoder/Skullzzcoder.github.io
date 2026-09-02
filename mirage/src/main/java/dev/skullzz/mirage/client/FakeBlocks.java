@@ -632,6 +632,17 @@ public final class FakeBlocks {
         return true;
     }
 
+    /**
+     * Whether a machine put this block down, as opposed to it belonging to a build.
+     *
+     * <p>The same mark that decides how far it is held back from the player, asked for a
+     * different reason: what a machine put down is the game's answer, and the answer is
+     * treated differently from scenery in more than one place.
+     */
+    public static boolean isPlaced(BlockPos pos) {
+        return underfootOnly.contains(pos);
+    }
+
     /** What is being faked at a position, or null if nothing is. */
     public static BlockState fakeAt(BlockPos pos) {
         return showing.get(pos);

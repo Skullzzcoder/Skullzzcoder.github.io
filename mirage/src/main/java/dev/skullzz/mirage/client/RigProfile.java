@@ -116,6 +116,16 @@ public final class RigProfile {
     public final List<Integer> mixPayouts = new ArrayList<>();
 
     /**
+     * How long a block a machine put down takes to break, in seconds. Zero is vanilla speed.
+     *
+     * <p>The prize is the thing everyone is looking at, and a prize that vanishes the instant
+     * it is touched does not read as having been mined. Its own time rather than the block's,
+     * because the block is chosen for how it looks and a shulker box happens to give way in
+     * about two ticks to any decent pickaxe.
+     */
+    public double breakSeconds = 1.5;
+
+    /**
      * Roulette mode: instead of one answer, the dispenser cycles through a fixed number of
      * shots and the loaded one lands on a chosen position in that cycle.
      */

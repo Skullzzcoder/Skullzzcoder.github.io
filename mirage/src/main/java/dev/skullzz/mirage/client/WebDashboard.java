@@ -350,10 +350,38 @@ public final class WebDashboard {
               #fixed { color: #9aa0a6; font-size: 13px; text-align: center; line-height: 1.7;
                        font-variant-numeric: tabular-nums; }
               #none { color: #9aa0a6; font-size: 14px; }
+              #head { text-align: center; }
+              #game { font-size: 20px; font-weight: 650; }
+              #keys { color: #9aa0a6; font-size: 14px; margin-top: 4px; }
+              #alert { width: min(92vw, 460px); padding: 12px 16px; border-radius: 12px;
+                       background: #3a1414; border: 1px solid #ff5252; color: #ff8a80;
+                       font-size: 14px; text-align: center; }
+              .panel { width: min(92vw, 460px); }
+              .panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em;
+                          color: #9aa0a6; font-weight: 600; margin: 0 0 8px; }
+              .machine { display: flex; justify-content: space-between; gap: 12px;
+                         padding: 9px 12px; border-radius: 10px; background: #1e2127;
+                         border: 1px solid #2b2f37; margin-bottom: 6px; font-size: 13px; }
+              .machine.bad { border-color: #ff5252; color: #ff8a80; }
+              .machine .where { color: #9aa0a6; font-variant-numeric: tabular-nums;
+                                white-space: nowrap; }
+              .machine .what { text-align: right; }
+              .log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+                     color: #9aa0a6; background: #1a1d22; border: 1px solid #2b2f37;
+                     border-radius: 10px; padding: 10px 12px; max-height: 190px;
+                     overflow-y: auto; white-space: pre-wrap; }
+              .log div.stopped { color: #ff8a80; }
+              #settings { color: #9aa0a6; font-size: 13px; line-height: 1.8;
+                          text-align: center; font-variant-numeric: tabular-nums; }
             </style>
             </head>
             <body>
               <div class="row" id="rigs"></div>
+              <div id="head">
+                <div id="game">--</div>
+                <div id="keys"></div>
+              </div>
+              <div id="alert" hidden></div>
               <div id="card">
                 <div id="label">Rigged toward</div>
                 <div id="name">--</div>
@@ -367,7 +395,11 @@ public final class WebDashboard {
               <div class="row" id="chambers"></div>
               <div class="row" id="winners"></div>
               <div id="fixed"></div>
+              <div id="settings"></div>
               <div id="none" hidden>Nothing set in this rig.</div>
+              <div class="panel"><h3>Machines</h3><div id="machines"></div></div>
+              <div class="panel"><h3>What the machines did</h3><div id="fires" class="log"></div></div>
+              <div class="panel"><h3>Messages</h3><div id="notices" class="log"></div></div>
             <script>
             const el = id => document.getElementById(id);
 
@@ -529,6 +561,70 @@ public final class WebDashboard {
               }));
             }
 
+            function renderHead(s) {
+              el('game').textContent = (s.rig || '--') + '  \u00b7  ' + (s.mode || '');
+              el('keys').textContent = 'F  ' + (s.forward || '') + '     R  ' + (s.back || '')
+                + (s.quiet ? '     \u00b7  quiet: nothing shows in game' : '');
+
+              // The one line that means the rig cannot produce anything at all.
+              const bad = s.answer && s.answer !== 'yes';
+              el('alert').hidden = !bad;
+              if (bad) el('alert').textContent = s.answer;
+            }
+
+            function renderSettings(s) {
+              const bits = [];
+              if (s.place) bits.push('answers are placed as blocks, breaking in '
+                + (s.breakSeconds || 0) + 's');
+              if (s.tower && s.tower.on) {
+                bits.push(s.tower.floors + ' floors, they called ' + s.tower.called
+                  + (s.tower.armed ? ', ARMED' : s.tower.bustAt
+                    ? ', ends on floor ' + s.tower.bustAt : ''));
+              }
+              if (s.mix && s.mix.on) {
+                bits.push((s.mix.items || []).map(i =>
+                  i.held + 'x ' + i.name + ' (' + i.chance + '%, pays ' + i.pays + 'x)').join('   '));
+              }
+              if (s.paper && s.paper.on) {
+                bits.push('winner: ' + (s.winner || s.paper.winner || 'chance'));
+              }
+              el('settings').replaceChildren(...bits.map(t => {
+                const d = document.createElement('div');
+                d.textContent = t;
+                return d;
+              }));
+            }
+
+            function renderMachines(s) {
+              el('machines').replaceChildren(...(s.machines || []).map(m => {
+                const row = document.createElement('div');
+                row.className = 'machine' + (m.state === 'ok' ? '' : ' bad');
+
+                const where = document.createElement('span');
+                where.className = 'where';
+                where.textContent = m.pos;
+
+                const what = document.createElement('span');
+                what.className = 'what';
+                what.textContent = m.state === 'ok'
+                  ? 'fires ' + m.fires + '   \u00b7   holds ' + m.holds
+                  : m.state;
+
+                row.append(where, what);
+                return row;
+              }));
+            }
+
+            function renderLog(id, lines) {
+              el(id).replaceChildren(...(lines || []).slice().reverse().map(line => {
+                const d = document.createElement('div');
+                // The ones that mean nothing came out, marked so they are found by eye.
+                if (line.includes('STOPPED')) d.className = 'stopped';
+                d.textContent = line;
+                return d;
+              }));
+            }
+
             let last = '';
             async function refresh() {
               let s;
@@ -549,6 +645,11 @@ public final class WebDashboard {
               renderChambers(s);
               renderWinners(s);
               renderFixed(s);
+              renderHead(s);
+              renderSettings(s);
+              renderMachines(s);
+              renderLog('fires', s.fires);
+              renderLog('notices', s.notices);
             }
 
             wireButtons();

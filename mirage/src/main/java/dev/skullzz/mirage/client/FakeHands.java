@@ -139,19 +139,26 @@ public final class FakeHands {
             return;
         }
 
-        // Creative takes a block out the instant it is hit, and it does so before the hook
-        // our callback answers -- the check for creative sits above it, so no answer we give
-        // is ever heard. Left alone, five ticks after the click vanilla mines its own copy
-        // and the block simply vanishes: no cracks, no item, and a real break sent for
-        // whatever the server has underneath. So the break is finished here first. The paint
-        // comes off because we took it and the item lands in the bag, and by the time vanilla
-        // looks there is nothing of ours left at that position to mine.
-        if (player.isCreative()) {
+        // A box a machine put down is the prize, and the block it is made of was chosen for
+        // how it looks rather than for how long it takes: a shulker box gives way in about
+        // two ticks to any decent pickaxe, which is not mining it, it is it disappearing. So
+        // the answer gets a time of its own -- in creative too, since creative is where the
+        // instant break comes from and is the mode it is most wrong in.
+        int placed = ClientDispensers.placedBreakTicks(breaking);
+        if (placed > 0) {
+            progress += 1.0F / placed;
+        } else if (player.isCreative()) {
+            // Creative takes a block out the instant it is hit, and it does so before the
+            // hook our callback answers -- the check for creative sits above it, so no answer
+            // we give is ever heard. Left alone, five ticks after the click vanilla mines its
+            // own copy and the block simply vanishes: no cracks, no item, and a real break
+            // sent for whatever the server has underneath. So the break is finished here
+            // first, leaving vanilla nothing of ours at that position to find.
             finish(client, player, world, state);
             return;
+        } else {
+            progress += state.calcBlockBreakingDelta(player, world, breaking);
         }
-
-        progress += state.calcBlockBreakingDelta(player, world, breaking);
         if (progress < 1.0F) {
             world.setBlockBreakingInfo(BREAKER_ID, breaking, (int) (progress * STAGES));
             return;

@@ -78,6 +78,7 @@ public final class SelfFakes {
     private static Map<Identifier, Block> blocksById;
     /** Whether cycling a preset prints anything. Off by default. */
     private static boolean announceSwitching = false;
+    private static boolean quiet = false;
     /** Whether a fake fired from a dispenser ends up in the inventory afterwards. */
     private static boolean autoCollect = true;
     /** The master switch. Off puts everything real back without forgetting any of it. */
@@ -243,6 +244,21 @@ public final class SelfFakes {
 
     public static void setAutoCollect(boolean collect) {
         autoCollect = collect;
+        save();
+    }
+
+    /**
+     * Whether the mod keeps everything it has to say off the screen.
+     *
+     * <p>For playing in front of somebody: the dashboard on the other screen carries the
+     * same messages, so nothing is lost, it only moves to where they are not looking.
+     */
+    public static boolean quiet() {
+        return quiet;
+    }
+
+    public static void setQuiet(boolean on) {
+        quiet = on;
         save();
     }
 
@@ -612,6 +628,7 @@ public final class SelfFakes {
             }
             announceSwitching = root.has("announceSwitching")
                     && root.get("announceSwitching").getAsBoolean();
+            quiet = root.has("quiet") && root.get("quiet").getAsBoolean();
             autoCollect = !root.has("autoCollect") || root.get("autoCollect").getAsBoolean();
             enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
             ClientDispensers.load(root);
@@ -656,6 +673,7 @@ public final class SelfFakes {
         }
         root.add("containers", containers);
         root.addProperty("announceSwitching", announceSwitching);
+        root.addProperty("quiet", quiet);
         root.addProperty("autoCollect", autoCollect);
         root.addProperty("enabled", enabled);
         WebDashboard.writeConfig(root);
