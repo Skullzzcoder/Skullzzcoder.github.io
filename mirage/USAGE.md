@@ -349,6 +349,27 @@ Got them the wrong way round? Look at one and name it:
 
     /fake rig paper side Host
 
+### Only two machines can be in it
+
+This is the one thing that catches people out. The paper game hands out exactly
+**two** sides — `Player` and `Host` — and every watched dispenser competes for
+them, including the roulette dropper, the coin flip and the tower floors. A
+machine that misses out **fires nothing at all**.
+
+If `H` on a paper machine says *"Both sides are already taken (Player at 100 64
+-20, Host at 103 64 -20)"*, that is what happened. Two fixes:
+
+    (look at the machine you want)
+    /fake paper side Player        or Host
+
+or unwatch whichever machine is holding the side you want:
+
+    (look at it)
+    /fake dispenser unwatch
+
+`/fake doctor` shows it too — a machine with no side reads
+`would fire nothing - not in the paper game`.
+
 ### Rigging who wins
 
 One key per side, so there is nothing to count and nothing to remember:

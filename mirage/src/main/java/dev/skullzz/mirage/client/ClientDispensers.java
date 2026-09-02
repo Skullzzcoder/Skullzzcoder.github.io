@@ -841,6 +841,51 @@ public final class ClientDispensers {
         return true;
     }
 
+    /**
+     * Why laying a machine out produced nothing.
+     *
+     * <p>"The rig has nothing to put in" was the answer to all of it, and for the two games
+     * that hand out parts it is the wrong answer: the rig has plenty, this machine is simply
+     * not in the game. That reads as the whole game being broken rather than as one machine
+     * needing a side, which is a five-second fix nobody could find.
+     */
+    public static String whyNotFilled(BlockPos pos) {
+        RigProfile profile = active();
+
+        if (profile.paper) {
+            if (profile.sideOf(pos).isEmpty()) {
+                return "Both sides are already taken " + sideOwners()
+                        + ". Look at this machine and run /fake paper side Player"
+                        + " (or Host), or unwatch the one holding it.";
+            }
+            return "The paper game makes slips from '" + profile.slipItem
+                    + "', which is not a real item. /fake paper item paper";
+        }
+        if (profile.tower) {
+            if (profile.floorOf(pos) == 0) {
+                return "All " + profile.floors + " floors are taken. Look at this machine and"
+                        + " run /fake tower floor <1-" + profile.floors + ">.";
+            }
+            return "The tower's colours are not real items. /fake tower colours"
+                    + " white_shulker_box black_shulker_box";
+        }
+        return "Rig '" + profile.name + "' has nothing to put in."
+                + " Add one with /fake preset add <item>.";
+    }
+
+    /** Which machine holds each side of the paper game, for saying why a third cannot join. */
+    private static String sideOwners() {
+        RigProfile profile = active();
+        StringBuilder text = new StringBuilder();
+
+        for (Map.Entry<BlockPos, String> entry : profile.sides.entrySet()) {
+            if (!watched.contains(entry.getKey())) continue;
+            text.append(text.length() == 0 ? "(" : ", ")
+                    .append(entry.getValue()).append(" at ").append(text(entry.getKey()));
+        }
+        return text.length() == 0 ? "(by nothing still watched)" : text.append(")").toString();
+    }
+
     /** Fills every watched dispenser that has not been laid out yet. */
     public static int fillEmptyWatched() {
         RigProfile profile = active();

@@ -235,6 +235,25 @@ for i in range(600):
     wins[r.round_winner] += 1
 check("chance picks both sides", all(w > 0 for w in wins.values()))
 
+# ------------------------------------------------------- a machine with no side
+# Only two sides exist, and every other game's dispensers are watched alongside these. A
+# machine that misses out fires nothing, and "the rig has nothing to put in" is the wrong
+# answer to that: the rig has plenty, this machine is not in the game.
+mc = io.open("src/main/java/dev/skullzz/mirage/client/MirageClient.java", encoding="utf-8").read()
+why = re.search(r"public static String whyNotFilled\(BlockPos pos\) \{(.*?)\n    \}",
+                disp, re.S).group(1)
+check("a sideless machine is told what it is", "profile.sideOf(pos).isEmpty()" in why)
+check("and which machines hold the sides", "sideOwners()" in why)
+check("and the command that fixes it", "/fake paper side Player" in why)
+check("the refill key uses it", "ClientDispensers.whyNotFilled(pos)" in mc)
+check("the old blanket answer is gone", "has nothing to put in.\");" not in mc)
+
+# A side typed in the wrong case is a third side: everything that compares sides ignores
+# case except the one place that hands them out, which matches exactly.
+side_cmd = re.search(r"private static int setPaperSide\(.*?\n    \}", mc, re.S).group(0)
+check("a side name is normalised to the built-in one",
+      "known.equalsIgnoreCase(side)" in side_cmd and "RigProfile.DEFAULT_SIDES" in side_cmd)
+
 print("FAILED: " + "; ".join(dict.fromkeys(fails)) if fails else
       "paper draws: %s, slips 1-%d; levelling off by default, %s only when asked "
       "(%d seen at 25%%), %s never draws, stale winners recover"

@@ -1127,6 +1127,17 @@ public class MirageClient implements ClientModInitializer {
 
         RigProfile profile = ClientDispensers.active();
         String side = StringArgumentType.getString(context, "name");
+
+        // "player" and "Player" are the same side to everything that compares them -- except
+        // the one place that hands them out, which matches exactly. A lowercase one there
+        // becomes a third side that uses up a slot neither machine can then have, and the
+        // keys that mean "Player wins" stop pointing at the machine that plays for them.
+        for (String known : RigProfile.DEFAULT_SIDES) {
+            if (known.equalsIgnoreCase(side)) {
+                side = known;
+                break;
+            }
+        }
         profile.setSide(hit.getBlockPos(), side);
 
         // The slips carry the side in their names, so they have to be laid out again.
@@ -1679,7 +1690,7 @@ public class MirageClient implements ClientModInitializer {
             return;
         }
         if (!ClientDispensers.fill(pos)) {
-            say(client, "Rig '" + ClientDispensers.activeName() + "' has nothing to put in.");
+            say(client, ClientDispensers.whyNotFilled(pos));
             return;
         }
 
