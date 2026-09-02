@@ -362,10 +362,17 @@ If `H` on a paper machine says *"Both sides are already taken (Player at 100 64
     (look at the machine you want)
     /fake paper side Player        or Host
 
-or unwatch whichever machine is holding the side you want:
+or hand the sides out again from scratch:
 
-    (look at it)
-    /fake dispenser unwatch
+    /fake dispenser parts
+
+That drops every side and floor the rig has assigned. They go to the machines you
+fill or fire next, so press `H` on the two you actually want, in order — Player
+first, then Host. **This is the fix when the sides went to machines from another
+game**, which is easy to end up with because every watched dispenser competes for
+them and an assignment sticks until something lets go of it.
+
+The same command fixes the tower's floors, the same way.
 
 `/fake doctor` shows it too — a machine with no side reads
 `would fire nothing - not in the paper game`.

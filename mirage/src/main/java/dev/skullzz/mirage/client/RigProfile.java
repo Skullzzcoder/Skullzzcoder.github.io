@@ -348,7 +348,9 @@ public final class RigProfile {
         return this.towerFloors.size();
     }
 
+    /** Gives a machine a floor, taking it off whoever had it. As with the paper sides. */
     public void setFloor(BlockPos pos, int floor) {
+        this.towerFloors.values().removeIf(held -> held == floor);
         this.towerFloors.put(pos.toImmutable(), floor);
     }
 
@@ -417,12 +419,39 @@ public final class RigProfile {
         return side == null ? "" : side;
     }
 
+    /**
+     * Forgets which machine plays what, so the parts are handed out again.
+     *
+     * <p>Sides and floors go to whichever machines get there first and then stay put, which
+     * is right while a game is being played and wrong for ever afterwards: a dispenser that
+     * took a side months ago, for another game entirely, holds it against the machine that
+     * needs it now, and nothing short of unwatching it lets go.
+     *
+     * @return how many assignments were dropped.
+     */
+    public int clearParts() {
+        int held = this.sides.size() + this.towerFloors.size();
+        this.sides.clear();
+        this.towerFloors.clear();
+        return held;
+    }
+
     /** Forgets sides belonging to machines that are no longer watched. */
     public void pruneSides(Set<BlockPos> live) {
         this.sides.keySet().retainAll(live);
     }
 
+    /**
+     * Gives a machine a side, taking it off whoever had it.
+     *
+     * <p>Only one machine can play for a side. Without the taking-away, naming a second one
+     * left both claiming it: the pair then drew the same number as each other every round,
+     * which looks like the game being broken rather than like two machines on one side. And
+     * it is the fix people are told to use when the sides went to the wrong machines, so it
+     * had to be the one thing that could not go wrong.
+     */
     public void setSide(BlockPos pos, String side) {
+        this.sides.values().removeIf(held -> held.equalsIgnoreCase(side));
         this.sides.put(pos.toImmutable(), side);
     }
 

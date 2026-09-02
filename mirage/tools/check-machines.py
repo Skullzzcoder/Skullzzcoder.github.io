@@ -84,6 +84,18 @@ fire_loop = re.search(r"Iterator<PendingFire> iterator.*?\n        \}", disp, re
 check("the fire loop uses it", "whyNotDispensing(world, fire.pos())" in fire_loop)
 check("the status list names it too", "COVERED by one of your builds" in disp)
 
+# --------------------------------------------- the guard must not eat the answer
+# The guard keeps builds off a machine and off the cell it fires into. What the machine
+# itself puts down in that cell is not a build -- it is the answer, and making room for
+# exactly that is what the guard is for. Without the exception, placing succeeded, the
+# stock went down, and nothing ever appeared: every game that stands its answer on the
+# ground, silently.
+check("a machine's own placed answer survives the guard",
+      "keepClear.contains(pos) && !underfootOnly.contains(pos)" in refresh)
+# And the marker it is judged by has to be the one placing actually sets.
+place = body(blocks, "public static boolean place(BlockPos pos, BlockState state) {")
+check("placing is what marks it", "underfootOnly.add(key)" in place)
+
 print("FAILED: " + "; ".join(fails) if fails else
       "builds keep off every watched machine and the cell it fires into; "
       "a covered machine repairs itself and says so")

@@ -915,6 +915,18 @@ public class MirageClient implements ClientModInitializer {
                                     SelfFakes.save();
                                     return feedback(context, "Deleted rig '" + name + "'.");
                                 })))
+                // The fix for parts stuck on machines that are not in the game any more.
+                .then(ClientCommandManager.literal("parts").executes(context -> {
+                    RigProfile profile = ClientDispensers.active();
+                    int held = profile.clearParts();
+                    ClientDispensers.refillWatched();
+                    SelfFakes.save();
+
+                    return feedback(context, "Dropped " + held + " side/floor assignment"
+                            + (held == 1 ? "" : "s") + " from rig '" + profile.name
+                            + "'. They go to the machines you fill or fire next - press H on"
+                            + " the ones you actually want in the game, in order.");
+                }))
                 .then(ClientCommandManager.literal("place")
                         .then(ClientCommandManager.literal("on").executes(context -> {
                             ClientDispensers.active().placeOutput = true;
@@ -945,6 +957,18 @@ public class MirageClient implements ClientModInitializer {
                 .then(paperBranch())
                 .then(towerBranch())
                 .then(rouletteBranch())
+                // The fix for parts stuck on machines that are not in the game any more.
+                .then(ClientCommandManager.literal("parts").executes(context -> {
+                    RigProfile profile = ClientDispensers.active();
+                    int held = profile.clearParts();
+                    ClientDispensers.refillWatched();
+                    SelfFakes.save();
+
+                    return feedback(context, "Dropped " + held + " side/floor assignment"
+                            + (held == 1 ? "" : "s") + " from rig '" + profile.name
+                            + "'. They go to the machines you fill or fire next - press H on"
+                            + " the ones you actually want in the game, in order.");
+                }))
                 .then(ClientCommandManager.literal("place")
                         .then(ClientCommandManager.literal("on").executes(context -> {
                             ClientDispensers.active().placeOutput = true;

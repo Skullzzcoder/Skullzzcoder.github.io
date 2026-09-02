@@ -892,7 +892,7 @@ public final class ClientDispensers {
             if (profile.sideOf(pos).isEmpty()) {
                 return "Both sides are already taken " + sideOwners()
                         + ". Look at this machine and run /fake paper side Player"
-                        + " (or Host), or unwatch the one holding it.";
+                        + " (or Host), or /fake dispenser parts to hand them out again.";
             }
             return "The paper game makes slips from '" + profile.slipItem
                     + "', which is not a real item. /fake paper item paper";
@@ -1252,14 +1252,20 @@ public final class ClientDispensers {
         }
         if (profile.paper) {
             String side = profile.sideOf(pos);
-            if (side.isEmpty()) return "nothing - not in the paper game";
+            if (side.isEmpty()) {
+                return "NOTHING - not in the paper game; sides held " + sideOwners()
+                        + ". /fake dispenser parts hands them out again.";
+            }
             return "a " + profile.slipItem + " for " + side + ", "
                     + (profile.winner.isEmpty() ? "winner left to chance"
                             : "rigged for " + profile.winner);
         }
         if (profile.tower) {
             int floor = profile.floorOf(pos);
-            if (floor == 0) return "nothing - not in the tower";
+            if (floor == 0) {
+                return "NOTHING - not in the tower; all " + profile.floors
+                        + " floors are taken. /fake dispenser parts hands them out again.";
+            }
 
             boolean busts = profile.bustNext
                     || (profile.bustAt > 0 && floor == profile.bustAt);

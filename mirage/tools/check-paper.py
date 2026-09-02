@@ -248,6 +248,26 @@ check("and the command that fixes it", "/fake paper side Player" in why)
 check("the refill key uses it", "ClientDispensers.whyNotFilled(pos)" in mc)
 check("the old blanket answer is gone", "has nothing to put in.\");" not in mc)
 
+# Only one machine can play a side. Naming a second one used to leave both claiming it,
+# and the pair then drew the same number as each other every round -- which reads as the
+# game being broken rather than as two machines on one side. It is also the fix people are
+# told to use when the sides went to the wrong machines, so it is the one that must work.
+set_side = re.search(r"public void setSide\(BlockPos pos, String side\) \{(.*?)\n    \}",
+                     rig, re.S).group(1)
+check("naming a side takes it off whoever had it",
+      "this.sides.values().removeIf(" in set_side and "equalsIgnoreCase(side)" in set_side)
+set_floor = re.search(r"public void setFloor\(BlockPos pos, int floor\) \{(.*?)\n    \}",
+                      rig, re.S).group(1)
+check("and so does naming a floor", "this.towerFloors.values().removeIf(" in set_floor)
+
+# Parts stick to whichever machine got there first, for ever. There has to be a way to let
+# go without unwatching the machine.
+parts = re.search(r"public int clearParts\(\) \{(.*?)\n    \}", rig, re.S).group(1)
+check("parts can be handed out again",
+      "this.sides.clear();" in parts and "this.towerFloors.clear();" in parts)
+check("and there is a command for it", 'literal("parts")' in mc and "clearParts()" in mc)
+check("which lays the machines out again", "ClientDispensers.refillWatched();" in mc)
+
 # A side typed in the wrong case is a third side: everything that compares sides ignores
 # case except the one place that hands them out, which matches exactly.
 side_cmd = re.search(r"private static int setPaperSide\(.*?\n    \}", mc, re.S).group(0)

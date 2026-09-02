@@ -536,7 +536,13 @@ public final class FakeBlocks {
 
         // Before the has-it-drifted test, not after: a machine already covered is showing
         // exactly what was asked of it, so that test would call it settled and leave it.
-        if (keepClear.contains(pos)) {
+        //
+        // A build may not cover a machine or the cell it fires into. What the machine puts
+        // down in that cell is not a build: it is the answer, and making room for exactly
+        // that is what the guard is for. Without this exception the guard rubbed out every
+        // box a machine placed -- the placing succeeded, the stock went down, and nothing
+        // ever appeared, which is every game that stands its answer on the ground.
+        if (keepClear.contains(pos) && !underfootOnly.contains(pos)) {
             restore(world, pos);
             return;
         }
