@@ -59,7 +59,7 @@ doc = body(mc, "private static int doctor(CommandContext<FabricClientCommandSour
 check("there is a doctor command", 'literal("doctor")' in mc and doc)
 for step, probe in (("the master switch", "SelfFakes.enabled()"),
                     ("which rig is on", "profile.mode()"),
-                    ("whether the rig has an answer", "ClientDispensers.result()"),
+                    ("whether the rig has an answer", "ClientDispensers.noAnswer()"),
                     ("the machines", "ClientDispensers.watchedPositions()"),
                     ("a covered machine", "FakeBlocks.fakeAt(pos)"),
                     ("an unloaded chunk", "isChunkLoaded"),

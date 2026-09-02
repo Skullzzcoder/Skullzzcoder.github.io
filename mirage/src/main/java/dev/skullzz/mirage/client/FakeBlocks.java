@@ -516,13 +516,28 @@ public final class FakeBlocks {
         for (BlockPos pos : keepClear) {
             // The entry in showing stays: this is a position held back, not one taken out
             // of the build, so unwatching the machine brings the wall back.
-            if (showing.containsKey(pos)) restore(world, pos);
+            if (showing.containsKey(pos) && guarded(pos)) restore(world, pos);
         }
     }
 
     /** Whether a position is one the paint is kept off. */
     public static boolean isKeptClear(BlockPos pos) {
         return keepClear.contains(pos);
+    }
+
+    /**
+     * Whether the paint at a position is being held back for a machine.
+     *
+     * <p>A build may not cover a machine or the cell it fires into. What the machine itself
+     * puts down in that cell is not a build: it is the answer, and making room for exactly
+     * that is what the guard is for.
+     *
+     * <p>One method rather than the same condition written twice, because it was written
+     * twice and only one copy was fixed. The sweep painted the box every tick and the guard
+     * rubbed it out every second, which is a box that flickers and never lands.
+     */
+    private static boolean guarded(BlockPos pos) {
+        return keepClear.contains(pos) && !underfootOnly.contains(pos);
     }
 
     /** What the server really has at a position, painted over or not. */
@@ -537,12 +552,7 @@ public final class FakeBlocks {
         // Before the has-it-drifted test, not after: a machine already covered is showing
         // exactly what was asked of it, so that test would call it settled and leave it.
         //
-        // A build may not cover a machine or the cell it fires into. What the machine puts
-        // down in that cell is not a build: it is the answer, and making room for exactly
-        // that is what the guard is for. Without this exception the guard rubbed out every
-        // box a machine placed -- the placing succeeded, the stock went down, and nothing
-        // ever appeared, which is every game that stands its answer on the ground.
-        if (keepClear.contains(pos) && !underfootOnly.contains(pos)) {
+        if (guarded(pos)) {
             restore(world, pos);
             return;
         }

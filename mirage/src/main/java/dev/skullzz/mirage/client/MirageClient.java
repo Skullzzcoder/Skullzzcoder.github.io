@@ -463,15 +463,11 @@ public class MirageClient implements ClientModInitializer {
         out.append("\n2. Rig             '").append(profile.name).append("' (")
                 .append(profile.mode()).append(")   F ").append(profile.forwardLabel());
 
-        // 3. whether that rig has an answer to give at all
-        String answer = ClientDispensers.presets().isEmpty() && !profile.roulette
-                && !profile.paper && !profile.tower
-                ? "NO ITEMS  <-- /fake preset add <item>"
-                : ClientDispensers.result() == null && !profile.roulette && !profile.paper
-                        && !profile.tower
-                        ? "nothing selected  <-- press F"
-                        : "yes";
-        out.append("\n3. Rig has answer  ").append(answer);
+        // 3. whether that rig has an answer to give at all. Asked of the rig, which knows
+        //    what its own game needs -- the old test here only looked at presets, so a
+        //    roulette rig with nothing loaded was reported as fine.
+        String missing = ClientDispensers.noAnswer();
+        out.append("\n3. Rig has answer  ").append(missing == null ? "yes" : missing);
 
         // 4. the machines, each with what it would fire if it went off now
         Set<BlockPos> watched = ClientDispensers.watchedPositions();

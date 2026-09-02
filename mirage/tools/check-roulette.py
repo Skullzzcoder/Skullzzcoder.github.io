@@ -76,6 +76,42 @@ empties = re.search(r"public static int fillEmptyWatched\(\) \{(.*?)\n    \}", s
 check("an emptied dispenser counts as needing filling", "containsKey" not in empties
       and "isEmpty()" in empties)
 
+# ------------------------------------------------- a rig that lost its own game
+# A rig named for a game, carrying no mode and no presets, fires nothing at all: the mode
+# branch is skipped and the cycled branch it falls to has nothing to cycle. Nobody sets
+# that up on purpose, so it is repaired -- the same treatment the paper rig has.
+mc = io.open("src/main/java/dev/skullzz/mirage/client/MirageClient.java", encoding="utf-8").read()
+repair = re.search(r"private static void repair\(RigProfile profile\) \{(.*?)\n    \}",
+                   src, re.S).group(1)
+# Scoped to the repair's own condition, not to the whole method: repair also sets the
+# preset index from profile.presets.isEmpty(), so looking anywhere in it for that phrase
+# passed with the guard deleted.
+mode_back = re.search(r'if \(profile\.name\.equals\("roulette"\)(.*?)\) \{', repair, re.S)
+check("a roulette rig with no mode gets it back", mode_back is not None)
+guard = mode_back.group(1) if mode_back else ""
+# But only when it has no other job. A rig given presets has been made something else --
+# the tower turned into a coin flip -- and must be left alone.
+check("a rig with presets is left alone", "profile.presets.isEmpty()" in guard)
+check("and one already in another mode is too",
+      "!profile.paper" in guard and "!profile.tower" in guard and "!profile.mix" in guard)
+
+# Whether the rig can answer at all has to be asked of the rig. The doctor used to test
+# presets, which roulette does not use, so a roulette rig with nothing loaded read as fine.
+no_answer = re.search(r"public static String noAnswer\(\) \{(.*?)\n    \}",
+                      src, re.S).group(1)
+check("a roulette rig with nothing loaded is caught",
+      "profile.bullet == null && profile.blank == null" in no_answer)
+# The blank-only branch specifically. "profile.blank == null" also appears in the
+# both-missing test above it, so looking for the phrase alone passed with this gone.
+check("and one with no blank, since every unarmed shot is a blank",
+      re.search(r"if \(profile\.blank == null\) \{\s*\n\s*return", no_answer) is not None
+      and "fires nothing" in no_answer)
+check("the games with parts answer per machine instead",
+      "if (profile.paper || profile.tower) return null;" in no_answer)
+check("the doctor asks it", "ClientDispensers.noAnswer()" in mc)
+check("and no longer guesses from presets",
+      "ClientDispensers.presets().isEmpty() && !profile.roulette" not in mc)
+
 print("bullet=%s blank=%s chambers=%d slots=%d middle=%d" % (BULLET, BLANK, CHAMBERS, SLOTS, MIDDLE))
 print("FAILED: " + ", ".join(fails) if fails else "all roulette stock checks pass")
 sys.exit(1 if fails else 0)

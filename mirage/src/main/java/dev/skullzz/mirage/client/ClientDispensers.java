@@ -1231,6 +1231,37 @@ public final class ClientDispensers {
     }
 
     /**
+     * Why the active rig can produce nothing at all, or null when it can.
+     *
+     * <p>Asked of the rig rather than of a machine. The games that hand out parts report per
+     * machine, because there the fault is one machine's; roulette and the coin flip have no
+     * parts, so when they fire nothing the fault is the rig's and there was nowhere that
+     * said so -- the doctor's answer line only ever looked at presets, which roulette does
+     * not use, and so called a roulette rig with no blank loaded fine.
+     */
+    public static String noAnswer() {
+        RigProfile profile = active();
+
+        if (profile.roulette) {
+            if (profile.bullet == null && profile.blank == null) {
+                return "NOTHING LOADED  <-- /fake roulette bullet end_crystal,"
+                        + " /fake roulette blank obsidian";
+            }
+            if (profile.blank == null) {
+                return "no blank loaded, so every shot but the armed one fires nothing"
+                        + "  <-- /fake roulette blank obsidian";
+            }
+            return null;
+        }
+        // Their machines answer for themselves, one line each, further down.
+        if (profile.paper || profile.tower) return null;
+
+        if (profile.presets.isEmpty()) return "NO ITEMS  <-- /fake preset add <item>";
+        if (profile.selected() == null) return "nothing selected  <-- press F";
+        return null;
+    }
+
+    /**
      * What a machine would fire if it went off right now, spending nothing.
      *
      * <p>The rigging is invisible until something comes out, so "is it rigged correctly" and
@@ -2023,6 +2054,18 @@ public final class ClientDispensers {
         }
         if (profile.presetIndex() >= profile.presets.size()) {
             profile.setPresetIndex(profile.presets.isEmpty() ? -1 : 0);
+        }
+
+        // A rig named for a game, carrying no mode and no presets, can fire nothing at all:
+        // the mode branch is skipped and the cycled branch it falls to has nothing to cycle.
+        // Nobody sets that up on purpose, so it is put back -- the same repair the paper rig
+        // has always had. A rig with presets has been given another job (the tower turned
+        // into a coin flip, say) and is left exactly as it is.
+        if (profile.name.equals("roulette") && !profile.roulette && !profile.paper
+                && !profile.tower && !profile.mix && profile.presets.isEmpty()) {
+            profile.roulette = true;
+            profile.manualTrigger = true;
+            profile.chambers = 9;
         }
 
         // A roulette rig with nothing loaded fires nothing and lays out nothing, which is

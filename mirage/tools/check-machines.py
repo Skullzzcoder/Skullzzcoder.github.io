@@ -20,19 +20,19 @@ def body(src, sig):
 # --------------------------------------------------------------- the paint stops
 refresh = body(blocks, "private static void refresh(ClientWorld world, "
                        "ClientPlayerEntity player, BlockPos pos) {")
-check("the sweep keeps off guarded positions", "keepClear.contains(pos)" in refresh)
+clear = body(blocks, "public static void keepClear(Set<BlockPos> positions) {")
+check("the sweep keeps off guarded positions", "guarded(pos)" in refresh)
 check("and takes off anything already there", "restore(world, pos)" in refresh)
 
 # The order matters and is the whole trick: a machine that is ALREADY covered is showing
 # exactly what the build asked for, so the has-it-drifted test calls it settled and leaves
 # it. The guard has to be tested before that, or it only ever prevents and never repairs.
-guard = refresh.find("keepClear.contains(pos)")
+guard = refresh.find("guarded(pos)")
 drift = refresh.find("world.getBlockState(pos) == wanted")
 check("the guard is tested before the drift test", 0 <= guard < drift)
 
 # Holding a position back is not cutting it out of the build: unwatching the machine has to
 # bring the wall home.
-clear = body(blocks, "public static void keepClear(Set<BlockPos> positions) {")
 check("guarded positions are held back, not deleted", "showing.remove" not in clear)
 check("anything already painted comes off at once", "restore(world, pos)" in clear)
 check("the set is replaced, not added to", "keepClear.clear();" in clear)
@@ -90,8 +90,16 @@ check("the status list names it too", "COVERED by one of your builds" in disp)
 # exactly that is what the guard is for. Without the exception, placing succeeded, the
 # stock went down, and nothing ever appeared: every game that stands its answer on the
 # ground, silently.
-check("a machine's own placed answer survives the guard",
-      "keepClear.contains(pos) && !underfootOnly.contains(pos)" in refresh)
+# One method, not the same condition written twice. It WAS written twice and only one copy
+# was fixed: the sweep painted the box every tick and the guard rubbed it out every second,
+# which is a box that flickers and never lands.
+guarded = body(blocks, "private static boolean guarded(BlockPos pos) {")
+check("the hold-back rule exempts a machine's own placed answer",
+      "keepClear.contains(pos) && !underfootOnly.contains(pos)" in guarded)
+check("the sweep asks it", "if (guarded(pos)) {" in refresh)
+check("and so does the guard", "guarded(pos)) restore(world, pos);" in clear)
+check("neither writes the rule out by hand",
+      "keepClear.contains(pos)" not in refresh and "keepClear.contains(pos)" not in clear)
 # And the marker it is judged by has to be the one placing actually sets.
 place = body(blocks, "public static boolean place(BlockPos pos, BlockState state) {")
 check("placing is what marks it", "underfootOnly.add(key)" in place)
