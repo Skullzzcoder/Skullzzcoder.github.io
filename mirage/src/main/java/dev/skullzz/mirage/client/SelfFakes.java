@@ -79,6 +79,14 @@ public final class SelfFakes {
     /** Whether cycling a preset prints anything. Off by default. */
     private static boolean announceSwitching = false;
     private static boolean quiet = false;
+    /**
+     * Whether a fake carries the price line under its name.
+     *
+     * <p>Off unless asked for. It exists to make an item read like something the server
+     * formatted rather than a bare vanilla one, which is worth having only while that is the
+     * look you want; the rest of the time it is a line of text on every item you hold.
+     */
+    private static boolean showPrices = false;
     /** Whether a fake fired from a dispenser ends up in the inventory afterwards. */
     private static boolean autoCollect = true;
     /** The master switch. Off puts everything real back without forgetting any of it. */
@@ -255,6 +263,17 @@ public final class SelfFakes {
      */
     public static boolean quiet() {
         return quiet;
+    }
+
+    public static boolean showPrices() {
+        return showPrices;
+    }
+
+    public static void setShowPrices(boolean show) {
+        showPrices = show;
+        save();
+        // Every fake already made carries the old answer baked into its lore.
+        rebuildAll();
     }
 
     public static void setQuiet(boolean on) {
@@ -629,6 +648,7 @@ public final class SelfFakes {
             announceSwitching = root.has("announceSwitching")
                     && root.get("announceSwitching").getAsBoolean();
             quiet = root.has("quiet") && root.get("quiet").getAsBoolean();
+            showPrices = root.has("showPrices") && root.get("showPrices").getAsBoolean();
             autoCollect = !root.has("autoCollect") || root.get("autoCollect").getAsBoolean();
             enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
             ClientDispensers.load(root);
@@ -674,6 +694,7 @@ public final class SelfFakes {
         root.add("containers", containers);
         root.addProperty("announceSwitching", announceSwitching);
         root.addProperty("quiet", quiet);
+        root.addProperty("showPrices", showPrices);
         root.addProperty("autoCollect", autoCollect);
         root.addProperty("enabled", enabled);
         WebDashboard.writeConfig(root);

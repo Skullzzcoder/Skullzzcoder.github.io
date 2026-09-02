@@ -612,8 +612,18 @@ the vanilla pickup sound and stacks like a real one.
 
 ## 9. Prices
 
-Sell values are appended as lore so items read the way they do in game. They
-live in `config/mirage-prices.json`:
+**Off by default.** Nothing appears under a fake item's name unless you ask for
+it:
+
+    /fake prices on
+    /fake prices off
+
+Turning it off also strips the line from every fake you are already holding, so
+it takes effect the moment you run it rather than the next time an item is
+rebuilt.
+
+With it on, sell values are appended as lore so items read the way they do in
+game. They live in `config/mirage-prices.json`:
 
 - `prices` — item id to number. **The shipped ones are placeholders.**
 - `lore` — the line format. `%short%` is the stack total as `19.1K`,

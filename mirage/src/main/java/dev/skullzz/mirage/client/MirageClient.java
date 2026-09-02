@@ -83,7 +83,17 @@ public class MirageClient implements ClientModInitializer {
                         .then(rigBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
-                                        .executes(MirageClient::reloadPrices)))
+                                        .executes(MirageClient::reloadPrices))
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    SelfFakes.setShowPrices(true);
+                                    return feedback(context, "Fakes carry their price line"
+                                            + " again.");
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    SelfFakes.setShowPrices(false);
+                                    return feedback(context, "Price lines are off. Every fake"
+                                            + " you are already holding has lost its one too.");
+                                })))
                         .then(ClientCommandManager.literal("collect")
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     SelfFakes.setAutoCollect(true);

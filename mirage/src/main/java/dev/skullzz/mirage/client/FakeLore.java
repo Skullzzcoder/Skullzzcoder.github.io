@@ -218,9 +218,11 @@ public final class FakeLore {
             lines.add(Text.literal(enchant).setStyle(Style.EMPTY.withItalic(false)));
         }
 
-        // A price set on the fake itself beats the file, which beats the API.
+        // A price set on the fake itself beats the file, which beats the API -- but the
+        // switch beats all three. Asked here rather than at each caller so that a price set
+        // on one fake by hand cannot slip a line back onto an item that is meant to be bare.
         Double unitPrice = priceOverride != null ? priceOverride : priceOf(stack);
-        if (unitPrice != null && !loreLines.isEmpty()) {
+        if (SelfFakes.showPrices() && unitPrice != null && !loreLines.isEmpty()) {
             // Price scales with the stack, the way a sell-all total would.
             double total = unitPrice * stack.getCount();
             for (String line : loreLines) {

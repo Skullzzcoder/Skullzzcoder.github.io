@@ -88,7 +88,32 @@ check("never zero ticks, which would divide by nothing", "Math.max(1," in ticks)
 check("the time is saved", 'addProperty("breakSeconds"' in disp)
 check("and settable", 'literal("breaktime")' in mc)
 
+# ------------------------------------------------------------- the price line
+# The line under a fake's name that makes it read like something the server formatted.
+# Worth having only while that is the look you want, so it is off unless asked for.
+lore = io.open("src/main/java/dev/skullzz/mirage/client/FakeLore.java", encoding="utf-8").read()
+apply_to = re.search(r"public static ItemStack applyTo\(ItemStack stack, String enchantSpec, "
+                     r"Double priceOverride\) \{(.*?)\n    \}", lore, re.S).group(1)
+check("the price line answers to the switch", "SelfFakes.showPrices()" in apply_to)
+# One gate, at the one place that writes lore. A per-fake price set by hand must not slip a
+# line back onto an item that is meant to be bare.
+check("there is only one place lore is written",
+      lore.count("DataComponentTypes.LORE") == 1)
+check("and the switch is tested before the price is used",
+      before(apply_to, "SelfFakes.showPrices()", "loreLines"))
+
+check("the switch is off unless asked for",
+      "private static boolean showPrices = false;" in self_)
+check("it survives a restart", 'root.addProperty("showPrices", showPrices);' in self_
+      and 'root.has("showPrices")' in self_)
+# Every fake already made has the old answer baked into the stack it hands out.
+setter = body(self_, "public static void setShowPrices(boolean show) {")
+check("turning it off strips the fakes already made", "rebuildAll();" in setter)
+check("there is a command", "SelfFakes.setShowPrices(true)" in mc
+      and "SelfFakes.setShowPrices(false)" in mc)
+
 print("FAILED: " + "; ".join(fails) if fails else
       "every message is kept before it is shown; the dashboard carries the game, the keys, "
-      "the machines and both logs; a placed answer takes its own time to break")
+      "the machines and both logs; a placed answer takes its own time to break; "
+      "the price line is off unless asked for")
 sys.exit(1 if fails else 0)
