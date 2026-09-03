@@ -78,8 +78,15 @@ public final class RigProfile {
     public int cards = 9;
     /** How many of each number it holds. */
     public int cardEach = 2;
-    /** The card the next deal produces, or zero to leave it to chance. */
-    public int nextCard;
+    /**
+     * Each side's cards this hand. Never saved: a hand belongs to the table it is on.
+     *
+     * <p>Kept as the cards rather than as a total, because an ace is worth eleven or one
+     * depending on what arrives after it and a running total cannot be taken back.
+     */
+    public final Map<String, List<Integer>> hands = new LinkedHashMap<>();
+    /** The side the next card goes to when a machine has not said, e.g. a one-box table. */
+    public String dealTo = "";
 
     /**
      * Mix mode: one machine holding a fixed spread of items, one of which comes out.
@@ -183,7 +190,7 @@ public final class RigProfile {
     /** What the forward result key does right now. */
     public String forwardLabel() {
         switch (keys()) {
-            case BLACKJACK: return "next card up";
+            case BLACKJACK: return "next winner";
             case PAPER: return "next winner";
             case ROULETTE: return "arm the loaded shot";
             default: return "next item";
@@ -193,7 +200,7 @@ public final class RigProfile {
     /** What the back result key does right now. */
     public String backLabel() {
         switch (keys()) {
-            case BLACKJACK: return "next card down";
+            case BLACKJACK: return "previous winner";
             case PAPER: return "previous winner";
             case ROULETTE: return "cancel the arm";
             default: return "previous item";
@@ -314,39 +321,108 @@ public final class RigProfile {
 
     // --------------------------------------------------------------- blackjack
 
+    /** The card that counts as eleven where it can, and one where it cannot. */
+    public static final int ACE = 1;
+    /** Over this is a bust. */
+    public static final int TARGET = 21;
+
     /** Keeps the shoe's shape sane after an edit. */
     public void tidyCards() {
         this.cards = Math.max(1, Math.min(this.cards, 9));
         this.cardEach = Math.max(1, Math.min(this.cardEach, 64));
-        if (this.nextCard > this.cards) this.nextCard = 0;
-        if (this.nextCard < 0) this.nextCard = 0;
+    }
+
+    /** What a card is called on its slip. The one is an ace and reads like one. */
+    public static String cardName(int card) {
+        return card == ACE ? "A" : String.valueOf(card);
     }
 
     /**
-     * The card a deal produces.
+     * What a hand is worth, counting every ace as eleven until that would bust it.
      *
-     * <p>Left to chance when nothing is named, because a shoe that always gives the same
-     * card is only wanted for the hand you mean to decide.
+     * <p>The ordinary rule, and the reason a hand cannot be scored by adding it up once: an
+     * ace is worth eleven or one depending on what else arrives afterwards, so the whole
+     * hand is re-read every time rather than kept as a running total.
      */
-    public int dealCard(Random random) {
-        if (this.nextCard >= 1 && this.nextCard <= this.cards) return this.nextCard;
-        return 1 + random.nextInt(Math.max(1, this.cards));
+    public static int handValue(List<Integer> hand) {
+        int total = 0;
+        int aces = 0;
+
+        for (int card : hand) {
+            if (card == ACE) {
+                aces++;
+                total += 11;
+            } else {
+                total += card;
+            }
+        }
+        // Each ace drops from eleven to one, one at a time, only as far as it has to.
+        while (total > TARGET && aces > 0) {
+            total -= 10;
+            aces--;
+        }
+        return total;
+    }
+
+    public List<Integer> handFor(String side) {
+        return this.hands.computeIfAbsent(side == null ? "" : side, ignored -> new ArrayList<>());
+    }
+
+    public int totalFor(String side) {
+        return handValue(handFor(side));
+    }
+
+    /** Forgets both hands, so the next card starts a new one. */
+    public void newHand() {
+        this.hands.clear();
     }
 
     /**
-     * Steps which card is coming, through the numbers and then through chance.
+     * The card to deal to a side, chosen so that whoever is meant to win does.
      *
-     * <p>Chance sits one past the last number, so stepping back off the first lands there
-     * rather than falling off the end.
+     * <p>This is the whole rigging. Naming a card meant knowing every total at the table and
+     * working out in your head which number produced the result you wanted, while somebody
+     * waited -- so instead the outcome is named and the card is worked back from it.
+     *
+     * <p>For the side that is meant to win: never a card that busts them, and otherwise the
+     * one that leaves them closest to twenty-one. For the side that is meant to lose: the
+     * card that busts them if any card can, and otherwise the one that leaves them lowest.
+     * Ties among equally good cards are broken at random, so a table played twice does not
+     * deal the same shoe twice.
      */
-    public int cycleCard(int delta) {
-        int ring = this.cards + 1;
-        // Chance is stored as zero and walked as the last position on the ring.
-        int index = this.nextCard == 0 ? this.cards : this.nextCard - 1;
+    public int chooseCard(String side, Random random) {
+        // Nothing named is an honest deal.
+        if (this.winner.isEmpty()) return 1 + random.nextInt(Math.max(1, this.cards));
 
-        index = Math.floorMod(index + delta, ring);
-        this.nextCard = index >= this.cards ? 0 : index + 1;
-        return this.nextCard;
+        List<Integer> hand = new ArrayList<>(handFor(side));
+        boolean toWin = this.winner.equalsIgnoreCase(side);
+
+        List<Integer> best = new ArrayList<>();
+        int bestScore = Integer.MIN_VALUE;
+
+        for (int card = 1; card <= this.cards; card++) {
+            hand.add(card);
+            int total = handValue(hand);
+            hand.remove(hand.size() - 1);
+
+            int score;
+            if (toWin) {
+                // A bust is the one thing that cannot happen to them, so it is scored below
+                // every hand that does not bust rather than merely worse than them.
+                score = total > TARGET ? Integer.MIN_VALUE + 1 + total : total;
+            } else {
+                score = total > TARGET ? Integer.MAX_VALUE - 1 : -total;
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                best.clear();
+                best.add(card);
+            } else if (score == bestScore) {
+                best.add(card);
+            }
+        }
+        return best.get(random.nextInt(best.size()));
     }
 
     // ------------------------------------------------------------------- paper
@@ -441,6 +517,16 @@ public final class RigProfile {
     public String slipName(int number, String side) {
         return side == null || side.isEmpty() ? String.valueOf(number)
                 : number + " (" + side + ")";
+    }
+
+    /**
+     * Whether this game is played by two named sides.
+     *
+     * <p>The paper game and blackjack both are, and everything about naming a winner, giving
+     * a machine a side and handing those out again is shared by them because of it.
+     */
+    public boolean hasSides() {
+        return this.paper || this.blackjack;
     }
 
     /** Whether a side is the one a draw goes to. */

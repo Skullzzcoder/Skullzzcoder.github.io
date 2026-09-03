@@ -266,6 +266,12 @@ public final class ClientDispensers {
     /** Makes the next shot from this rig the loaded one. */
     public static void armNext() {
         RigProfile profile = active();
+        // Nothing to load in a game with no chamber: the useful thing that key can mean
+        // at a blackjack table is that the hand on it is over.
+        if (profile.blackjack) {
+            profile.newHand();
+            return;
+        }
         profile.armed = true;
     }
 
@@ -483,7 +489,7 @@ public final class ClientDispensers {
             } else if (profile.paper) {
                 result = paperSlip(profile, fire.pos());
             } else if (profile.blackjack) {
-                result = card(profile);
+                result = card(profile, fire.pos());
             } else {
                 result = profile.resultFor(fire.pos());
             }
@@ -577,26 +583,44 @@ public final class ClientDispensers {
     }
 
     /**
-     * The card a deal produces.
+     * The card a deal produces, and whose hand it joins.
      *
-     * <p>No part to hand out and no machine to blame: a shoe is a shoe wherever it stands,
-     * so every machine in the game deals from the same one.
+     * <p>Which side is being dealt to decides everything, so it is worked out first: the
+     * machine's own side when it has one, the side named by hand otherwise. A table with two
+     * boxes needs nothing said; a table with one has the keys to say it.
      */
-    private static FakeSpec card(RigProfile profile) {
+    private static FakeSpec card(RigProfile profile, BlockPos pos) {
         Item slip = SelfFakes.lookupItem(profile.slipItem);
         if (slip == null) return null;
 
-        int number = profile.dealCard(random);
-        note("dealt " + number + (profile.nextCard == 0 ? " by chance" : " as named"));
+        String side = profile.sideOf(pos);
+        if (side.isEmpty()) side = profile.dealTo;
+        if (side.isEmpty()) side = profile.sideAt(pos, watched);
+        if (side.isEmpty()) {
+            warn("Both boxes are taken, so " + text(pos) + " is not at this table."
+                    + " Press [ or ] to say whose card it deals, or /fake dispenser parts.");
+            return null;
+        }
+
+        int number = profile.chooseCard(side, random);
+        profile.handFor(side).add(number);
+
+        note("dealt " + RigProfile.cardName(number) + " to " + side + ", now on "
+                + profile.totalFor(side));
         // Built to match the laid-out card exactly, so it empties that slot on the way out.
-        return new FakeSpec(slip, 1, "", null, null, String.valueOf(number));
+        return new FakeSpec(slip, 1, "", null, null, RigProfile.cardName(number));
     }
 
-    /** Steps which card the shoe deals next, and says which that is now. */
-    public static int cycleCard(int delta) {
-        int card = active().cycleCard(delta);
+    /** Says whose card the next deal is, for a table played on one box. */
+    public static String dealTo(String side) {
+        active().dealTo = side;
         SelfFakes.save();
-        return card;
+        return side;
+    }
+
+    /** Clears both hands, so the next card starts a new one. */
+    public static void newHand() {
+        active().newHand();
     }
 
     /** Steps who the paper game is rigged for, and says who that is now. */
@@ -751,13 +775,15 @@ public final class ClientDispensers {
             }
         } else if (profile.blackjack) {
             // A shoe: one number per slot, two of each. That is what nine slots hold, and
-            // what a shoe looks like through the glass.
-            Item slip = SelfFakes.lookupItem(profile.slipItem);
+            // what a shoe looks like through the glass. The box also takes a side here, the
+            // way the paper game's machines do, since laying one out is a deliberate act.
+            String side = join ? profile.sideAt(pos, watched) : profile.sideOf(pos);
+            Item slip = side.isEmpty() ? null : SelfFakes.lookupItem(profile.slipItem);
             if (slip != null) {
                 int count = Math.min(profile.cards, STOCK_SLOTS);
                 for (int slot = 0; slot < count; slot++) {
                     slots.put(slot, new FakeSpec(slip, profile.cardEach, "", null, null,
-                            String.valueOf(slot + 1)));
+                            RigProfile.cardName(slot + 1)));
                 }
             }
         } else if (profile.paper) {
@@ -851,6 +877,10 @@ public final class ClientDispensers {
                     + "', which is not a real item. /fake paper item paper";
         }
         if (profile.blackjack) {
+            if (profile.sideOf(pos).isEmpty()) {
+                return "Both boxes are already taken " + sideOwners()
+                        + ". /fake dispenser parts hands them out again.";
+            }
             return "The shoe is made of '" + profile.slipItem
                     + "', which is not a real item. /fake blackjack item paper";
         }
@@ -898,7 +928,7 @@ public final class ClientDispensers {
     /** @return how many machines are set up for the active game, or -1 if it has no parts. */
     public static int partsInGame() {
         RigProfile profile = active();
-        if (profile.paper) return profile.sideNames().size();
+        if (profile.hasSides()) return profile.sideNames().size();
         return -1;
     }
 
@@ -962,9 +992,13 @@ public final class ClientDispensers {
         // does F do right now" is in the same place as everything else about the rig.
         lines.add("  F " + profile.forwardLabel() + ", R " + profile.backLabel());
         if (profile.blackjack) {
-            lines.add("  a shoe of " + profile.cardEach + "x each of 1-" + profile.cards
-                    + ", next card "
-                    + (profile.nextCard == 0 ? "left to chance" : profile.nextCard));
+            lines.add("  a shoe of " + profile.cardEach + "x each of A-" + profile.cards
+                    + ", rigged for "
+                    + (profile.winner.isEmpty() ? "chance" : profile.winner));
+            for (String side : profile.sideNames()) {
+                lines.add("    " + side + " holds " + profile.handFor(side)
+                        + " = " + profile.totalFor(side));
+            }
         }
         if (profile.paper) {
             lines.add("  rigged for: "
@@ -1210,7 +1244,7 @@ public final class ClientDispensers {
             return null;
         }
         // Their machines answer for themselves, one line each, further down.
-        if (profile.paper) return null;
+        if (profile.hasSides()) return null;
 
         if (profile.presets.isEmpty()) return "NO ITEMS  <-- /fake preset add <item>";
         if (profile.selected() == null) return "nothing selected  <-- press F";
@@ -1248,9 +1282,12 @@ public final class ClientDispensers {
                             : "rigged for " + profile.winner);
         }
         if (profile.blackjack) {
-            return profile.nextCard == 0
-                    ? "any of 1-" + profile.cards + " (left to chance)"
-                    : "a " + profile.nextCard + " (named)";
+            String side = profile.sideOf(pos);
+            if (side.isEmpty()) side = profile.dealTo;
+            if (side.isEmpty()) return "NOTHING - this box is not at the table";
+
+            return "a card for " + side + " (on " + profile.totalFor(side) + "), rigged for "
+                    + (profile.winner.isEmpty() ? "chance" : profile.winner);
         }
         return describeSpec(profile.resultFor(pos));
     }
@@ -1673,8 +1710,14 @@ public final class ClientDispensers {
                 JsonObject cards = new JsonObject();
                 cards.addProperty("cards", profile.cards);
                 cards.addProperty("each", profile.cardEach);
-                cards.addProperty("next", profile.nextCard);
                 cards.addProperty("item", profile.slipItem);
+                cards.addProperty("winner", profile.winner);
+
+                JsonObject sides = new JsonObject();
+                for (Map.Entry<BlockPos, String> entry : profile.sides.entrySet()) {
+                    sides.addProperty(writePos(entry.getKey()), entry.getValue());
+                }
+                cards.add("sides", sides);
                 json.add("blackjack", cards);
             }
 
@@ -1825,8 +1868,16 @@ public final class ClientDispensers {
             profile.blackjack = true;
             if (cards.has("cards")) profile.cards = cards.get("cards").getAsInt();
             if (cards.has("each")) profile.cardEach = cards.get("each").getAsInt();
-            if (cards.has("next")) profile.nextCard = cards.get("next").getAsInt();
             if (cards.has("item")) profile.slipItem = cards.get("item").getAsString();
+            if (cards.has("winner")) profile.winner = cards.get("winner").getAsString();
+
+            if (cards.has("sides")) {
+                for (Map.Entry<String, JsonElement> entry
+                        : cards.getAsJsonObject("sides").entrySet()) {
+                    BlockPos pos = readPos(entry.getKey());
+                    if (pos != null) profile.sides.put(pos, entry.getValue().getAsString());
+                }
+            }
             profile.tidyCards();
         }
 
@@ -2028,6 +2079,11 @@ public final class ClientDispensers {
         if (profile.blackjack) {
             if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
             profile.tidyCards();
+            profile.pruneSides(watched);
+            if (!profile.winner.isEmpty() && !profile.sideNames().isEmpty()
+                    && !profile.hasSide(profile.winner)) {
+                profile.winner = "";
+            }
             // The numbers are the game; anything in the preset list belongs to another one.
             profile.presets.clear();
             profile.setPresetIndex(-1);

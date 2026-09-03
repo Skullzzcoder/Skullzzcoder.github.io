@@ -60,12 +60,13 @@ check("neither key still calls the presets straight", "selectPreset" not in pres
 # --------------------------------------------------- the label matches the act
 # Tower: forward is the first colour, and the first colour is what the forward key calls.
 fwd, back = body(rig, "public String forwardLabel() {"), body(rig, "public String backLabel() {")
-check("forward is labelled the next card up", 'case BLACKJACK: return "next card up";' in fwd)
-check("back is labelled the next card down", 'case BLACKJACK: return "next card down";' in back)
-check("forward steps the card up", "case BLACKJACK:\n                stepCard(client, delta);" in result)
-# The direction has to reach the ring: passing a boolean would have lost it.
-card = body(mc, "private static void stepCard(MinecraftClient client, int delta) {")
-check("the direction is carried through", "ClientDispensers.cycleCard(delta)" in card)
+check("forward is labelled the next winner", 'case BLACKJACK: return "next winner";' in fwd)
+check("back is labelled the previous one", 'case BLACKJACK: return "previous winner";' in back)
+check("forward steps the winner", "case BLACKJACK:\n                stepWinner(client, delta);" in result)
+# Both games with named sides walk the same ring, so the direction has to reach it.
+winner = body(mc, "private static void stepWinner(MinecraftClient client, int delta) {")
+check("the direction is carried through", "ClientDispensers.cycleWinner(delta)" in winner)
+check("and both games are let in", "profile.hasSides()" in winner)
 
 # Roulette: forward arms, back takes the arming back off.
 check("forward is labelled as arming", 'case ROULETTE: return "arm the loaded shot";' in fwd)

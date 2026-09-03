@@ -228,8 +228,8 @@ public class MirageClient implements ClientModInitializer {
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
-            while (callFirst.wasPressed()) stepCard(client, 1);
-            while (callSecond.wasPressed()) stepCard(client, -1);
+            while (callFirst.wasPressed()) dealTo(client, 0);
+            while (callSecond.wasPressed()) dealTo(client, 1);
             while (cycleWinner.wasPressed()) stepWinner(client, 1);
             while (winFirst.wasPressed()) setWinner(client, 0);
             while (winSecond.wasPressed()) setWinner(client, 1);
@@ -311,9 +311,9 @@ public class MirageClient implements ClientModInitializer {
         cutBlock = bind("cut_block", GLFW.GLFW_KEY_B, category,
                 "Open a hole in the build you are looking at");
         callFirst = bind("call_first", GLFW.GLFW_KEY_LEFT_BRACKET, category,
-                "Blackjack: next card up");
+                "Blackjack: deal to the first side");
         callSecond = bind("call_second", GLFW.GLFW_KEY_RIGHT_BRACKET, category,
-                "Blackjack: next card down");
+                "Blackjack: deal to the second side");
         cycleRig = bind("cycle_rig", GLFW.GLFW_KEY_BACKSLASH, category,
                 "Next rig");
         // Unbound by default: the menu has a command, and an accidental clash is worse.
@@ -428,7 +428,17 @@ public class MirageClient implements ClientModInitializer {
         if (shown.blackjack) {
             json.append(",\"cards\":").append(shown.cards)
                     .append(",\"each\":").append(shown.cardEach)
-                    .append(",\"next\":").append(shown.nextCard);
+                    .append(",\"hands\":[");
+            boolean firstHand = true;
+            for (String side : shown.sideNames()) {
+                if (!firstHand) json.append(',');
+                firstHand = false;
+                json.append("{\"side\":\"").append(WebDashboard.escape(side))
+                        .append("\",\"cards\":\"")
+                        .append(WebDashboard.escape(shown.handFor(side).toString()))
+                        .append("\",\"total\":").append(shown.totalFor(side)).append('}');
+            }
+            json.append(']');
         }
         json.append("},\"mix\":{\"on\":").append(shown.mix);
         if (shown.mix) {
@@ -520,7 +530,7 @@ public class MirageClient implements ClientModInitializer {
     private static void rigResult(MinecraftClient client, int delta) {
         switch (ClientDispensers.active().keys()) {
             case BLACKJACK:
-                stepCard(client, delta);
+                stepWinner(client, delta);
                 break;
             case PAPER:
                 stepWinner(client, delta);
@@ -619,8 +629,8 @@ public class MirageClient implements ClientModInitializer {
         text.append("  H  refill the dispenser you are looking at\n");
         text.append("  ;  arm the next shot     K  clear your fakes\n");
         text.append("  N  everything off / on   B  open up a fake block\n");
-        text.append("  Z / X  paper: Player / Host wins    M  paper: step winner\n");
-        text.append("  [ / ]  blackjack: next card up / down");
+        text.append("  Z / X  Player / Host wins    M  step the winner\n");
+        text.append("  [ / ]  blackjack: deal to the first / second side");
         return feedback(context, text.toString());
     }
 
@@ -1131,22 +1141,10 @@ public class MirageClient implements ClientModInitializer {
                     SelfFakes.save();
                     return feedback(context, "Blackjack off for this rig.");
                 }))
-                .then(ClientCommandManager.literal("chance").executes(context -> {
-                    ClientDispensers.active().nextCard = 0;
-                    SelfFakes.save();
-                    return feedback(context, "The next card is left to chance.");
+                .then(ClientCommandManager.literal("hand").executes(context -> {
+                    ClientDispensers.newHand();
+                    return feedback(context, "New hand. Both boxes are back on nothing.");
                 }))
-                .then(ClientCommandManager.literal("next")
-                        .then(ClientCommandManager.argument("card",
-                                        IntegerArgumentType.integer(1, 9))
-                                .executes(context -> {
-                                    RigProfile profile = ClientDispensers.active();
-                                    profile.nextCard = IntegerArgumentType.getInteger(context, "card");
-                                    profile.tidyCards();
-                                    SelfFakes.save();
-                                    return feedback(context, "The next card dealt is a "
-                                            + profile.nextCard + ".");
-                                })))
                 .then(ClientCommandManager.literal("numbers")
                         .then(ClientCommandManager.argument("count",
                                         IntegerArgumentType.integer(1, 9))
@@ -1667,18 +1665,22 @@ public class MirageClient implements ClientModInitializer {
      * <p>Silent like the other switches. The call is the whole input this game needs: what a
      * floor fires is their own answer, or the other colour when the run is ended.
      */
-    private static void stepCard(MinecraftClient client, int delta) {
+    /** Says whose card the next deal is, for a blackjack table played on one box. */
+    private static void dealTo(MinecraftClient client, int index) {
         RigProfile profile = ClientDispensers.active();
         if (!profile.blackjack) {
             say(client, "Rig '" + profile.name + "' is not blackjack.");
             return;
         }
 
-        int card = ClientDispensers.cycleCard(delta);
-        if (!SelfFakes.announceSwitching() || client.player == null) return;
+        List<String> sides = profile.sideNames();
+        String side = index < sides.size() ? sides.get(index)
+                : RigProfile.DEFAULT_SIDES[Math.min(index, RigProfile.DEFAULT_SIDES.length - 1)];
+        ClientDispensers.dealTo(side);
 
-        client.player.sendMessage(Text.literal(card == 0 ? "next card: chance"
-                        : "next card: " + card).formatted(Formatting.GRAY), true);
+        if (!SelfFakes.announceSwitching() || client.player == null) return;
+        client.player.sendMessage(Text.literal("dealing to " + side)
+                .formatted(Formatting.GRAY), true);
     }
 
     /** Opens up the one block being looked at, for punching holes as you go. */
@@ -1744,8 +1746,8 @@ public class MirageClient implements ClientModInitializer {
      */
     private static void setWinner(MinecraftClient client, int index) {
         RigProfile profile = ClientDispensers.active();
-        if (!profile.paper) {
-            say(client, "Rig '" + profile.name + "' is not the paper game.");
+        if (!profile.hasSides()) {
+            say(client, "Rig '" + profile.name + "' has no sides to rig for.");
             return;
         }
 
@@ -1775,7 +1777,7 @@ public class MirageClient implements ClientModInitializer {
      */
     private static void stepWinner(MinecraftClient client, int delta) {
         RigProfile profile = ClientDispensers.active();
-        if (!profile.paper || client.player == null) return;
+        if (!profile.hasSides() || client.player == null) return;
 
         String winner = ClientDispensers.cycleWinner(delta);
         if (!SelfFakes.announceSwitching()) return;

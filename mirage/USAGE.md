@@ -431,46 +431,63 @@ named for the setup they were made with.
 
 ## 5c. Blackjack
 
-The machine is a **shoe**: nine numbered slips, two of each number, one number per
-slot — which is exactly what a nine-slot dispenser holds and what a shoe looks
-like through the glass.
+Two boxes: one deals the **Player's** cards, one deals the **Host's**. Each holds a
+shoe of nine slips, two of each — **A** (the ace) through 9.
 
     /fake rig use blackjack
-    (look at the dispenser)
-    /fake dispenser watch
-    H
+    (look at the Player's box)   H
+    (look at the Host's box)     H
 
-Every machine deals from the same shoe, so there is no side or floor to hand out
-and nothing to get stuck on the wrong dispenser.
+The first box you fill becomes Player, the second Host. If they come out the wrong
+way round, `/fake dispenser parts` and fill them again in the order you want.
 
-### Rigging it
+### The rig is who wins, not which card
 
-**`F` and `R` walk the numbers.** `F` steps 1 → 2 → … → 9 → chance → 1 again, `R`
-goes the other way. Whatever is named is what the next deal produces; on **chance**
-it draws at random from the shoe.
+You do not name numbers. **The mod keeps both hands and works the card back from the
+result you chose.**
 
-`[` and `]` do the same thing, so you have a pair of keys that is only ever
-blackjack whatever rig is selected.
+| key | what it does |
+|---|---|
+| `Z` | the Player wins this hand |
+| `X` | the Host wins |
+| `F` / `R` | step Player → Host → chance → round again |
+| `;` | new hand — both boxes back to nothing |
 
-By command, if you prefer:
+Then just fire the boxes as the hand is played. Every card is chosen for you:
 
-    /fake blackjack next 7      (the next card is a 7)
-    /fake blackjack chance      (back to random)
+- the side that is **meant to win** is never dealt a card that busts them, and
+  otherwise gets the one that leaves them closest to 21
+- the side that is **meant to lose** gets a card that busts them if any card can,
+  and otherwise the one that leaves them lowest
+- on **chance** it deals honestly at random
+
+Ties between equally good cards are broken at random, so the same situation twice
+does not deal the same card twice.
+
+**The ace is 1 or 11** — whichever keeps the hand alive, re-read every time a card
+lands, so `A + 9 + 5` is 15 rather than a bust.
+
+### Watching it
+
+`/fake dispenser status` and the dashboard both show both hands live:
+
+    Rig 'blackjack', blackjack
+      a shoe of 2x each of A-9, rigged for Player
+        Player holds [1, 9] = 20
+        Host holds [7, 8] = 15
+
+### One box instead of two
+
+If the table has a single dispenser, `[` and `]` say whose card the next deal is —
+`[` for the first side, `]` for the second — and everything else works the same.
 
 ### Changing the shoe
 
-    /fake blackjack numbers 9   (how many different numbers, 1-9)
+    /fake blackjack numbers 9   (how many different cards, 1-9)
     /fake blackjack each 2      (how many of each)
     /fake blackjack item paper  (what the cards are made of)
 
-Lay the machines out again with `H` after changing any of those. The status line
-and the dashboard both show the shoe and what is coming:
-
-    Rig 'blackjack', blackjack
-      a shoe of 2x each of 1-9, next card 7
-
-> The tower game has been removed. If you had a tower rig you had already turned
-> into a coin flip, it is untouched — it was not in tower mode any more.
+Lay the boxes out again with `H` after any of those.
 
 ## 6. Russian roulette
 
@@ -737,7 +754,7 @@ change meaning with the rig, so switching game with `\` switches what they do:
 | `454510` | next item | previous item |
 | `paper` | next winner (Player → Host → chance) | previous winner |
 | `roulette` | arm the loaded shot | cancel the arm |
-| `blackjack` | next card up | next card down |
+| `blackjack` | next winner | previous winner |
 
 `\` says which game you have landed on and what `F` and `R` now mean, in your
 action bar. `/fake keys` prints the lot, and `/fake dispenser status` carries the
@@ -752,14 +769,14 @@ which one you want.
 | `F` / `R` | rig the current game forward / back (table above) |
 | sneak + right-click | place the fake block you are holding |
 | `\` | next rig — and `F` / `R` change with it |
-| `;` | arm the next spin |
+| `;` | arm the next spin — blackjack: new hand |
 | `'` | fire the dispenser you are looking at |
 | `H` | refill the dispenser you are looking at |
 | `K` | clear every fake out of your inventory |
 | `N` | turn everything off / back on |
 | `B` | open up the fake block you are looking at |
-| `[` / `]` | blackjack: next card up / down |
-| `Z` / `X` | paper game: Player wins / Host wins |
+| `[` / `]` | blackjack: deal to the first / second side |
+| `Z` / `X` | paper game and blackjack: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |
 

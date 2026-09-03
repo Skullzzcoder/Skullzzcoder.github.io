@@ -577,8 +577,11 @@ public final class WebDashboard {
               if (s.place) bits.push('answers are placed as blocks, breaking in '
                 + (s.breakSeconds || 0) + 's');
               if (s.blackjack && s.blackjack.on) {
-                bits.push('a shoe of ' + s.blackjack.each + 'x each of 1-' + s.blackjack.cards
-                  + ', next card ' + (s.blackjack.next ? s.blackjack.next : 'left to chance'));
+                bits.push('a shoe of ' + s.blackjack.each + 'x each of A-' + s.blackjack.cards
+                  + ', rigged for ' + (s.winner || 'chance'));
+                (s.blackjack.hands || []).forEach(h =>
+                  bits.push(h.side + '  ' + h.cards + '  = ' + h.total
+                    + (h.total > 21 ? '  BUST' : '')));
               }
               if (s.mix && s.mix.on) {
                 bits.push((s.mix.items || []).map(i =>

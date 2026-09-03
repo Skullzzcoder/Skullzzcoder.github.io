@@ -27,57 +27,52 @@ check("the numbers fill the machine exactly", CARDS == SLOTS)
 fill = body(disp, "public static boolean fill(BlockPos pos, boolean join) {")
 shoe = fill[fill.index("profile.blackjack"):fill.index("} else if (profile.paper)")]
 check("one number per slot", "slots.put(slot, new FakeSpec(slip, profile.cardEach" in shoe)
-check("and the slip is named for its number", "String.valueOf(slot + 1)" in shoe)
+check("and the slip is named as a card", "RigProfile.cardName(slot + 1)" in shoe)
 check("the shoe never overruns the machine", "Math.min(profile.cards, STOCK_SLOTS)" in shoe)
 check("cards are made of the slip item", "SelfFakes.lookupItem(profile.slipItem)" in shoe)
 
-# --------------------------------------------------------------- what it deals
-deal = body(rig, "public int dealCard(Random random) {")
-check("a named card is dealt", "this.nextCard >= 1 && this.nextCard <= this.cards" in deal)
-check("and nothing named is left to chance", "random.nextInt(" in deal)
+# ------------------------------------------------- rigged by outcome, not by number
+# Naming a card meant knowing every total at the table and working out which number gave
+# the result you wanted, while somebody waited. The outcome is named and the card worked
+# back from it instead.
+choose = body(rig, "public int chooseCard(String side, Random random) {")
+check("nothing named is an honest deal", 'this.winner.isEmpty()) return 1 + random.nextInt' in choose)
+check("the side that must win is never busted",
+      "total > TARGET ? Integer.MIN_VALUE + 1 + total : total" in choose)
+check("the side that must lose is busted where a card can",
+      "total > TARGET ? Integer.MAX_VALUE - 1 : -total" in choose)
+check("equally good cards are broken at random", "best.get(random.nextInt(best.size()))" in choose)
 
-def deal_card(next_card, cards, rnd):
-    if 1 <= next_card <= cards: return next_card
-    return 1 + rnd.randrange(max(1, cards))
+# An ace is worth eleven or one depending on what arrives after it, so a hand cannot be a
+# running total -- it is re-read whole every time.
+value = body(rig, "public static int handValue(List<Integer> hand) {")
+check("an ace starts at eleven", "total += 11;" in value)
+check("and drops to one only as far as it must",
+      "while (total > TARGET && aces > 0)" in value and "total -= 10;" in value)
+check("hands are kept as cards, not as a total", "Map<String, List<Integer>> hands" in rig)
+check("the ace reads as one on its slip", 'card == ACE ? "A"' in rig)
 
-rnd = random.Random(7)
-check("a named card always comes out",
-      all(deal_card(n, CARDS, rnd) == n for n in range(1, CARDS + 1) for _ in range(20)))
-seen = {deal_card(0, CARDS, rnd) for _ in range(400)}
-check("chance reaches every number", seen == set(range(1, CARDS + 1)))
-check("and never leaves the shoe", all(1 <= c <= CARDS for c in seen))
-
-# ------------------------------------------------------------ walking the ring
-step = body(rig, "public int cycleCard(int delta) {")
-check("chance sits one past the last number", "this.nextCard == 0 ? this.cards" in step)
-check("the ring wraps both ways", "Math.floorMod(index + delta, ring)" in step)
-
-def walk(next_card, cards, delta):
-    ring = cards + 1
-    index = cards if next_card == 0 else next_card - 1
-    index = (index + delta) % ring
-    return 0 if index >= cards else index + 1
-
-at, seq = 0, []
-for _ in range(CARDS + 1):
-    at = walk(at, CARDS, 1)
-    seq.append(at)
-check("forward walks 1..n then chance", seq == list(range(1, CARDS + 1)) + [0])
-at = 0
-back = [at := walk(at, CARDS, -1) for _ in range(CARDS + 1)]
-check("back walks the other way", back == list(range(CARDS, 0, -1)) + [0])
-check("one back undoes one forward",
-      all(walk(walk(n, CARDS, 1), CARDS, -1) == n for n in range(0, CARDS + 1)))
+# Whose card it is decides everything, so it is worked out before the card is.
+deal = body(disp, "private static FakeSpec card(RigProfile profile, BlockPos pos) {")
+check("the machine's own side comes first", "profile.sideOf(pos)" in deal)
+check("then the side named by hand", "profile.dealTo" in deal)
+check("then joining the table", "profile.sideAt(pos, watched)" in deal)
+check("a box at no table says so", "not at this table" in deal or "is not at this table" in disp)
+check("the card joins that hand", "profile.handFor(side).add(number)" in deal)
 
 # ------------------------------------------------------------------- the rest
-check("the keys know the game", "case BLACKJACK: return \"next card up\";" in rig)
-check("and the dispatch does", "case BLACKJACK:" in mc and "stepCard(client, delta);" in mc)
+check("the keys know the game", 'case BLACKJACK: return "next winner";' in rig)
+check("and the dispatch does", "case BLACKJACK:" in mc and "stepWinner(client, delta);" in mc)
 check("a rig carrying only this is not empty", "!this.blackjack" in body(rig, "public boolean isEmpty() {"))
 check("it is seeded", 'needsSeeding("blackjack")' in disp and "cards.blackjack = true;" in disp)
 check("it is saved", 'json.add("blackjack", cards);' in disp)
 check("and read back", 'json.has("blackjack")' in disp and "profile.blackjack = true;" in disp)
 check("the shoe is kept sane on the way in", "profile.tidyCards();" in disp)
-check("there are commands", 'literal("blackjack")' in mc and 'literal("next")' in mc)
+check("there are commands", 'literal("blackjack")' in mc and 'literal("hand")' in mc)
+# Both games with named sides share the winner keys, the parts and the side machinery.
+check("the two side games are named together", "public boolean hasSides()" in rig)
+check("and the winner keys serve both", "profile.hasSides()" in mc)
+check("arming starts a new hand instead", "profile.blackjack) {\n            profile.newHand();" in disp)
 
 # ------------------------------------------------------------- the tower is gone
 for gone in ("towerBox", "bustNext", "floorAt", "towerA", "pruneFloors", "towerToFlip"):

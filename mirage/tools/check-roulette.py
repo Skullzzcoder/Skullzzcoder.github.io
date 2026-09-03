@@ -106,8 +106,8 @@ check("a roulette rig with nothing loaded is caught",
 check("and one with no blank, since every unarmed shot is a blank",
       re.search(r"if \(profile\.blank == null\) \{\s*\n\s*return", no_answer) is not None
       and "fires nothing" in no_answer)
-check("the game with parts answers per machine instead",
-      "if (profile.paper) return null;" in no_answer)
+check("the games with parts answer per machine instead",
+      "if (profile.hasSides()) return null;" in no_answer)
 check("the doctor asks it", "ClientDispensers.noAnswer()" in mc)
 check("and no longer guesses from presets",
       "ClientDispensers.presets().isEmpty() && !profile.roulette" not in mc)
