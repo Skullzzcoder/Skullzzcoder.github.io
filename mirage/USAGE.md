@@ -731,6 +731,56 @@ empty slot is worse than no click at all. A block is only taken over when the
 paint is actually on the screen there — a fake held back from underfoot, or one
 the master switch has taken down, is a real block again and breaks normally.
 
+## 11b. Map art — numbers on a map
+
+    /fake map <id> 21
+    /fake map <id> A
+    /fake map <id> clear
+
+Draws a number or a short word across a map, as large as it fits, **on your screen
+only**. Nobody else's map changes.
+
+**It repaints a map you already own — it cannot invent one.** A map's picture comes
+from the server: your client renders map N from pixels the server sent it, and has
+none for an id it has never been told about. So:
+
+1. Craft a map (or take one you have) and **look at it once**, so the server sends
+   your client its picture.
+2. Read its id — hover it with F3+H on, or `/fake map <id> 8` and try ids until one
+   changes.
+3. Paint it.
+
+If the client has never seen that map, the command says so rather than doing
+nothing:
+
+    the client has no map 42 yet. Hold a real map, look at it once so the server
+    sends it, then use that map's id.
+
+`/fake doctor` line 7 shows what the last paint did.
+
+### Using them in a game
+
+A fake item can point at a map id — that is what the `#` in an item spec means:
+
+    /fake set hotbar1 filled_map#42
+
+So a painted map can be a card, a dice face, or a result marker in any of the
+games. Point several fakes at several maps you own, paint each with its number,
+and the machines deal pictures instead of named paper.
+
+### What is drawn
+
+Digits `0-9`, the letters `A J K Q X`, `-`, and space. Anything else is skipped.
+One character fills the map; two or three share it and are still large. Black on
+white by default.
+
+> **One honest caveat.** Handing the picture to the client is the only part of this
+> that touches Minecraft's own code, and the call for it has moved between
+> versions — so it is found by reflection rather than named. It can never crash or
+> fail the build; if this version keeps its maps somewhere the search does not
+> reach, the command says exactly what it could not find, and that message is what
+> I need to fix it.
+
 ## 12. Item frames and armour stands
 
 Client-only decoration for your base.

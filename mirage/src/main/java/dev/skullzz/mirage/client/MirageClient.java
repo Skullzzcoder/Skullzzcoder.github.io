@@ -108,6 +108,15 @@ public class MirageClient implements ClientModInitializer {
                         // way to reach it, which made every readback in the mod dead by
                         // default -- including the one that says which of three items
                         // 45/45/10 is currently rigged to.
+                        .then(ClientCommandManager.literal("map")
+                                .then(ClientCommandManager.argument("id",
+                                                IntegerArgumentType.integer(0, 1000000))
+                                        .then(ClientCommandManager.literal("clear")
+                                                .executes(context -> paintMap(context, " ")))
+                                        .then(ClientCommandManager.argument("text",
+                                                        StringArgumentType.greedyString())
+                                                .executes(context -> paintMap(context,
+                                                        StringArgumentType.getString(context, "text"))))))
                         .then(ClientCommandManager.literal("doctor")
                                 .executes(MirageClient::doctor))
                         .then(ClientCommandManager.literal("keys")
@@ -545,6 +554,25 @@ public class MirageClient implements ClientModInitializer {
     }
 
     /**
+     * Paints a number or a short word onto a map the client already has.
+     *
+     * <p>A map's picture comes from the server, so there is no inventing one: this repaints
+     * a real map you own, on your screen. The command says which map and what to draw, and
+     * says plainly when the client has never been sent that map, which is the one way this
+     * fails and is not obvious from looking at it.
+     */
+    private static int paintMap(CommandContext<FabricClientCommandSource> context, String text) {
+        int id = IntegerArgumentType.getInteger(context, "id");
+        byte[] pixels = MapArt.render(text, MapArt.BLACK, MapArt.WHITE);
+
+        if (!MapArt.paint(id, pixels)) {
+            return error(context, MapArt.lastReason());
+        }
+        return feedback(context, "Map " + id + " now reads '" + text.trim() + "' on your"
+                + " screen. Nobody else's map changed.");
+    }
+
+    /**
      * Walks the whole chain a fake has to travel, and says where it stops.
      *
      * <p>Nine things have to be true for something to come out of a machine, and until now
@@ -608,6 +636,7 @@ public class MirageClient implements ClientModInitializer {
         }
 
         out.append("\n6. Collect fakes   ").append(SelfFakes.autoCollect() ? "on" : "off");
+        out.append("\n7. Last map paint  ").append(MapArt.lastReason());
         return feedback(context, out.toString());
     }
 
