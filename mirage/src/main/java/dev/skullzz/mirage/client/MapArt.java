@@ -288,6 +288,46 @@ public final class MapArt {
         return null;
     }
 
+    /**
+     * The id of the map in the player's hand, or -1.
+     *
+     * <p>Finding a map's id otherwise means turning on a debug overlay and squinting, which
+     * is a poor first step for the commonest case by far: the art is in your hand and you
+     * want that one. The number inside the component is read by type rather than by an
+     * accessor name, for the same reason the pixels are.
+     */
+    public static int heldMapId() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return -1;
+
+        for (net.minecraft.util.Hand hand : net.minecraft.util.Hand.values()) {
+            net.minecraft.item.ItemStack stack = client.player.getStackInHand(hand);
+            Object component = stack.get(net.minecraft.component.DataComponentTypes.MAP_ID);
+            if (component == null) continue;
+
+            int id = numberIn(component);
+            if (id >= 0) return id;
+        }
+        return -1;
+    }
+
+    /** The single int a map-id component wraps, whatever its accessor is called here. */
+    private static int numberIn(Object component) {
+        for (Method method : component.getClass().getMethods()) {
+            if (method.getParameterCount() != 0) continue;
+            if (method.getReturnType() != int.class) continue;
+            // Every object has these and neither is the map id.
+            if (method.getName().equals("hashCode")) continue;
+
+            try {
+                return (int) method.invoke(component);
+            } catch (ReflectiveOperationException ignored) {
+                // Try the next candidate.
+            }
+        }
+        return -1;
+    }
+
     // ------------------------------------------------------------------------ the library
 
     /**
@@ -342,6 +382,95 @@ public final class MapArt {
         return pixels != null && paint(to, pixels);
     }
 
+    /** Where pictures to import are looked for. */
+    public static java.nio.file.Path pictureFolder() {
+        return net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+                .resolve("mirage-pictures");
+    }
+
+    /**
+     * Turns an image file into a design.
+     *
+     * <p>The only way in that needs nothing in the game at all. Reading and scaling the image
+     * is the JDK's own work, and matching each pixel to a map colour is arithmetic against a
+     * written-down table -- so a picture off the internet becomes a design without the game
+     * being involved until you put it on a map.
+     *
+     * <p>Anything see-through stays see-through: a map can hold nothing at a pixel, and a
+     * logo with a cut-out background should keep it rather than gain a white square.
+     */
+    public static boolean importPicture(String fileName, String name) {
+        java.nio.file.Path path = pictureFolder().resolve(fileName);
+        if (!java.nio.file.Files.exists(path)) {
+            lastReason = "no file at " + path + ". Put the picture there and try again.";
+            return false;
+        }
+
+        try {
+            java.awt.image.BufferedImage source = javax.imageio.ImageIO.read(path.toFile());
+            if (source == null) {
+                lastReason = fileName + " is not a picture this can read (png, jpg, gif, bmp)";
+                return false;
+            }
+
+            byte[] pixels = quantise(scale(source));
+            designs.put(name, pixels);
+            persist();
+
+            lastReason = "imported " + fileName + " as '" + name + "'";
+            return true;
+        } catch (java.io.IOException | RuntimeException failure) {
+            lastReason = "could not read " + fileName + ": " + failure;
+            Mirage.LOGGER.warn("Mirage could not import a picture", failure);
+            return false;
+        }
+    }
+
+    /** Squashes any picture to the one size a map has, smoothly. */
+    private static java.awt.image.BufferedImage scale(java.awt.image.BufferedImage source) {
+        java.awt.image.BufferedImage square =
+                new java.awt.image.BufferedImage(SIZE, SIZE,
+                        java.awt.image.BufferedImage.TYPE_INT_ARGB);
+
+        java.awt.Graphics2D pen = square.createGraphics();
+        pen.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        pen.drawImage(source, 0, 0, SIZE, SIZE, null);
+        pen.dispose();
+        return square;
+    }
+
+    /** Matches every pixel to the nearest colour a map can hold. */
+    private static byte[] quantise(java.awt.image.BufferedImage image) {
+        byte[] pixels = new byte[SIZE * SIZE];
+
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int argb = image.getRGB(x, y);
+                int alpha = (argb >>> 24) & 0xFF;
+
+                // Mostly see-through is see-through. A map has no half-way.
+                pixels[y * SIZE + x] = alpha < 128 ? MapPalette.CLEAR
+                        : MapPalette.nearest((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
+            }
+        }
+        return pixels;
+    }
+
+    /** What pictures are sitting in the folder waiting to be imported. */
+    public static java.util.List<String> pictures() {
+        java.util.List<String> found = new java.util.ArrayList<>();
+        try (java.util.stream.Stream<java.nio.file.Path> files =
+                     java.nio.file.Files.list(pictureFolder())) {
+            files.filter(java.nio.file.Files::isRegularFile)
+                    .forEach(path -> found.add(path.getFileName().toString()));
+        } catch (java.io.IOException ignored) {
+            // No folder yet is the same answer as an empty one.
+        }
+        java.util.Collections.sort(found);
+        return found;
+    }
+
     private static java.nio.file.Path file() {
         return net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                 .resolve("mirage-maps.json");
@@ -370,6 +499,13 @@ public final class MapArt {
 
     public static void load() {
         designs.clear();
+        try {
+            // Made on the way in so there is somewhere obvious to drop a picture, rather
+            // than a folder you have to be told the name of and create yourself.
+            java.nio.file.Files.createDirectories(pictureFolder());
+        } catch (java.io.IOException ignored) {
+            // It can be made by hand; not being able to is not a reason to stop.
+        }
         if (!java.nio.file.Files.exists(file())) return;
 
         try {

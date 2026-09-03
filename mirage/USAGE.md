@@ -758,6 +758,40 @@ nothing:
 
 `/fake doctor` line 7 shows what the last paint did.
 
+### Copying art you are holding
+
+**It never had to be art you made — only art your client can see.** A map in your
+hand is one the server has already sent you, so it can be copied as it is:
+
+    (hold the map)
+    /fake map save held dragon
+
+That reads the id off the item, so there is no hunting for it. It works on anyone's
+art, bought, found or given.
+
+### Importing a picture from your computer
+
+Nothing in the game is needed for this half. Drop image files — png, jpg, gif,
+bmp — into:
+
+    config/mirage-pictures/
+
+Then:
+
+    /fake map pictures                  (what is in the folder)
+    /fake map import logo.png dragon    (keep it as a design)
+    /fake map load dragon 118           (put it on a map you own)
+
+Any size of picture is squashed to the 128×128 a map is, smoothly, and every pixel
+is matched to the nearest of the 248 colours a map can show. **Transparency is
+kept** — a logo with a cut-out background keeps the cut-out rather than gaining a
+white square.
+
+> **You still need one real map to show it on.** The picture can come from
+> anywhere; the *surface* cannot. A map's pixels live in your client because the
+> server sent them, so a blank crafted map you have looked at once is enough — but
+> an id you have never seen has nothing to paint onto, and the command will say so.
+
 ### Importing art you actually made
 
 The drawn numbers are a fallback. **Real map art is thousands of placed blocks —

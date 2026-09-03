@@ -119,11 +119,25 @@ public class MirageClient implements ClientModInitializer {
                                                                 IntegerArgumentType.integer(0, 1000000))
                                                         .executes(MirageClient::copyMap))))
                                 .then(ClientCommandManager.literal("save")
+                                        .then(ClientCommandManager.literal("held")
+                                                .then(ClientCommandManager.argument("name",
+                                                                StringArgumentType.word())
+                                                        .executes(MirageClient::saveHeldDesign)))
                                         .then(ClientCommandManager.argument("id",
                                                         IntegerArgumentType.integer(0, 1000000))
                                                 .then(ClientCommandManager.argument("name",
                                                                 StringArgumentType.word())
                                                         .executes(MirageClient::saveDesign))))
+                                .then(ClientCommandManager.literal("import")
+                                        .then(ClientCommandManager.argument("file",
+                                                        StringArgumentType.word())
+                                                .suggests((context, builder) ->
+                                                        CommandSource.suggestMatching(MapArt.pictures(), builder))
+                                                .then(ClientCommandManager.argument("name",
+                                                                StringArgumentType.word())
+                                                        .executes(MirageClient::importPicture))))
+                                .then(ClientCommandManager.literal("pictures")
+                                        .executes(MirageClient::listPictures))
                                 .then(ClientCommandManager.literal("load")
                                         .then(ClientCommandManager.argument("name",
                                                         StringArgumentType.word())
@@ -619,6 +633,40 @@ public class MirageClient implements ClientModInitializer {
                 ? feedback(context, "Kept map " + id + " as '" + name + "'. It will still be"
                         + " here in another world - /fake map load " + name + " <id>.")
                 : error(context, MapArt.lastReason());
+    }
+
+    private static int saveHeldDesign(CommandContext<FabricClientCommandSource> context) {
+        int id = MapArt.heldMapId();
+        if (id < 0) {
+            return error(context, "You are not holding a map. Hold the art and try again,"
+                    + " or give the id: /fake map save <id> <name>.");
+        }
+
+        String name = StringArgumentType.getString(context, "name");
+        return MapArt.save(name, id)
+                ? feedback(context, "Kept the map in your hand (id " + id + ") as '" + name
+                        + "'. It did not have to be yours - only your client's.")
+                : error(context, MapArt.lastReason());
+    }
+
+    private static int importPicture(CommandContext<FabricClientCommandSource> context) {
+        String file = StringArgumentType.getString(context, "file");
+        String name = StringArgumentType.getString(context, "name");
+
+        return MapArt.importPicture(file, name)
+                ? feedback(context, "Imported " + file + " as '" + name + "'. Put it on a map"
+                        + " you own with /fake map load " + name + " <id>.")
+                : error(context, MapArt.lastReason());
+    }
+
+    private static int listPictures(CommandContext<FabricClientCommandSource> context) {
+        List<String> pictures = MapArt.pictures();
+        if (pictures.isEmpty()) {
+            return feedback(context, "No pictures to import. Drop image files into "
+                    + MapArt.pictureFolder() + " and run this again.");
+        }
+        return feedback(context, "Ready to import from " + MapArt.pictureFolder() + ": "
+                + String.join(", ", pictures));
     }
 
     private static int loadDesign(CommandContext<FabricClientCommandSource> context) {
