@@ -82,6 +82,33 @@ public final class RigProfile {
     public int nextCard;
 
     /**
+     * Mix mode: one machine holding a fixed spread of items, one of which comes out.
+     *
+     * <p>45/45/10 is the game it was written for -- four diamonds, four emeralds and one
+     * crystal in the nine slots, the player calling which they will get. The rigging is the
+     * plainest of all of them: the answer is simply whichever item is selected, so the
+     * result key already cycles it. What the mode adds is the shape of the machine. The
+     * ordinary layout puts one of each item in, which is right for a coin flip and wrong
+     * here: the whole game is the odds you can see through the glass, and three items in a
+     * nine-slot box are not odds at all.
+     */
+    public boolean mix;
+    /** How many of each item the machine holds. Runs alongside the presets. */
+    public final List<Integer> mixCounts = new ArrayList<>();
+    /** What each item pays, for the sake of saying so when it is picked. */
+    public final List<Integer> mixPayouts = new ArrayList<>();
+
+    /**
+     * Whether a machine puts its answer down as a block rather than throwing it out.
+     *
+     * <p>A dispenser holding shulker boxes places them, so a game played with them shows its
+     * answer standing on the ground rather than bouncing across it. Belongs to the rig
+     * rather than to any one game: it once lived inside the tower's own block, which threw
+     * it away along with that game.
+     */
+    public boolean placeOutput;
+
+    /**
      * How long a block a machine put down takes to break, in seconds. Zero is vanilla speed.
      *
      * <p>The prize is the thing everyone is looking at, and a prize that vanishes the instant

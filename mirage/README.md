@@ -49,6 +49,12 @@ that was never written exactly as it reports a missing Minecraft class: `cannot 
 That makes a real mistake easy to lose among the noise. This checks the mod's own classes
 against each other, and needs no classpath:
 
+`tools/check-symbols.py` covers the gap that leaves. The structural pass has to throw
+away every "cannot find symbol", because almost all of them are the missing classpath --
+but a field deleted out from under its users looks exactly the same, and twenty-eight of
+those once reached a build. Java's own naming convention separates the two: a missing
+type is capitalised, a missing member is not.
+
 ```
 python3 tools/check-calls.py
 ```
