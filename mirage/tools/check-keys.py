@@ -20,7 +20,7 @@ def body(src, sig):
 MODES = re.search(r"public enum Keys \{(.*?)\}", rig).group(1)
 MODES = [m.strip() for m in MODES.split(",") if m.strip()]
 check("there is a name for each shape of rigging", sorted(MODES)
-      == ["CYCLED", "PAPER", "ROULETTE", "TOWER"])
+      == ["BLACKJACK", "CYCLED", "PAPER", "ROULETTE"])
 
 keys = body(rig, "public Keys keys() {")
 for mode in MODES:
@@ -60,11 +60,12 @@ check("neither key still calls the presets straight", "selectPreset" not in pres
 # --------------------------------------------------- the label matches the act
 # Tower: forward is the first colour, and the first colour is what the forward key calls.
 fwd, back = body(rig, "public String forwardLabel() {"), body(rig, "public String backLabel() {")
-check("forward is labelled the first colour", "case TOWER: return \"they called \" + this.towerA;" in fwd)
-check("back is labelled the second colour", "case TOWER: return \"they called \" + this.towerB;" in back)
-check("forward calls the first colour", "case TOWER:\n                takeCall(client, delta > 0);" in result)
-call = body(mc, "private static void takeCall(MinecraftClient client, boolean first) {")
-check("the first colour is towerA", "first ? profile.towerA : profile.towerB" in call)
+check("forward is labelled the next card up", 'case BLACKJACK: return "next card up";' in fwd)
+check("back is labelled the next card down", 'case BLACKJACK: return "next card down";' in back)
+check("forward steps the card up", "case BLACKJACK:\n                stepCard(client, delta);" in result)
+# The direction has to reach the ring: passing a boolean would have lost it.
+card = body(mc, "private static void stepCard(MinecraftClient client, int delta) {")
+check("the direction is carried through", "ClientDispensers.cycleCard(delta)" in card)
 
 # Roulette: forward arms, back takes the arming back off.
 check("forward is labelled as arming", 'case ROULETTE: return "arm the loaded shot";' in fwd)

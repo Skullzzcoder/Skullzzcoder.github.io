@@ -93,7 +93,7 @@ guard = mode_back.group(1) if mode_back else ""
 # the tower turned into a coin flip -- and must be left alone.
 check("a rig with presets is left alone", "profile.presets.isEmpty()" in guard)
 check("and one already in another mode is too",
-      "!profile.paper" in guard and "!profile.tower" in guard and "!profile.mix" in guard)
+      "!profile.paper" in guard and "!profile.blackjack" in guard and "!profile.mix" in guard)
 
 # Whether the rig can answer at all has to be asked of the rig. The doctor used to test
 # presets, which roulette does not use, so a roulette rig with nothing loaded read as fine.
@@ -106,8 +106,8 @@ check("a roulette rig with nothing loaded is caught",
 check("and one with no blank, since every unarmed shot is a blank",
       re.search(r"if \(profile\.blank == null\) \{\s*\n\s*return", no_answer) is not None
       and "fires nothing" in no_answer)
-check("the games with parts answer per machine instead",
-      "if (profile.paper || profile.tower) return null;" in no_answer)
+check("the game with parts answers per machine instead",
+      "if (profile.paper) return null;" in no_answer)
 check("the doctor asks it", "ClientDispensers.noAnswer()" in mc)
 check("and no longer guesses from presets",
       "ClientDispensers.presets().isEmpty() && !profile.roulette" not in mc)

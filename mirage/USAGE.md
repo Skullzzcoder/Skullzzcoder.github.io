@@ -206,7 +206,7 @@ Five come built in, and are put back if a config file is missing them:
 | `454510` | 45/45/10 — diamonds, emeralds and one crystal |
 | `paper` | the named-paper game |
 | `roulette` | the crystal game |
-| `tower` | the five-floor shulker box climb |
+| `blackjack` | a shoe of numbered slips |
 
 `\` cycles to the next rig without opening anything.
 
@@ -353,7 +353,7 @@ Got them the wrong way round? Look at one and name it:
 
 This is the one thing that catches people out. The paper game hands out exactly
 **two** sides — `Player` and `Host` — and every watched dispenser competes for
-them, including the roulette dropper, the coin flip and the tower floors. A
+them, including the roulette dropper, the coin flip and the blackjack shoes. A
 machine that misses out **fires nothing at all**.
 
 If `H` on a paper machine says *"Both sides are already taken (Player at 100 64
@@ -372,7 +372,6 @@ first, then Host. **This is the fix when the sides went to machines from another
 game**, which is easy to end up with because every watched dispenser competes for
 them and an assignment sticks until something lets go of it.
 
-The same command fixes the tower's floors, the same way.
 
 `/fake doctor` shows it too — a machine with no side reads
 `would fire nothing - not in the paper game`.
@@ -430,112 +429,48 @@ named for the setup they were made with.
 
 ---
 
-## 5c. The tower
+## 5c. Blackjack
 
-### Or play it as a coin flip
+The machine is a **shoe**: nine numbered slips, two of each number, one number per
+slot — which is exactly what a nine-slot dispenser holds and what a shoe looks
+like through the glass.
 
-If your machines hold **one white and one black** rather than two of each, you do
-not want tower mode at all — you want the coin flip, with shulker boxes:
+    /fake rig use blackjack
+    (look at the dispenser)
+    /fake dispenser watch
+    H
 
-    /fake rig use tower
-    /fake tower off
+Every machine deals from the same shoe, so there is no side or floor to hand out
+and nothing to get stuck on the wrong dispenser.
 
-That converts the rig in place. The two colours become the two sides, `F` and `R`
-switch which one comes out, and the answer still **stands on the ground** rather
-than being thrown, which is the whole reason the game uses shulker boxes. Your
-machines stay watched and their floors are remembered in case you want the tower
-back. Press `H` on each machine to lay it out as one of each.
+### Rigging it
 
-Placing is its own setting now, on any rig:
+**`F` and `R` walk the numbers.** `F` steps 1 → 2 → … → 9 → chance → 1 again, `R`
+goes the other way. Whatever is named is what the next deal produces; on **chance**
+it draws at random from the shoe.
 
-    /fake dispenser place on      (put the answer down as a block)
-    /fake dispenser place off     (throw it out as an item)
+`[` and `]` do the same thing, so you have a pair of keys that is only ever
+blackjack whatever rig is selected.
 
+By command, if you prefer:
 
+    /fake blackjack next 7      (the next card is a 7)
+    /fake blackjack chance      (back to random)
 
-Five machines, one per floor, each holding **two white and two black shulker
-boxes**. The player calls a colour before each floor and climbs while they are
-right, with the multiplier going up as they go.
+### Changing the shoe
 
-    /fake rig use tower
-    (look at floor 1) /fake dispenser watch
-    ... and so on up to floor 5
+    /fake blackjack numbers 9   (how many different numbers, 1-9)
+    /fake blackjack each 2      (how many of each)
+    /fake blackjack item paper  (what the cards are made of)
 
-Floors are handed out in the order you **watch** them while the tower rig is
-active. If a machine is already watched from another game, watching it again
-joins it to the tower — or just look at it and press `H`, which does the same.
+Lay the machines out again with `H` after changing any of those. The status line
+and the dashboard both show the shoe and what is coming:
 
-Got one wrong? Look at it and run `/fake rig tower floor 3`.
+    Rig 'blackjack', blackjack
+      a shoe of 2x each of 1-9, next card 7
 
-A machine also joins simply **by going off** during a run, up to the five the run
-has. Past that it says so and stays out, so the roulette dropper and the coin
-flip are left alone and keep showing their real contents.
-
-`/fake dispenser status` lists which machine is which floor.
-
-### Playing it
-
-The **call is the only thing you have to enter**. What a floor fires is their own
-answer given back to them, or the other colour when the run ends.
-
-| key | means |
-|---|---|
-| `[` | they called **white** |
-| `]` | they called **black** |
-| `;` | **this next floor ends the run** |
-
-So a normal floor is one keypress: they say white, you press `[`, the machine
-fires white and they climb. When you want the run over, press `;` first and the
-machine fires the other colour instead.
-
-Arming beats everything and is spent by the floor it lands on, so you can end a
-run at any point without changing the setup.
-
-### How long it takes to break
-
-The box a machine puts down breaks on its own clock, with the cracks showing:
-
-    /fake dispenser breaktime 1.5     (seconds; 0 goes back to the block's own hardness)
-
-Default is **1.5 seconds**. Without it a shulker box gives way in about two ticks
-to any decent pickaxe, which is not mining it — it is it vanishing. This applies
-in creative too, since creative is where the instant break comes from.
-
-### The box is placed, not thrown
-
-A dispenser holding shulker boxes **places** them, so a floor's answer stands on
-the ground in front of the machine rather than bouncing out of it. That is on by
-default for the tower.
-
-One box per machine: the next round takes the last one away first, which is what
-clearing the floor between rounds looks like. `/fake dispenser sweep` clears them
-all, and so does `N`.
-
-    /fake dispenser place off    (throw the answer out as an item instead)
-    /fake dispenser place on
-
-Because it is a block rather than an item, it is held back from **directly under
-your feet** and nowhere else — you can stand beside it, look at it from a step
-away, and it stays. Only a block that could hold you up is unsafe; one at your
-own level cannot be stepped onto without jumping, and one that merely blocks the
-way never puts you anywhere the server disagrees with.
-
-### Ending it on a set floor instead
-
-    /fake rig tower ends 4        (every run ends on floor 4)
-    /fake rig tower ends armed    (only when you arm it — the default)
-
-### Other settings
-
-    /fake rig tower floors 5
-    /fake rig tower colours white_shulker_box black_shulker_box
-    /fake rig tower call white     (same as the keys, if you prefer typing)
-    /fake rig tower on | off
-
-`/fake dispenser status` prints the floor of each machine, what they last
-called, and where the run ends.
-
----
+> The tower game has been removed. If you had a tower rig you had already turned
+> into a coin flip, it is untouched — it was not in tower mode any more.
 
 ## 6. Russian roulette
 
@@ -802,7 +737,7 @@ change meaning with the rig, so switching game with `\` switches what they do:
 | `454510` | next item | previous item |
 | `paper` | next winner (Player → Host → chance) | previous winner |
 | `roulette` | arm the loaded shot | cancel the arm |
-| `tower` | they called the first colour | they called the second colour |
+| `blackjack` | next card up | next card down |
 
 `\` says which game you have landed on and what `F` and `R` now mean, in your
 action bar. `/fake keys` prints the lot, and `/fake dispenser status` carries the
@@ -823,12 +758,12 @@ which one you want.
 | `K` | clear every fake out of your inventory |
 | `N` | turn everything off / back on |
 | `B` | open up the fake block you are looking at |
-| `[` / `]` | tower: they called the first / second colour |
+| `[` / `]` | blackjack: next card up / down |
 | `Z` / `X` | paper game: Player wins / Host wins |
 | `M` | paper game: step Player → Host → chance |
 | — | open the menu (unbound by default) |
 
-`;` now has a way back: on roulette and the tower, `R` cancels an arming made by
+`;` now has a way back: on roulette, `R` cancels an arming made by
 accident, which previously could only be spent by letting the machine fire the
 shot it was set up to ruin.
 
@@ -867,7 +802,7 @@ The dashboard now shows everything the text used to, live:
   no longer a dispenser turns red.
 - **what the machines did** — the last dozen fires, with `STOPPED` lines in red
 - **messages** — everything the mod has said lately, newest first
-- the current game's settings: the tower's floors and call, the 45/45/10 spread
+- the current game's settings: the blackjack shoe and next card, the 45/45/10 spread
   with real odds, the paper winner, whether answers are placed and how long they
   take to break
 

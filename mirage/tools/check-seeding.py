@@ -14,7 +14,7 @@ needs = re.search(r"private static boolean needsSeeding\(String name\) \{(.*?)\n
 # every built-in rig must go through needsSeeding, not a bare containsKey
 built_in = re.findall(r'needsSeeding\("(\w+)"\)', seed)
 check("every built-in is seeded",
-      sorted(built_in) == ["454510", "5050", "paper", "roulette", "tower"])
+      sorted(built_in) == ["454510", "5050", "blackjack", "paper", "roulette"])
 check("no bare containsKey left in seeding", 'containsKey("' not in seed)
 check("needsSeeding treats an empty rig as missing", "isEmpty()" in needs)
 

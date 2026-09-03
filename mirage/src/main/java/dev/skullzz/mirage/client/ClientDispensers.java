@@ -266,22 +266,16 @@ public final class ClientDispensers {
     /** Makes the next shot from this rig the loaded one. */
     public static void armNext() {
         RigProfile profile = active();
-        // The same key on either game: the next one is the one that goes badly for them.
-        if (profile.tower) {
-            profile.bustNext = true;
-        } else {
-            profile.armed = true;
-        }
+        profile.armed = true;
     }
 
     public static boolean isArmed() {
         RigProfile profile = active();
-        return profile.tower ? profile.bustNext : profile.armed;
+        return profile.armed;
     }
 
     public static void disarm() {
         RigProfile profile = active();
-        profile.bustNext = false;
         profile.armed = false;
     }
 
@@ -312,42 +306,6 @@ public final class ClientDispensers {
 
         profile.presets.add(spec);
         if (profile.presetIndex() < 0) profile.setPresetIndex(0);
-    }
-
-    /**
-     * Turns the tower back into an ordinary coin flip on the same machines.
-     *
-     * <p>A tower rig carries no presets -- the two colours live in their own fields and the
-     * repair pass clears the preset list, because a run is not a thing you pick between. So
-     * simply switching the mode off left a rig that fired nothing, and the way out was to
-     * know that and retype both colours.
-     *
-     * <p>The colours become the two sides of the flip, and the answer keeps standing on the
-     * ground rather than being thrown, which is the whole reason the game was played with
-     * shulker boxes. Nothing about the machines changes: they stay watched, and their floors
-     * are kept in case the tower is ever wanted back.
-     *
-     * @return the two items it is now a flip between.
-     */
-    public static List<String> towerToFlip() {
-        RigProfile profile = active();
-        profile.tower = false;
-
-        List<String> colours = new ArrayList<>();
-        for (String colour : new String[] { profile.towerA, profile.towerB }) {
-            Item item = SelfFakes.lookupItem(colour);
-            if (item == null) continue;
-
-            addPreset(new FakeSpec(item, 1, ""));
-            colours.add(colour);
-        }
-        // What a machine holding shulker boxes is for.
-        profile.placeOutput = true;
-        if (profile.presetIndex() < 0 && !profile.presets.isEmpty()) profile.setPresetIndex(0);
-
-        // The layout is a floor's worth of boxes until it is laid out as a flip's.
-        refillWatched();
-        return colours;
     }
 
     public static void clearPresets() {
@@ -446,7 +404,6 @@ public final class ClientDispensers {
         // longer in play would keep the next one out of the game.
         for (RigProfile profile : profiles.values()) {
             profile.sides.remove(pos);
-            profile.towerFloors.remove(pos);
         }
         lastTriggered.remove(pos);
         lastPowered.remove(pos);
@@ -525,8 +482,8 @@ public final class ClientDispensers {
                 result = profile.advanceRoulette();
             } else if (profile.paper) {
                 result = paperSlip(profile, fire.pos());
-            } else if (profile.tower) {
-                result = towerBox(profile, fire.pos());
+            } else if (profile.blackjack) {
+                result = card(profile);
             } else {
                 result = profile.resultFor(fire.pos());
             }
@@ -620,39 +577,26 @@ public final class ClientDispensers {
     }
 
     /**
-     * The box a floor fires.
+     * The card a deal produces.
      *
-     * <p>Which colour wins is whatever the player called, so a floor that lets them climb
-     * fires their own call back at them and one that ends the run fires the other. The
-     * machine they are standing at decides the floor rather than a counter, so firing them
-     * out of order or twice cannot walk the run somewhere it never went.
+     * <p>No part to hand out and no machine to blame: a shoe is a shoe wherever it stands,
+     * so every machine in the game deals from the same one.
      */
-    private static FakeSpec towerBox(RigProfile profile, BlockPos pos) {
-        // As with the paper game's sides: a machine going off during a run is the plainest
-        // sign it is part of it, and only as many floors as the run has are ever handed out.
-        int floor = profile.floorAt(pos, watched);
-        if (floor == 0) {
-            warn("All " + profile.floors + " floors are taken, so " + text(pos)
-                    + " is not in the tower.");
-            return null;
-        }
+    private static FakeSpec card(RigProfile profile) {
+        Item slip = SelfFakes.lookupItem(profile.slipItem);
+        if (slip == null) return null;
 
-        String colour = profile.bustsOn(floor)
-                ? profile.otherColour(profile.called())
-                : profile.called();
-
-        Item box = SelfFakes.lookupItem(colour);
-        if (box == null) return null;
-
-        note("floor " + floor + ": called " + profile.called() + ", fired " + colour);
-        return new FakeSpec(box, 1, "");
+        int number = profile.dealCard(random);
+        note("dealt " + number + (profile.nextCard == 0 ? " by chance" : " as named"));
+        // Built to match the laid-out card exactly, so it empties that slot on the way out.
+        return new FakeSpec(slip, 1, "", null, null, String.valueOf(number));
     }
 
-    /** Records what the player just called, so the next floor knows their answer. */
-    public static String call(String colour) {
-        active().call = colour;
+    /** Steps which card the shoe deals next, and says which that is now. */
+    public static int cycleCard(int delta) {
+        int card = active().cycleCard(delta);
         SelfFakes.save();
-        return colour;
+        return card;
     }
 
     /** Steps who the paper game is rigged for, and says who that is now. */
@@ -805,17 +749,15 @@ public final class ClientDispensers {
                 // Each slot needs its own copy: they empty one at a time.
                 if (spec != null) slots.put(slot, spec.withCount(1));
             }
-        } else if (profile.tower) {
-            // Two of each colour, so a machine looks like it could go either way however
-            // many times it has already been played.
-            Item first = SelfFakes.lookupItem(profile.towerA);
-            Item second = SelfFakes.lookupItem(profile.towerB);
-
-            int floor = join ? profile.floorAt(pos, watched) : profile.floorOf(pos);
-            if (floor > 0 && first != null && second != null) {
-                for (int i = 0; i < profile.towerEach; i++) {
-                    slots.put(i, new FakeSpec(first, 1, ""));
-                    slots.put(profile.towerEach + i, new FakeSpec(second, 1, ""));
+        } else if (profile.blackjack) {
+            // A shoe: one number per slot, two of each. That is what nine slots hold, and
+            // what a shoe looks like through the glass.
+            Item slip = SelfFakes.lookupItem(profile.slipItem);
+            if (slip != null) {
+                int count = Math.min(profile.cards, STOCK_SLOTS);
+                for (int slot = 0; slot < count; slot++) {
+                    slots.put(slot, new FakeSpec(slip, profile.cardEach, "", null, null,
+                            String.valueOf(slot + 1)));
                 }
             }
         } else if (profile.paper) {
@@ -908,13 +850,9 @@ public final class ClientDispensers {
             return "The paper game makes slips from '" + profile.slipItem
                     + "', which is not a real item. /fake paper item paper";
         }
-        if (profile.tower) {
-            if (profile.floorOf(pos) == 0) {
-                return "All " + profile.floors + " floors are taken. Look at this machine and"
-                        + " run /fake tower floor <1-" + profile.floors + ">.";
-            }
-            return "The tower's colours are not real items. /fake tower colours"
-                    + " white_shulker_box black_shulker_box";
+        if (profile.blackjack) {
+            return "The shoe is made of '" + profile.slipItem
+                    + "', which is not a real item. /fake blackjack item paper";
         }
         return "Rig '" + profile.name + "' has nothing to put in."
                 + " Add one with /fake preset add <item>.";
@@ -960,7 +898,6 @@ public final class ClientDispensers {
     /** @return how many machines are set up for the active game, or -1 if it has no parts. */
     public static int partsInGame() {
         RigProfile profile = active();
-        if (profile.tower) return profile.floorCount();
         if (profile.paper) return profile.sideNames().size();
         return -1;
     }
@@ -1015,7 +952,7 @@ public final class ClientDispensers {
         }
 
         lines.add("Rig '" + profile.name + "'"
-                + (profile.tower ? ", tower" : "")
+                + (profile.blackjack ? ", blackjack" : "")
                 + (profile.mix ? ", 45/45/10" : "")
                 + (profile.paper ? ", paper" : "")
                 + (profile.roulette ? ", roulette" : "")
@@ -1024,11 +961,10 @@ public final class ClientDispensers {
         // The one pair of keys whose meaning moves with the rig, so the answer to "what
         // does F do right now" is in the same place as everything else about the rig.
         lines.add("  F " + profile.forwardLabel() + ", R " + profile.backLabel());
-        if (profile.tower) {
-            lines.add("  " + profile.floors + " floors, ends on "
-                    + (profile.bustAt > 0 ? "floor " + profile.bustAt : "the armed one")
-                    + (profile.bustNext ? " - ARMED" : "")
-                    + ", they called " + profile.called());
+        if (profile.blackjack) {
+            lines.add("  a shoe of " + profile.cardEach + "x each of 1-" + profile.cards
+                    + ", next card "
+                    + (profile.nextCard == 0 ? "left to chance" : profile.nextCard));
         }
         if (profile.paper) {
             lines.add("  rigged for: "
@@ -1091,10 +1027,6 @@ public final class ClientDispensers {
                     if (profile.paper) {
                         String side = profile.sides.get(pos);
                         line.append(side == null ? ", not in this game" : ", plays " + side);
-                    }
-                    if (profile.tower) {
-                        Integer floor = profile.towerFloors.get(pos);
-                        line.append(floor == null ? ", not in this game" : ", floor " + floor);
                     }
                     FakeSpec fixed = profile.perDispenser.get(pos);
                     if (fixed != null) line.append(", fires ").append(describeSpec(fixed));
@@ -1278,7 +1210,7 @@ public final class ClientDispensers {
             return null;
         }
         // Their machines answer for themselves, one line each, further down.
-        if (profile.paper || profile.tower) return null;
+        if (profile.paper) return null;
 
         if (profile.presets.isEmpty()) return "NO ITEMS  <-- /fake preset add <item>";
         if (profile.selected() == null) return "nothing selected  <-- press F";
@@ -1315,17 +1247,10 @@ public final class ClientDispensers {
                     + (profile.winner.isEmpty() ? "winner left to chance"
                             : "rigged for " + profile.winner);
         }
-        if (profile.tower) {
-            int floor = profile.floorOf(pos);
-            if (floor == 0) {
-                return "NOTHING - not in the tower; all " + profile.floors
-                        + " floors are taken. /fake dispenser parts hands them out again.";
-            }
-
-            boolean busts = profile.bustNext
-                    || (profile.bustAt > 0 && floor == profile.bustAt);
-            return (busts ? profile.otherColour(profile.called()) : profile.called())
-                    + " (floor " + floor + ", they called " + profile.called() + ")";
+        if (profile.blackjack) {
+            return profile.nextCard == 0
+                    ? "any of 1-" + profile.cards + " (left to chance)"
+                    : "a " + profile.nextCard + " (named)";
         }
         return describeSpec(profile.resultFor(pos));
     }
@@ -1735,32 +1660,22 @@ public final class ClientDispensers {
                         + profile.arrowTarget.y + "," + profile.arrowTarget.z);
             }
 
-            // Written for every rig rather than inside the tower's own block. A coin flip
-            // played with shulker boxes wants its answer standing on the ground just as much
-            // as the tower did, and keeping the setting in there meant turning the tower off
-            // silently threw it away.
+            // Written for every rig. A coin flip played with shulker boxes wants its answer
+            // standing on the ground as much as anything else does, and the setting once
+            // lived inside one game's own block, which threw it away with that game.
             json.addProperty("place", profile.placeOutput);
             json.addProperty("breakSeconds", profile.breakSeconds);
 
             // Written whether it is on or off. Writing it only when on made a rig that
             // had been turned off look identical to one that had never heard of the game,
             // and there is no way to tell those apart on the way back in.
-            if (profile.tower) {
-                JsonObject tower = new JsonObject();
-                tower.addProperty("floors", profile.floors);
-                tower.addProperty("a", profile.towerA);
-                tower.addProperty("b", profile.towerB);
-                tower.addProperty("each", profile.towerEach);
-                tower.addProperty("bustAt", profile.bustAt);
-                tower.addProperty("call", profile.call);
-                tower.addProperty("place", profile.placeOutput);
-
-                JsonObject floors = new JsonObject();
-                for (Map.Entry<BlockPos, Integer> entry : profile.towerFloors.entrySet()) {
-                    floors.addProperty(writePos(entry.getKey()), entry.getValue());
-                }
-                tower.add("at", floors);
-                json.add("tower", tower);
+            if (profile.blackjack) {
+                JsonObject cards = new JsonObject();
+                cards.addProperty("cards", profile.cards);
+                cards.addProperty("each", profile.cardEach);
+                cards.addProperty("next", profile.nextCard);
+                cards.addProperty("item", profile.slipItem);
+                json.add("blackjack", cards);
             }
 
             if (profile.paper || profile.name.equals("paper")) {
@@ -1882,9 +1797,9 @@ public final class ClientDispensers {
         }
         if (json.has("arrowTarget")) profile.arrowTarget = readVec(json.get("arrowTarget").getAsString());
 
-        // After the tower block below would be wrong -- this has to lose to nothing, and an
-        // older file carries the setting only in there. Read here, overwritten there only
-        // when the file predates this line.
+        // A rig written before this existed carried the setting inside a game block that is
+        // no longer read, so it comes back with placing off and one command away from having
+        // it again.
         if (json.has("place")) profile.placeOutput = json.get("place").getAsBoolean();
         if (json.has("breakSeconds")) {
             profile.breakSeconds = json.get("breakSeconds").getAsDouble();
@@ -1905,30 +1820,14 @@ public final class ClientDispensers {
             }
         }
 
-        if (json.has("tower")) {
-            JsonObject tower = json.getAsJsonObject("tower");
-            profile.tower = true;
-            if (tower.has("floors")) profile.floors = tower.get("floors").getAsInt();
-            if (tower.has("a")) profile.towerA = tower.get("a").getAsString();
-            if (tower.has("b")) profile.towerB = tower.get("b").getAsString();
-            if (tower.has("each")) profile.towerEach = tower.get("each").getAsInt();
-            if (tower.has("bustAt")) profile.bustAt = tower.get("bustAt").getAsInt();
-            if (tower.has("call")) profile.call = tower.get("call").getAsString();
-            // Older files predate the top-level setting and carry it only here, so this
-            // fills in for them. A file new enough to have written both agrees with itself.
-            if (!json.has("place")) {
-                profile.placeOutput = !tower.has("place") || tower.get("place").getAsBoolean();
-            }
-
-            if (tower.has("at")) {
-                for (Map.Entry<String, JsonElement> entry
-                        : tower.getAsJsonObject("at").entrySet()) {
-                    BlockPos pos = readPos(entry.getKey());
-                    if (pos != null) {
-                        profile.towerFloors.put(pos, entry.getValue().getAsInt());
-                    }
-                }
-            }
+        if (json.has("blackjack")) {
+            JsonObject cards = json.getAsJsonObject("blackjack");
+            profile.blackjack = true;
+            if (cards.has("cards")) profile.cards = cards.get("cards").getAsInt();
+            if (cards.has("each")) profile.cardEach = cards.get("each").getAsInt();
+            if (cards.has("next")) profile.nextCard = cards.get("next").getAsInt();
+            if (cards.has("item")) profile.slipItem = cards.get("item").getAsString();
+            profile.tidyCards();
         }
 
         if (json.has("paper")) {
@@ -2027,13 +1926,14 @@ public final class ClientDispensers {
             RigProfile paper = profiles.get("paper");
             if (!paper.roulette && !paperKnown) paper.paper = true;
         }
-        if (needsSeeding("tower")) {
-            // Five machines, two of each colour in every one, and the run ending wherever
-            // it is armed rather than on a floor picked in advance.
-            RigProfile tower = new RigProfile("tower");
-            tower.tower = true;
-            tower.placeOutput = true;
-            profiles.put(tower.name, tower);
+        if (needsSeeding("blackjack")) {
+            // A shoe of numbered slips: two of every number, one number per slot, which is
+            // exactly what a nine-slot machine holds. What comes out is named or left to
+            // chance, and the result keys walk the numbers.
+            RigProfile cards = new RigProfile("blackjack");
+            cards.blackjack = true;
+            cards.tidyCards();
+            profiles.put(cards.name, cards);
         }
         if (needsSeeding("454510")) {
             // 45/45/10: four diamonds, four emeralds and one crystal in the one machine.
@@ -2103,10 +2003,9 @@ public final class ClientDispensers {
         // A rig named for a game, carrying no mode and no presets, can fire nothing at all:
         // the mode branch is skipped and the cycled branch it falls to has nothing to cycle.
         // Nobody sets that up on purpose, so it is put back -- the same repair the paper rig
-        // has always had. A rig with presets has been given another job (the tower turned
-        // into a coin flip, say) and is left exactly as it is.
+        // has always had. A rig with presets has been given another job and is left as it is.
         if (profile.name.equals("roulette") && !profile.roulette && !profile.paper
-                && !profile.tower && !profile.mix && profile.presets.isEmpty()) {
+                && !profile.blackjack && !profile.mix && profile.presets.isEmpty()) {
             profile.roulette = true;
             profile.manualTrigger = true;
             profile.chambers = 9;
@@ -2126,19 +2025,10 @@ public final class ClientDispensers {
             profile.tidyRoulette();
         }
 
-        if (profile.tower) {
-            profile.floors = Math.max(1, Math.min(profile.floors, STOCK_SLOTS));
-            profile.towerEach = Math.max(1, Math.min(profile.towerEach, STOCK_SLOTS / 2));
-            if (profile.bustAt > profile.floors) profile.bustAt = 0;
-
-            if (SelfFakes.lookupItem(profile.towerA) == null) {
-                profile.towerA = "white_shulker_box";
-            }
-            if (SelfFakes.lookupItem(profile.towerB) == null) {
-                profile.towerB = "black_shulker_box";
-            }
-            // A floor held by a machine that is gone keeps the next one out of the run.
-            profile.pruneFloors(watched);
+        if (profile.blackjack) {
+            if (SelfFakes.lookupItem(profile.slipItem) == null) profile.slipItem = "paper";
+            profile.tidyCards();
+            // The numbers are the game; anything in the preset list belongs to another one.
             profile.presets.clear();
             profile.setPresetIndex(-1);
         }

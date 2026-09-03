@@ -228,8 +228,8 @@ public class MirageClient implements ClientModInitializer {
             while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
-            while (callFirst.wasPressed()) takeCall(client, true);
-            while (callSecond.wasPressed()) takeCall(client, false);
+            while (callFirst.wasPressed()) stepCard(client, 1);
+            while (callSecond.wasPressed()) stepCard(client, -1);
             while (cycleWinner.wasPressed()) stepWinner(client, 1);
             while (winFirst.wasPressed()) setWinner(client, 0);
             while (winSecond.wasPressed()) setWinner(client, 1);
@@ -311,9 +311,9 @@ public class MirageClient implements ClientModInitializer {
         cutBlock = bind("cut_block", GLFW.GLFW_KEY_B, category,
                 "Open a hole in the build you are looking at");
         callFirst = bind("call_first", GLFW.GLFW_KEY_LEFT_BRACKET, category,
-                "Tower: they called the first colour");
+                "Blackjack: next card up");
         callSecond = bind("call_second", GLFW.GLFW_KEY_RIGHT_BRACKET, category,
-                "Tower: they called the second colour");
+                "Blackjack: next card down");
         cycleRig = bind("cycle_rig", GLFW.GLFW_KEY_BACKSLASH, category,
                 "Next rig");
         // Unbound by default: the menu has a command, and an accidental clash is worse.
@@ -424,15 +424,11 @@ public class MirageClient implements ClientModInitializer {
         json.append(",\"answer\":\"")
                 .append(WebDashboard.escape(missing == null ? "yes" : missing)).append('"');
 
-        json.append(",\"tower\":{\"on\":").append(shown.tower);
-        if (shown.tower) {
-            json.append(",\"floors\":").append(shown.floors)
-                    .append(",\"bustAt\":").append(shown.bustAt)
-                    .append(",\"armed\":").append(shown.bustNext)
-                    .append(",\"called\":\"").append(WebDashboard.escape(shown.called()))
-                    .append("\",\"a\":\"").append(WebDashboard.escape(shown.towerA))
-                    .append("\",\"b\":\"").append(WebDashboard.escape(shown.towerB))
-                    .append('"');
+        json.append(",\"blackjack\":{\"on\":").append(shown.blackjack);
+        if (shown.blackjack) {
+            json.append(",\"cards\":").append(shown.cards)
+                    .append(",\"each\":").append(shown.cardEach)
+                    .append(",\"next\":").append(shown.nextCard);
         }
         json.append("},\"mix\":{\"on\":").append(shown.mix);
         if (shown.mix) {
@@ -513,7 +509,7 @@ public class MirageClient implements ClientModInitializer {
      * What the two result keys do, decided by the game that is on.
      *
      * <p>Every game is rigged by the same pair of keys. Which pair that is used to depend on
-     * the game -- one for the coin flip, another for the paper game, another for the tower --
+     * the game -- one for the coin flip, another for the paper game, another again --
      * which meant knowing the game, remembering its keys, and getting it wrong under a table
      * with somebody watching. Now the keys stay put and their meaning follows the rig, so
      * switching game with the rig key switches what they do with it.
@@ -523,8 +519,8 @@ public class MirageClient implements ClientModInitializer {
      */
     private static void rigResult(MinecraftClient client, int delta) {
         switch (ClientDispensers.active().keys()) {
-            case TOWER:
-                takeCall(client, delta > 0);
+            case BLACKJACK:
+                stepCard(client, delta);
                 break;
             case PAPER:
                 stepWinner(client, delta);
@@ -624,7 +620,7 @@ public class MirageClient implements ClientModInitializer {
         text.append("  ;  arm the next shot     K  clear your fakes\n");
         text.append("  N  everything off / on   B  open up a fake block\n");
         text.append("  Z / X  paper: Player / Host wins    M  paper: step winner\n");
-        text.append("  [ / ]  tower: they called the first / second colour");
+        text.append("  [ / ]  blackjack: next card up / down");
         return feedback(context, text.toString());
     }
 
@@ -660,7 +656,7 @@ public class MirageClient implements ClientModInitializer {
         // A key that can do nothing has to say so. This one used to return in silence, and
         // a rig with nothing to cycle looks exactly like a key that is not bound.
         if (spec == null) {
-            say(client, profile.roulette || profile.paper || profile.tower
+            say(client, profile.roulette || profile.paper || profile.blackjack
                     ? "Rig '" + profile.name + "' does not pick its result this way."
                     : "Rig '" + profile.name + "' has no items to cycle. "
                             + "Add one with /fake rig add <item>.");
@@ -1066,7 +1062,7 @@ public class MirageClient implements ClientModInitializer {
                     return feedback(context, "Chamber count back to zero.");
                 }))
                 .then(paperBranch())
-                .then(towerBranch())
+                .then(blackjackBranch())
                 .then(rouletteBranch())
                 // The fix for parts stuck on machines that are not in the game any more.
                 .then(ClientCommandManager.literal("parts").executes(context -> {
@@ -1120,100 +1116,68 @@ public class MirageClient implements ClientModInitializer {
                                                         IntegerArgumentType.getInteger(context, "count")))))));
     }
 
-    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> towerBranch() {
-        return ClientCommandManager.literal("tower")
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> blackjackBranch() {
+        return ClientCommandManager.literal("blackjack")
                 .then(ClientCommandManager.literal("on").executes(context -> {
-                    ClientDispensers.active().tower = true;
+                    RigProfile profile = ClientDispensers.active();
+                    profile.blackjack = true;
+                    profile.tidyCards();
                     SelfFakes.save();
-                    return feedback(context, "Tower on. Watch the machines in floor order, "
-                            + "then /fake dispenser fill each one.");
+                    return feedback(context, "Blackjack on. Press H on each machine to lay a"
+                            + " shoe out, then F and R name the card that comes next.");
                 }))
                 .then(ClientCommandManager.literal("off").executes(context -> {
-                    List<String> colours = ClientDispensers.towerToFlip();
+                    ClientDispensers.active().blackjack = false;
                     SelfFakes.save();
-
-                    return colours.size() < 2
-                            ? feedback(context, "Tower off. Its colours are not real items, so"
-                                    + " add two with /fake preset add <item>.")
-                            : feedback(context, "Tower off. Rig '"
-                                    + ClientDispensers.activeName() + "' is now a coin flip"
-                                    + " between " + colours.get(0) + " and " + colours.get(1)
-                                    + ". F and R switch which one comes out, and it still"
-                                    + " stands on the ground rather than being thrown."
-                                    + " Press H on each machine to lay it out.");
+                    return feedback(context, "Blackjack off for this rig.");
                 }))
-                .then(ClientCommandManager.literal("floors")
-                        .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 9))
+                .then(ClientCommandManager.literal("chance").executes(context -> {
+                    ClientDispensers.active().nextCard = 0;
+                    SelfFakes.save();
+                    return feedback(context, "The next card is left to chance.");
+                }))
+                .then(ClientCommandManager.literal("next")
+                        .then(ClientCommandManager.argument("card",
+                                        IntegerArgumentType.integer(1, 9))
                                 .executes(context -> {
                                     RigProfile profile = ClientDispensers.active();
-                                    profile.floors = IntegerArgumentType.getInteger(context, "count");
-                                    if (profile.bustAt > profile.floors) profile.bustAt = 0;
+                                    profile.nextCard = IntegerArgumentType.getInteger(context, "card");
+                                    profile.tidyCards();
                                     SelfFakes.save();
-                                    return feedback(context, "A run is " + profile.floors
-                                            + " floors.");
+                                    return feedback(context, "The next card dealt is a "
+                                            + profile.nextCard + ".");
                                 })))
-                .then(ClientCommandManager.literal("floor")
-                        .then(ClientCommandManager.argument("number", IntegerArgumentType.integer(1, 9))
-                                .executes(MirageClient::setTowerFloor)))
-                .then(ClientCommandManager.literal("colours")
-                        .then(ClientCommandManager.argument("first", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("second", StringArgumentType.word())
-                                        .executes(MirageClient::setTowerColours))))
-                .then(ClientCommandManager.literal("call")
-                        .then(ClientCommandManager.argument("colour", StringArgumentType.word())
+                .then(ClientCommandManager.literal("numbers")
+                        .then(ClientCommandManager.argument("count",
+                                        IntegerArgumentType.integer(1, 9))
                                 .executes(context -> {
                                     RigProfile profile = ClientDispensers.active();
-                                    String colour = StringArgumentType
-                                            .getString(context, "colour").toLowerCase(Locale.ROOT);
-                                    String full = colour.contains("_") ? colour
-                                            : colour + "_shulker_box";
-                                    ClientDispensers.call(full);
-                                    return feedback(context, "They called " + full + ". Floors "
-                                            + "fire that back until the run is ended.");
-                                })))
-                .then(ClientCommandManager.literal("ends")
-                        .then(ClientCommandManager.literal("armed").executes(context -> {
-                            ClientDispensers.active().bustAt = 0;
-                            SelfFakes.save();
-                            return feedback(context, "A run ends only when you arm it.");
-                        }))
-                        .then(ClientCommandManager.argument("floor", IntegerArgumentType.integer(1, 9))
-                                .executes(context -> {
-                                    RigProfile profile = ClientDispensers.active();
-                                    profile.bustAt = IntegerArgumentType.getInteger(context, "floor");
+                                    profile.cards = IntegerArgumentType.getInteger(context, "count");
+                                    profile.tidyCards();
                                     SelfFakes.save();
-                                    return feedback(context, "Every run ends on floor "
-                                            + profile.bustAt + ".");
+                                    return feedback(context, "The shoe runs 1-" + profile.cards
+                                            + ". Lay the machines out again with H.");
+                                })))
+                .then(ClientCommandManager.literal("each")
+                        .then(ClientCommandManager.argument("count",
+                                        IntegerArgumentType.integer(1, 64))
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.cardEach = IntegerArgumentType.getInteger(context, "count");
+                                    profile.tidyCards();
+                                    SelfFakes.save();
+                                    return feedback(context, profile.cardEach
+                                            + " of each number. Lay the machines out again.");
+                                })))
+                .then(ClientCommandManager.literal("item")
+                        .then(ClientCommandManager.argument("item", StringArgumentType.word())
+                                .executes(context -> {
+                                    RigProfile profile = ClientDispensers.active();
+                                    profile.slipItem = StringArgumentType.getString(context, "item");
+                                    SelfFakes.save();
+                                    return feedback(context, "Cards are now "
+                                            + profile.slipItem + ". Fill the machines again.");
                                 })));
-    }
-
-    private static int setTowerFloor(CommandContext<FabricClientCommandSource> context) {
-        BlockHitResult hit = lookedAt(64.0);
-        if (hit == null) return error(context, "Look at the machine you are numbering.");
-
-        RigProfile profile = ClientDispensers.active();
-        int floor = IntegerArgumentType.getInteger(context, "number");
-        profile.setFloor(hit.getBlockPos(), floor);
-
-        ClientDispensers.fill(hit.getBlockPos());
-        SelfFakes.save();
-        return feedback(context, "That machine is floor " + floor + ".");
-    }
-
-    private static int setTowerColours(CommandContext<FabricClientCommandSource> context) {
-        RigProfile profile = ClientDispensers.active();
-        profile.towerA = StringArgumentType.getString(context, "first");
-        profile.towerB = StringArgumentType.getString(context, "second");
-
-        if (SelfFakes.lookupItem(profile.towerA) == null
-                || SelfFakes.lookupItem(profile.towerB) == null) {
-            return error(context, "One of those is not an item.");
-        }
-
-        ClientDispensers.refillWatched();
-        SelfFakes.save();
-        return feedback(context, "Floors now hold " + profile.towerA + " and "
-                + profile.towerB + ".");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> paperBranch() {
@@ -1688,14 +1652,6 @@ public class MirageClient implements ClientModInitializer {
         ClientDispensers.setOpenDispenser(hit.getBlockPos());
     }
 
-    /**
-     * Says when a game has been switched to that no machine is set up for.
-     *
-     * <p>The tower and the paper game are played on particular machines rather than on
-     * whatever happens to be watched, so switching to one with none of them chosen leaves
-     * every dispenser doing nothing. That is worth a line, even from a key meant to be
-     * quiet, because the alternative is finding out mid-game.
-     */
     /** @return whether it had something to say, so nothing else writes over it. */
     private static boolean nagIfUnset(MinecraftClient client) {
         if (ClientDispensers.partsInGame() != 0) return false;
@@ -1711,18 +1667,18 @@ public class MirageClient implements ClientModInitializer {
      * <p>Silent like the other switches. The call is the whole input this game needs: what a
      * floor fires is their own answer, or the other colour when the run is ended.
      */
-    private static void takeCall(MinecraftClient client, boolean first) {
+    private static void stepCard(MinecraftClient client, int delta) {
         RigProfile profile = ClientDispensers.active();
-        if (!profile.tower) {
-            say(client, "Rig '" + profile.name + "' is not the tower.");
+        if (!profile.blackjack) {
+            say(client, "Rig '" + profile.name + "' is not blackjack.");
             return;
         }
 
-        String colour = ClientDispensers.call(first ? profile.towerA : profile.towerB);
+        int card = ClientDispensers.cycleCard(delta);
         if (!SelfFakes.announceSwitching() || client.player == null) return;
 
-        client.player.sendMessage(Text.literal("called " + colour)
-                .formatted(Formatting.GRAY), true);
+        client.player.sendMessage(Text.literal(card == 0 ? "next card: chance"
+                        : "next card: " + card).formatted(Formatting.GRAY), true);
     }
 
     /** Opens up the one block being looked at, for punching holes as you go. */

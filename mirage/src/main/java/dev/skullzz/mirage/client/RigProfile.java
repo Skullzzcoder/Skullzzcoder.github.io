@@ -67,53 +67,19 @@ public final class RigProfile {
     public long roundTick = Long.MIN_VALUE;
 
     /**
-     * Tower mode: a row of machines, one per floor, each holding two of each colour.
+     * Blackjack mode: the machine is a shoe of numbered slips and fires one card at a time.
      *
-     * <p>The player calls a colour before each floor and climbs while they are right, so
-     * what a machine should fire is not a fixed answer but the answer to their call: the
-     * colour they said to let them through, the other one to end the run.
+     * <p>Two of every number, one number per slot, which is what a nine-slot dispenser holds
+     * and what a shoe looks like through the glass. The rigging is which card comes out
+     * next: named, or left to chance, and the result keys walk the numbers.
      */
-    public boolean tower;
-    /** How many machines make a run. */
-    public int floors = 5;
-    /** Which floor of the tower each machine is, in the order they were watched. */
-    public final Map<BlockPos, Integer> towerFloors = new LinkedHashMap<>();
-    /** The two colours in play. */
-    public String towerA = "white_shulker_box";
-    public String towerB = "black_shulker_box";
-    /** How many of each colour a machine appears to hold. */
-    public int towerEach = 2;
-    /** What the player just called, so the machine knows which answer is theirs. */
-    public String call = "";
-    /** The floor a run always ends on, or zero to leave it to the arm key. */
-    public int bustAt;
-    /** Set by arming: the next floor to fire ends the run, whatever floor it is. */
-    public boolean bustNext;
-    /**
-     * Whether a machine puts its answer down as a block rather than throwing it out.
-     *
-     * <p>A dispenser holding shulker boxes places them, so a game played with them shows its
-     * answer standing on the ground rather than bouncing across it. On by default for the
-     * tower, since that is the game it belongs to.
-     */
-    public boolean placeOutput;
-
-    /**
-     * Mix mode: one machine holding a fixed spread of items, one of which comes out.
-     *
-     * <p>45/45/10 is the game it was written for -- four diamonds, four emeralds and one
-     * crystal in the nine slots, the player calling which they will get. The rigging is the
-     * plainest of all of them: the answer is simply whichever item is selected, so the
-     * result key already cycles it. What the mode adds is the shape of the machine. The
-     * ordinary layout puts one of each item in, which is right for a coin flip and wrong
-     * here: the whole game is the odds you can see through the glass, and three items in a
-     * nine-slot box are not odds at all.
-     */
-    public boolean mix;
-    /** How many of each item the machine holds. Runs alongside the presets. */
-    public final List<Integer> mixCounts = new ArrayList<>();
-    /** What each item pays, for the sake of saying so when it is picked. */
-    public final List<Integer> mixPayouts = new ArrayList<>();
+    public boolean blackjack;
+    /** How many different numbers are in the shoe. */
+    public int cards = 9;
+    /** How many of each number it holds. */
+    public int cardEach = 2;
+    /** The card the next deal produces, or zero to leave it to chance. */
+    public int nextCard;
 
     /**
      * How long a block a machine put down takes to break, in seconds. Zero is vanilla speed.
@@ -166,12 +132,12 @@ public final class RigProfile {
      * of the three that need it -- the keys themselves, what they are labelled, and what the
      * status line says -- is the only way the label and the key can be trusted to agree.
      */
-    public enum Keys { TOWER, PAPER, ROULETTE, CYCLED }
+    public enum Keys { BLACKJACK, PAPER, ROULETTE, CYCLED }
 
     public Keys keys() {
         // Ordered, because a rig may carry more than one mode flag: an older file can hold
         // a paper rig that was once a roulette one. First match wins, everywhere.
-        if (this.tower) return Keys.TOWER;
+        if (this.blackjack) return Keys.BLACKJACK;
         if (this.paper) return Keys.PAPER;
         if (this.roulette) return Keys.ROULETTE;
         return Keys.CYCLED;
@@ -180,7 +146,7 @@ public final class RigProfile {
     /** What game this is, in a word, for saying which one you have just switched to. */
     public String mode() {
         switch (keys()) {
-            case TOWER: return "tower";
+            case BLACKJACK: return "blackjack";
             case PAPER: return "paper game";
             case ROULETTE: return "roulette";
             default: return this.mix ? "45/45/10" : "cycled";
@@ -190,7 +156,7 @@ public final class RigProfile {
     /** What the forward result key does right now. */
     public String forwardLabel() {
         switch (keys()) {
-            case TOWER: return "they called " + this.towerA;
+            case BLACKJACK: return "next card up";
             case PAPER: return "next winner";
             case ROULETTE: return "arm the loaded shot";
             default: return "next item";
@@ -200,7 +166,7 @@ public final class RigProfile {
     /** What the back result key does right now. */
     public String backLabel() {
         switch (keys()) {
-            case TOWER: return "they called " + this.towerB;
+            case BLACKJACK: return "next card down";
             case PAPER: return "previous winner";
             case ROULETTE: return "cancel the arm";
             default: return "previous item";
@@ -319,78 +285,41 @@ public final class RigProfile {
         return total <= 0 ? 0 : Math.round(mixCount(index) * 100.0F / total);
     }
 
-    // ------------------------------------------------------------------- tower
+    // --------------------------------------------------------------- blackjack
 
-    /**
-     * Which floor a machine is, giving it the next one if it has none.
-     *
-     * <p>Floors go out in the order the machines are watched, and only as many as the run
-     * has. Watched dispensers are shared by every rig, so anything past the last floor is
-     * one of the other games' and is left out rather than made into a sixth floor.
-     *
-     * @return the floor, or zero for a machine that is not in this game.
-     */
-    public int floorAt(BlockPos pos, Set<BlockPos> live) {
-        int known = floorOf(pos);
-        if (known > 0) return known;
-
-        Set<Integer> taken = new LinkedHashSet<>();
-        for (Map.Entry<BlockPos, Integer> entry : this.towerFloors.entrySet()) {
-            if (live.contains(entry.getKey())) taken.add(entry.getValue());
-        }
-
-        for (int candidate = 1; candidate <= this.floors; candidate++) {
-            if (taken.contains(candidate)) continue;
-            this.towerFloors.put(pos.toImmutable(), candidate);
-            return candidate;
-        }
-        return 0;
-    }
-
-    /** The floor a machine already has, without handing it one. */
-    public int floorOf(BlockPos pos) {
-        Integer floor = this.towerFloors.get(pos);
-        return floor == null ? 0 : floor;
-    }
-
-    /** How many machines are in this run. */
-    public int floorCount() {
-        return this.towerFloors.size();
-    }
-
-    /** Gives a machine a floor, taking it off whoever had it. As with the paper sides. */
-    public void setFloor(BlockPos pos, int floor) {
-        this.towerFloors.values().removeIf(held -> held == floor);
-        this.towerFloors.put(pos.toImmutable(), floor);
-    }
-
-    /** Forgets floors belonging to machines that are no longer watched. */
-    public void pruneFloors(Set<BlockPos> live) {
-        this.towerFloors.keySet().retainAll(live);
-    }
-
-    /** The colour that is not the one named, so a wrong call has something to be. */
-    public String otherColour(String colour) {
-        return colour.equalsIgnoreCase(this.towerA) ? this.towerB : this.towerA;
-    }
-
-    /** What the player called, falling back to the first colour if they said nothing. */
-    public String called() {
-        return this.call.isEmpty() ? this.towerA : this.call;
+    /** Keeps the shoe's shape sane after an edit. */
+    public void tidyCards() {
+        this.cards = Math.max(1, Math.min(this.cards, 9));
+        this.cardEach = Math.max(1, Math.min(this.cardEach, 64));
+        if (this.nextCard > this.cards) this.nextCard = 0;
+        if (this.nextCard < 0) this.nextCard = 0;
     }
 
     /**
-     * Whether the run ends on a floor.
+     * The card a deal produces.
      *
-     * <p>Arming beats the counted floor and is spent by the floor it lands on, so a run can
-     * be ended by hand at any point without disturbing where it was set to end.
+     * <p>Left to chance when nothing is named, because a shoe that always gives the same
+     * card is only wanted for the hand you mean to decide.
      */
-    public boolean bustsOn(int floor) {
-        if (this.bustNext) {
-            this.bustNext = false;
-            return true;
-        }
-        return this.bustAt > 0 && floor == this.bustAt;
+    public int dealCard(Random random) {
+        if (this.nextCard >= 1 && this.nextCard <= this.cards) return this.nextCard;
+        return 1 + random.nextInt(Math.max(1, this.cards));
+    }
+
+    /**
+     * Steps which card is coming, through the numbers and then through chance.
+     *
+     * <p>Chance sits one past the last number, so stepping back off the first lands there
+     * rather than falling off the end.
+     */
+    public int cycleCard(int delta) {
+        int ring = this.cards + 1;
+        // Chance is stored as zero and walked as the last position on the ring.
+        int index = this.nextCard == 0 ? this.cards : this.nextCard - 1;
+
+        index = Math.floorMod(index + delta, ring);
+        this.nextCard = index >= this.cards ? 0 : index + 1;
+        return this.nextCard;
     }
 
     // ------------------------------------------------------------------- paper
@@ -432,7 +361,7 @@ public final class RigProfile {
     /**
      * Forgets which machine plays what, so the parts are handed out again.
      *
-     * <p>Sides and floors go to whichever machines get there first and then stay put, which
+     * <p>Sides go to whichever machines get there first and then stay put, which
      * is right while a game is being played and wrong for ever afterwards: a dispenser that
      * took a side months ago, for another game entirely, holds it against the machine that
      * needs it now, and nothing short of unwatching it lets go.
@@ -440,9 +369,8 @@ public final class RigProfile {
      * @return how many assignments were dropped.
      */
     public int clearParts() {
-        int held = this.sides.size() + this.towerFloors.size();
+        int held = this.sides.size();
         this.sides.clear();
-        this.towerFloors.clear();
         return held;
     }
 
@@ -579,7 +507,7 @@ public final class RigProfile {
 
     public boolean isEmpty() {
         return this.presets.isEmpty() && this.perDispenser.isEmpty()
-                && this.arrowTarget == null && !this.roulette && !this.paper && !this.tower
+                && this.arrowTarget == null && !this.roulette && !this.paper && !this.blackjack
                 && !this.mix && this.stock.isEmpty();
     }
 }

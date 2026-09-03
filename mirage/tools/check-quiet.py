@@ -57,7 +57,7 @@ for field, probe in (("which game is on", "shown.mode()"),
                      ("what each holds", "ClientDispensers.describeStock(pos)"),
                      ("the fire log", "ClientDispensers.fireLog()"),
                      ("the messages", "ClientDispensers.notices()"),
-                     ("the tower's settings", 'shown.tower'),
+                     ("the blackjack shoe", "shown.blackjack"),
                      ("the mix spread", "shown.mixChance(i)"),
                      ("whether quiet is on", "SelfFakes.quiet()")):
     check("the dashboard publishes %s" % field, probe in pub)

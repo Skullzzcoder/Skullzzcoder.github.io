@@ -47,11 +47,11 @@ check("a repeat is still held back", "tick - lastWarn < WARN_GAP_TICKS" in warn)
 # "Is it rigged right" and "does anything come out" were the same question asked twice.
 preview = body(disp, "public static String preview(BlockPos pos) {")
 check("the preview covers every game",
-      all(m in preview for m in ("profile.roulette", "profile.paper", "profile.tower")))
+      all(m in preview for m in ("profile.roulette", "profile.paper", "profile.blackjack")))
 check("and falls back to the cycled answer", "profile.resultFor(pos)" in preview)
 # It must not spend anything: advancing a chamber to find out what it would fire is the
 # one thing that would make asking change the answer.
-for spender in ("advanceRoulette", "bustsOn", "startRound", "sideAt(", "floorAt("):
+for spender in ("advanceRoulette", "dealCard", "startRound", "sideAt("):
     check("the preview does not spend %s" % spender, spender not in preview)
 
 # ------------------------------------------------------------------- the doctor

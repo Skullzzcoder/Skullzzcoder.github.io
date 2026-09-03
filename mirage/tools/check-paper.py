@@ -256,15 +256,13 @@ set_side = re.search(r"public void setSide\(BlockPos pos, String side\) \{(.*?)\
                      rig, re.S).group(1)
 check("naming a side takes it off whoever had it",
       "this.sides.values().removeIf(" in set_side and "equalsIgnoreCase(side)" in set_side)
-set_floor = re.search(r"public void setFloor\(BlockPos pos, int floor\) \{(.*?)\n    \}",
-                      rig, re.S).group(1)
-check("and so does naming a floor", "this.towerFloors.values().removeIf(" in set_floor)
+
 
 # Parts stick to whichever machine got there first, for ever. There has to be a way to let
 # go without unwatching the machine.
 parts = re.search(r"public int clearParts\(\) \{(.*?)\n    \}", rig, re.S).group(1)
 check("parts can be handed out again",
-      "this.sides.clear();" in parts and "this.towerFloors.clear();" in parts)
+      "this.sides.clear();" in parts)
 check("and there is a command for it", 'literal("parts")' in mc and "clearParts()" in mc)
 check("which lays the machines out again", "ClientDispensers.refillWatched();" in mc)
 

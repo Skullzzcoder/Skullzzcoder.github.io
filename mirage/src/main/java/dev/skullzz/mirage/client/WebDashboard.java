@@ -576,10 +576,9 @@ public final class WebDashboard {
               const bits = [];
               if (s.place) bits.push('answers are placed as blocks, breaking in '
                 + (s.breakSeconds || 0) + 's');
-              if (s.tower && s.tower.on) {
-                bits.push(s.tower.floors + ' floors, they called ' + s.tower.called
-                  + (s.tower.armed ? ', ARMED' : s.tower.bustAt
-                    ? ', ends on floor ' + s.tower.bustAt : ''));
+              if (s.blackjack && s.blackjack.on) {
+                bits.push('a shoe of ' + s.blackjack.each + 'x each of 1-' + s.blackjack.cards
+                  + ', next card ' + (s.blackjack.next ? s.blackjack.next : 'left to chance'));
               }
               if (s.mix && s.mix.on) {
                 bits.push((s.mix.items || []).map(i =>
