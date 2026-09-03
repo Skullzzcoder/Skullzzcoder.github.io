@@ -66,6 +66,7 @@ public class MirageClient implements ClientModInitializer {
         registerKeys();
 
         FakeLore.load();
+        MapArt.load();
         SelfFakes.load();
         FakeBlocks.load();
 
@@ -109,6 +110,34 @@ public class MirageClient implements ClientModInitializer {
                         // default -- including the one that says which of three items
                         // 45/45/10 is currently rigged to.
                         .then(ClientCommandManager.literal("map")
+                                .then(ClientCommandManager.literal("list")
+                                        .executes(MirageClient::listDesigns))
+                                .then(ClientCommandManager.literal("copy")
+                                        .then(ClientCommandManager.argument("from",
+                                                        IntegerArgumentType.integer(0, 1000000))
+                                                .then(ClientCommandManager.argument("to",
+                                                                IntegerArgumentType.integer(0, 1000000))
+                                                        .executes(MirageClient::copyMap))))
+                                .then(ClientCommandManager.literal("save")
+                                        .then(ClientCommandManager.argument("id",
+                                                        IntegerArgumentType.integer(0, 1000000))
+                                                .then(ClientCommandManager.argument("name",
+                                                                StringArgumentType.word())
+                                                        .executes(MirageClient::saveDesign))))
+                                .then(ClientCommandManager.literal("load")
+                                        .then(ClientCommandManager.argument("name",
+                                                        StringArgumentType.word())
+                                                .suggests((context, builder) ->
+                                                        CommandSource.suggestMatching(MapArt.names(), builder))
+                                                .then(ClientCommandManager.argument("id",
+                                                                IntegerArgumentType.integer(0, 1000000))
+                                                        .executes(MirageClient::loadDesign))))
+                                .then(ClientCommandManager.literal("forget")
+                                        .then(ClientCommandManager.argument("name",
+                                                        StringArgumentType.word())
+                                                .suggests((context, builder) ->
+                                                        CommandSource.suggestMatching(MapArt.names(), builder))
+                                                .executes(MirageClient::forgetDesign)))
                                 .then(ClientCommandManager.argument("id",
                                                 IntegerArgumentType.integer(0, 1000000))
                                         .then(ClientCommandManager.literal("clear")
@@ -570,6 +599,51 @@ public class MirageClient implements ClientModInitializer {
         }
         return feedback(context, "Map " + id + " now reads '" + text.trim() + "' on your"
                 + " screen. Nobody else's map changed.");
+    }
+
+    private static int copyMap(CommandContext<FabricClientCommandSource> context) {
+        int from = IntegerArgumentType.getInteger(context, "from");
+        int to = IntegerArgumentType.getInteger(context, "to");
+
+        return MapArt.copy(from, to)
+                ? feedback(context, "Map " + to + " now shows what map " + from + " shows,"
+                        + " on your screen. Map " + from + " is untouched.")
+                : error(context, MapArt.lastReason());
+    }
+
+    private static int saveDesign(CommandContext<FabricClientCommandSource> context) {
+        int id = IntegerArgumentType.getInteger(context, "id");
+        String name = StringArgumentType.getString(context, "name");
+
+        return MapArt.save(name, id)
+                ? feedback(context, "Kept map " + id + " as '" + name + "'. It will still be"
+                        + " here in another world - /fake map load " + name + " <id>.")
+                : error(context, MapArt.lastReason());
+    }
+
+    private static int loadDesign(CommandContext<FabricClientCommandSource> context) {
+        String name = StringArgumentType.getString(context, "name");
+        int id = IntegerArgumentType.getInteger(context, "id");
+
+        return MapArt.load(name, id)
+                ? feedback(context, "Map " + id + " now shows '" + name + "', on your screen.")
+                : error(context, MapArt.lastReason());
+    }
+
+    private static int forgetDesign(CommandContext<FabricClientCommandSource> context) {
+        String name = StringArgumentType.getString(context, "name");
+        return MapArt.forget(name)
+                ? feedback(context, "Forgot '" + name + "'. Maps already painted with it stay"
+                        + " as they are until something repaints them.")
+                : error(context, "No design called '" + name + "'.");
+    }
+
+    private static int listDesigns(CommandContext<FabricClientCommandSource> context) {
+        if (MapArt.names().isEmpty()) {
+            return feedback(context, "No map designs kept. Look at a map you made and run"
+                    + " /fake map save <id> <name>.");
+        }
+        return feedback(context, "Kept designs: " + String.join(", ", MapArt.names()));
     }
 
     /**

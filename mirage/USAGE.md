@@ -731,7 +731,7 @@ empty slot is worse than no click at all. A block is only taken over when the
 paint is actually on the screen there — a fake held back from underfoot, or one
 the master switch has taken down, is a real block again and breaks normally.
 
-## 11b. Map art — numbers on a map
+## 11b. Map art — your own designs, and numbers
 
     /fake map <id> 21
     /fake map <id> A
@@ -757,6 +757,33 @@ nothing:
     sends it, then use that map's id.
 
 `/fake doctor` line 7 shows what the last paint did.
+
+### Importing art you actually made
+
+The drawn numbers are a fallback. **Real map art is thousands of placed blocks —
+makeable in a world of your own, not on somebody else's.** So build it where you
+can and carry it over, one map at a time, the same trade the whole-build feature
+makes:
+
+**In your own world**, standing where the art renders:
+
+    /fake map save 7 dragon        (map 7's picture, kept as "dragon")
+
+**On the server**, holding any map you own:
+
+    /fake map load dragon 118      (map 118 now shows it, on your screen)
+
+Designs live in `config/mirage-maps.json` and survive restarts and worlds.
+
+    /fake map list
+    /fake map forget dragon
+
+**Copying without keeping**, when both maps are in the same world:
+
+    /fake map copy 7 118           (118 shows what 7 shows; 7 is untouched)
+
+The map you copy *from* has to be one your client has seen too — same rule as
+everything else here.
 
 ### Using them in a game
 
