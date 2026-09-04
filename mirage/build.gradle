@@ -40,7 +40,11 @@ if (target != null) {
 // "unknown property".
 def versionProps = ['minecraft_version', 'yarn_mappings', 'loader_version', 'fabric_version']
 def prop = { String name ->
-    targetProps.containsKey(name) ? targetProps[name] : (project.findProperty(name) ?: 'MISSING')
+    def found = targetProps.containsKey(name) ? targetProps[name] : project.findProperty(name)
+    // A blank counts as missing. The lookup script writes the file even when it could not
+    // find every value, so that -Ptarget gets far enough to name the blank one -- and an
+    // empty mappings line would otherwise reach Loom as "could not find net.fabricmc:yarn::v2".
+    (found == null || found.toString().trim().isEmpty()) ? 'MISSING' : found.toString().trim()
 }
 
 def missing = versionProps.findAll { prop(it) == 'MISSING' }
@@ -50,8 +54,10 @@ if (!missing.isEmpty()) {
             + " is missing: ${missing.join(', ')}\n\n" +
             "Get the correct values for your Minecraft version with:\n" +
             "    powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 " +
-            "-MinecraftVersion <version> -Write\n" +
-            "or by hand from https://fabricmc.net/develop/")
+            "-MinecraftVersion <version> -Write\n\n" +
+            "If only yarn_mappings is blank, yarn had no mappings for that version when\n" +
+            "the file was written. Take the version from https://fabricmc.net/develop/ and\n" +
+            "either paste it in, or re-run with -YarnMappings <version>.")
 }
 
 // What the jar tells Fabric it runs on. Defaults to exactly the version it was built

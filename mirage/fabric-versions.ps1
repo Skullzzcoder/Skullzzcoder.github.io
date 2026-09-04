@@ -18,6 +18,7 @@
 #>
 param(
     [string] $MinecraftVersion,
+    [string] $YarnMappings,
     [switch] $Write
 )
 
@@ -68,12 +69,45 @@ $loader = $null
 $api = $null
 $problems = @()
 
-try {
-    $builds = Get-Json "https://meta.fabricmc.net/v2/versions/yarn/$MinecraftVersion"
-    # Newest build first.
-    $yarn = Assert-Version 'yarn_mappings' $builds.version
-} catch {
-    $problems += "yarn lookup failed: $($_.Exception.Message)"
+if ($YarnMappings) {
+    # Given by hand, from https://fabricmc.net/develop/ -- taken as read.
+    $yarn = $YarnMappings
+    Write-Host "Using the yarn mappings you gave: $yarn"
+} else {
+    try {
+        $builds = Get-Json "https://meta.fabricmc.net/v2/versions/yarn/$MinecraftVersion"
+        # Newest build first.
+        $yarn = Assert-Version 'yarn_mappings' $builds.version
+    } catch {
+        $problems += "yarn lookup failed: $($_.Exception.Message)"
+
+        # An empty answer here means one of two very different things, and the difference
+        # decides what to do next: yarn has not been published for this version yet (wait,
+        # or take a snapshot), or this version is not named what we asked for. So ask what
+        # yarn does have rather than leaving it as "produced nothing".
+        try {
+            Write-Host ""
+            Write-Host "Asking what yarn does have ..." -ForegroundColor Yellow
+            $allYarn = Get-Json "https://meta.fabricmc.net/v2/versions/yarn"
+            $games = @($allYarn.gameVersion) | Select-Object -Unique
+            $newest = $games | Select-Object -First 12
+
+            if ($games -contains $MinecraftVersion) {
+                Write-Host "  yarn does list $MinecraftVersion -- the lookup itself failed, not the mappings." -ForegroundColor Yellow
+            } else {
+                Write-Host "  yarn has no mappings for $MinecraftVersion." -ForegroundColor Yellow
+                Write-Host "  Newest versions yarn does have:" -ForegroundColor Yellow
+                foreach ($game in $newest) { Write-Host "    $game" -ForegroundColor Yellow }
+                Write-Host ""
+                Write-Host "  A Fabric mod cannot be built against mappings that do not exist." -ForegroundColor Yellow
+                Write-Host "  Either wait for yarn to publish $MinecraftVersion, or pass one" -ForegroundColor Yellow
+                Write-Host "  by hand from https://fabricmc.net/develop/ :" -ForegroundColor Yellow
+                Write-Host "    -MinecraftVersion $MinecraftVersion -YarnMappings $MinecraftVersion+build.1" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "  (could not reach yarn's version list either: $($_.Exception.Message))" -ForegroundColor Yellow
+        }
+    }
 }
 
 try {
@@ -124,14 +158,7 @@ if (-not $Write) {
     return
 }
 
-if (-not ($yarn -and $loader -and $api)) {
-    Write-Host "Not touching gradle.properties: at least one lookup failed." -ForegroundColor Red
-    exit 1
-}
-if (-not (Test-Path $propsFile)) {
-    Write-Host "Not touching gradle.properties: $propsFile does not exist." -ForegroundColor Red
-    exit 1
-}
+$complete = [bool]($yarn -and $loader -and $api)
 
 function Set-Prop([string] $Text, [string] $Name, [string] $Value) {
     $pattern = "(?m)^\s*$([regex]::Escape($Name))\s*=.*$"
@@ -151,9 +178,18 @@ $versionsDir = Join-Path $PSScriptRoot 'versions'
 if (-not (Test-Path $versionsDir)) { New-Item -ItemType Directory -Path $versionsDir | Out-Null }
 
 $targetFile = Join-Path $versionsDir "$MinecraftVersion.properties"
+$note = if ($complete) { "" } else {
+@"
+
+# INCOMPLETE. A blank value below was not found and has to be filled in by hand from
+# https://fabricmc.net/develop/ -- Gradle will name the blank one rather than failing
+# somewhere confusing later. Re-run with -YarnMappings <version> to fill yarn in.
+"@
+}
+
 $targetText = @"
 # Toolchain for Minecraft $MinecraftVersion, looked up from Fabric's API on $(Get-Date -Format 'yyyy-MM-dd').
-# Build with: gradlew build -Ptarget=$MinecraftVersion
+# Build with: gradlew build -Ptarget=$MinecraftVersion$note
 minecraft_version=$MinecraftVersion
 yarn_mappings=$yarn
 loader_version=$loader
@@ -166,13 +202,34 @@ fabric_version=$api
 minecraft_depend=~$MinecraftVersion
 "@
 
+# Written even when a lookup failed. Refusing to write anything left no target file at
+# all, so -Ptarget could not even get far enough to say which value was missing.
 Set-Content -Path $targetFile -Value $targetText -Encoding ASCII
 
 Write-Host ""
-Write-Host "Wrote versions\$MinecraftVersion.properties" -ForegroundColor Green
-Write-Host "Build it with:  gradlew build -Ptarget=$MinecraftVersion" -ForegroundColor Green
+if ($complete) {
+    Write-Host "Wrote versions\$MinecraftVersion.properties" -ForegroundColor Green
+    Write-Host "Build it with:  gradlew build -Ptarget=$MinecraftVersion" -ForegroundColor Green
+} else {
+    Write-Host "Wrote versions\$MinecraftVersion.properties, with blanks." -ForegroundColor Yellow
+    Write-Host "Fill them in from https://fabricmc.net/develop/, then:" -ForegroundColor Yellow
+    Write-Host "    gradlew build -Ptarget=$MinecraftVersion" -ForegroundColor Yellow
+}
 
-# gradle.properties stays the no-target default, so a plain "gradlew build" still works.
+# gradle.properties is the no-target default, so a plain "gradlew build" keeps working.
+# Only touched when every value was found: half-writing it would break the target that
+# currently builds, which is the one thing that must not happen here.
+if (-not $complete) {
+    Write-Host ""
+    Write-Host "gradle.properties left alone, so 'gradlew build' still targets what it did." -ForegroundColor Yellow
+    exit 1
+}
+
+if (-not (Test-Path $propsFile)) {
+    Write-Host "gradle.properties not found, so it was not updated." -ForegroundColor Yellow
+    return
+}
+
 $text = Get-Content -Path $propsFile -Raw
 $text = Set-Prop $text 'minecraft_version' $MinecraftVersion
 $text = Set-Prop $text 'yarn_mappings'     $yarn

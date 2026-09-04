@@ -40,7 +40,13 @@ for path in targets:
     name = os.path.basename(path).replace(".properties", "")
 
     for key in REQUIRED:
+        # Present but blank is the case that matters: the lookup script writes the file
+        # even when it could not find every value, so the key is always there. A check
+        # that only asks whether the line exists passes on a target that cannot build.
         check("%s sets %s" % (name, key), key in values)
+        if key in values:
+            check("%s leaves %s blank -- fill it in from https://fabricmc.net/develop/"
+                  % (name, key), values[key].strip() != "")
     if "minecraft_version" in values:
         check("%s is the version it is named after" % name,
               values["minecraft_version"].strip() == name)

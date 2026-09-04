@@ -22,6 +22,34 @@ Writes `versions/26.2.properties`. If Fabric has no mappings for that version ye
 script says so — that is a real answer, not a failure to work around. A Fabric mod cannot
 be built for a version Fabric has not mapped.
 
+### If yarn has no mappings for that version
+
+This is the one wall that no amount of build configuration gets past, so it is worth
+naming plainly. Fabric API and the loader can exist for a version before yarn does — the
+lookup will find `fabric_version=0.159.0+26.2` and come back empty for yarn.
+
+The script now says which of two things happened, because they need different answers:
+
+- **yarn lists the version, but the lookup failed** — a network or shape problem. Pass it
+  by hand: `-YarnMappings 26.2+build.1`.
+- **yarn has no mappings for it** — it prints the newest versions yarn *does* have. There
+  is no build from here. A Fabric mod is compiled against mappings; if they do not exist,
+  nothing can be compiled against them.
+
+If it is the second, there are exactly two honest options:
+
+1. **Wait.** Yarn usually follows a release within days. Nothing in the project needs to
+   change; re-run the script when it lands.
+2. **Move to Mojang's official mappings.** Loom supports it, and it does not depend on
+   yarn. Be clear about the cost before starting: mojmap names are *different* names, not
+   a different spelling — `ClientWorld` is `ClientLevel`, `setBlockState` is `setBlock`.
+   That is all 92 imports and a large share of 571 call sites, and it is a rewrite of
+   every Minecraft-touching file, not a switch to flip. It also means the 1.21.11 build
+   and the 26.2 build no longer share source.
+
+Either way the version file is still written, with the blank marked, so `-Ptarget` gets
+far enough to name what is missing instead of failing inside Loom.
+
 **2. Ask what moved:**
 
 ```
