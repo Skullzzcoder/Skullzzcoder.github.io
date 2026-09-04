@@ -8,26 +8,66 @@ plugins {
     id 'maven-publish'
 }
 
-// The four toolchain versions live in gradle.properties. Read them defensively so a
-// missing one names itself instead of surfacing as Gradle's "unknown property".
-// Run fabric-versions.ps1 to fill them in for your Minecraft version.
-def versionProps = ['minecraft_version', 'yarn_mappings', 'loader_version', 'fabric_version']
-def prop = { String name -> project.findProperty(name) ?: 'MISSING' }
+// The toolchain for one Minecraft version. Pick it with -Ptarget=<version>, which reads
+// versions/<version>.properties; with no target the values in gradle.properties are used,
+// so an existing checkout keeps building exactly as it did.
+//
+// One jar per Minecraft version, always. A Fabric mod is compiled against remapped
+// Minecraft names and those names move between releases, so a jar built for one will not
+// load on another -- there is no set of properties that makes a single jar span two.
+def target = project.findProperty('target')
+def targetProps = [:]
 
-def missing = versionProps.findAll { !project.hasProperty(it) }
+if (target != null) {
+    def file = file("versions/${target}.properties")
+    if (!file.exists()) {
+        def known = fileTree('versions').matching { include '*.properties' }
+                .files.collect { it.name.replace('.properties', '') }.sort()
+        throw new GradleException(
+                "No versions/${target}.properties.\n\n" +
+                "Known targets: ${known.isEmpty() ? '(none)' : known.join(', ')}\n\n" +
+                "Make one for Minecraft ${target} with:\n" +
+                "    powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 " +
+                "-MinecraftVersion ${target} -Write")
+    }
+    def loaded = new Properties()
+    file.withInputStream { loaded.load(it) }
+    loaded.each { key, value -> targetProps[key.toString()] = value.toString() }
+    logger.lifecycle("Mirage: building for Minecraft ${target}")
+}
+
+// Read defensively so a missing value names itself instead of surfacing as Gradle's
+// "unknown property".
+def versionProps = ['minecraft_version', 'yarn_mappings', 'loader_version', 'fabric_version']
+def prop = { String name ->
+    targetProps.containsKey(name) ? targetProps[name] : (project.findProperty(name) ?: 'MISSING')
+}
+
+def missing = versionProps.findAll { prop(it) == 'MISSING' }
 if (!missing.isEmpty()) {
     throw new GradleException(
-            "gradle.properties is missing: ${missing.join(', ')}\n\n" +
+            (target == null ? "gradle.properties" : "versions/${target}.properties")
+            + " is missing: ${missing.join(', ')}\n\n" +
             "Get the correct values for your Minecraft version with:\n" +
-            "    powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -Write\n" +
+            "    powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 " +
+            "-MinecraftVersion <version> -Write\n" +
             "or by hand from https://fabricmc.net/develop/")
 }
+
+// What the jar tells Fabric it runs on. Defaults to exactly the version it was built
+// against, because that is the only version its compiled names are known to match.
+def minecraftDepend = targetProps.containsKey('minecraft_depend')
+        ? targetProps['minecraft_depend']
+        : (project.findProperty('minecraft_depend') ?: "~${prop('minecraft_version')}")
 
 version = project.findProperty('mod_version') ?: '1.0.0'
 group = project.findProperty('maven_group') ?: 'dev.skullzz'
 
 base {
-    archivesName = project.findProperty('archives_base_name') ?: 'mirage'
+    // The Minecraft version is part of the name: two targets otherwise write the same
+    // file, and the second silently replaces the first in build/libs.
+    def stem = project.findProperty('archives_base_name') ?: 'mirage'
+    archivesName = target == null ? stem : "${stem}-mc${prop('minecraft_version')}"
 }
 
 repositories {
@@ -43,9 +83,10 @@ dependencies {
 
 processResources {
     inputs.property "version", project.version
+    inputs.property "minecraft_depend", minecraftDepend
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": project.version, "minecraft_depend": minecraftDepend
     }
 }
 

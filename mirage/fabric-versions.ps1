@@ -142,14 +142,43 @@ function Set-Prop([string] $Text, [string] $Name, [string] $Value) {
     return $Text.TrimEnd() + "`r`n$Name=$Value`r`n"
 }
 
+# ASCII on purpose throughout: PowerShell 5.1 writes a BOM for UTF8, and a BOM corrupts
+# the first line of a .properties file as far as Gradle is concerned.
+
+# A file per Minecraft version, so building for a second one does not overwrite the first.
+# This is what lets both be built from one checkout and uploaded to the same Modrinth page.
+$versionsDir = Join-Path $PSScriptRoot 'versions'
+if (-not (Test-Path $versionsDir)) { New-Item -ItemType Directory -Path $versionsDir | Out-Null }
+
+$targetFile = Join-Path $versionsDir "$MinecraftVersion.properties"
+$targetText = @"
+# Toolchain for Minecraft $MinecraftVersion, looked up from Fabric's API on $(Get-Date -Format 'yyyy-MM-dd').
+# Build with: gradlew build -Ptarget=$MinecraftVersion
+minecraft_version=$MinecraftVersion
+yarn_mappings=$yarn
+loader_version=$loader
+fabric_version=$api
+
+# What the built jar tells Fabric it runs on. Exactly the version it was compiled against:
+# a Fabric mod is built against remapped Minecraft names, and those names move between
+# releases, so widening this does not make the jar work on another version -- it only
+# stops Fabric from warning you before it breaks.
+minecraft_depend=~$MinecraftVersion
+"@
+
+Set-Content -Path $targetFile -Value $targetText -Encoding ASCII
+
+Write-Host ""
+Write-Host "Wrote versions\$MinecraftVersion.properties" -ForegroundColor Green
+Write-Host "Build it with:  gradlew build -Ptarget=$MinecraftVersion" -ForegroundColor Green
+
+# gradle.properties stays the no-target default, so a plain "gradlew build" still works.
 $text = Get-Content -Path $propsFile -Raw
 $text = Set-Prop $text 'minecraft_version' $MinecraftVersion
 $text = Set-Prop $text 'yarn_mappings'     $yarn
 $text = Set-Prop $text 'loader_version'    $loader
 $text = Set-Prop $text 'fabric_version'    $api
 
-# ASCII on purpose: PowerShell 5.1 writes a BOM for UTF8, and a BOM corrupts the first
-# line of a .properties file as far as Gradle is concerned.
 Set-Content -Path $propsFile -Value $text -Encoding ASCII -NoNewline
 
-Write-Host "gradle.properties updated. Now run: gradlew build" -ForegroundColor Green
+Write-Host "gradle.properties updated too, so a plain 'gradlew build' targets $MinecraftVersion."

@@ -42,6 +42,22 @@ all — hence the pinned distribution in `gradle/wrapper/gradle-wrapper.properti
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
+### Building for another Minecraft version
+
+```
+powershell -ExecutionPolicy Bypass -File fabric-versions.ps1 -MinecraftVersion 26.2 -Write
+gradlew build -Ptarget=26.2
+```
+
+That writes `versions/26.2.properties` and builds `mirage-mc26.2-1.0.0.jar` beside the
+1.21.11 one, so two targets never overwrite each other.
+
+**One jar per Minecraft version** — a Fabric mod is compiled against remapped Minecraft
+names and those names move between releases, so a jar built for one will not load on
+another. Expect a second target to need source fixes the first time; `gradlew inspectApi
+-Ptarget=26.2` prints the real names rather than leaving them to be guessed at. See
+[PUBLISHING.md](PUBLISHING.md).
+
 ### Checking calls without a build
 
 Minecraft is not on the classpath outside a Loom build, so `javac` reports a call to a method
