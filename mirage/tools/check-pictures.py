@@ -46,8 +46,10 @@ check("a home-relative path is expanded", 'cleaned.startsWith("~")' in find)
 check("a pasted path keeps its quotes out of the name", 'startsWith("\\"")' in find)
 check("a name alone is looked for in every folder", "for (java.nio.file.Path folder : places())" in find)
 # On Windows a stray character throws rather than returning; a thrown import helps nobody.
+# RuntimeException alone catches it: InvalidPathException is one, and naming both is a
+# compile error (see check-catch.py), which is exactly how this was first written.
 check("an impossible path is a missing file, not a crash",
-      "InvalidPathException" in find and "RuntimeException" in find)
+      "catch (RuntimeException" in find)
 check("nothing found is nothing returned", find.rstrip().endswith("return null;"))
 
 # -------------------------------------------------------------- what it offers

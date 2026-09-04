@@ -448,8 +448,10 @@ public final class MapArt {
                 java.nio.file.Path candidate = folder.resolve(cleaned);
                 if (java.nio.file.Files.isRegularFile(candidate)) return candidate;
             }
-        } catch (java.nio.file.InvalidPathException | RuntimeException ignored) {
+        } catch (RuntimeException ignored) {
             // Not a path this system can express, which is a missing file by another name.
+            // RuntimeException alone: InvalidPathException is one, so naming both is not
+            // allowed -- alternatives in a multi-catch may not be related by subclassing.
         }
         return null;
     }
