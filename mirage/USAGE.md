@@ -607,10 +607,61 @@ and its world is untouched.
     /fake build uncut [radius]  (fill it back in)
     /fake build uncutall casino (fill every hole in)
 
-    /fake build take casino     (down, real blocks back)
+    /fake build take            (look at it - down, real blocks back)
+    /fake build take casino     (or name it)
     /fake build takeall
     /fake build list
     /fake build forget casino   (delete it)
+
+### Taking one down
+
+`/fake build take` **with no name** takes down whichever build you are looking at.
+Point at any of its blocks and it goes, real blocks back as they were — you do not
+have to remember what you called it, which matters most for the one you just put
+up in the wrong place. `/fake build takeall` clears the lot.
+
+### Lining it up with your platform
+
+A build lands where you were pointing, and pointing is not precise. Two commands
+fix it without taking anything down:
+
+    /fake build align casino          (corner onto the block you are looking at)
+    /fake build move casino 1 0 0     (then nudge, a block at a time)
+
+`align` is the coarse half: look at the corner of your platform and the build's
+low corner lands exactly on that block. `move` is the fine half, in **east, up,
+south** — negative goes the other way:
+
+    /fake build move casino -2 0 0    (two west)
+    /fake build move casino 0 -1 0    (one down)
+    /fake build move casino 0 0 3     (three south)
+
+Directions rather than x/y/z on purpose: the corner a build was placed from is
+rarely the corner you can see, so "two east, one up" is the thing you can judge by
+eye. Run it again to keep nudging — each one moves from where it now stands, and
+the build's holes move with it. Up to 256 blocks in one go.
+
+Both take the build down and put it up again in that order, which is what stops a
+nudge leaving a trail of itself behind.
+
+### A build only stands in the world it was put in
+
+A placement now remembers **which server it was made on**. A build stood up on
+DonutSMP stays on DonutSMP: it will not appear in single-player, or on another
+server, at the same coordinates in the middle of whatever is there. Walk back in
+and it stands itself up again.
+
+`/fake build list` says so plainly — a build standing elsewhere is shown as
+`up at 12 64 -30 in <server>, not here`, which answers both *why can I not see it*
+and *why did that just appear*.
+
+> Builds saved before this arrived have no server written down, and those keep the
+> old behaviour — they show everywhere. Take one down and put it up again to tie it
+> to the world you are in.
+>
+> If the mod cannot work out what server you are on, every world gets the same
+> blank name and everything shows everywhere, exactly as it did before. It fails
+> towards showing your build, never towards hiding it.
 
 Builds live in `config/mirage-builds.json`, written only when one changes.
 Air is skipped, so only what is really built is carried, and the corner is

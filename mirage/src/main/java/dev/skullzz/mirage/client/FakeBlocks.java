@@ -78,6 +78,18 @@ public final class FakeBlocks {
     /** Which builds are up, and where the corner of each one sits. */
     private static final Map<String, BlockPos> placed = new LinkedHashMap<>();
 
+    /**
+     * Which world each standing build was put in.
+     *
+     * <p>Without this a build stood up on a server came back in single-player, at the same
+     * coordinates, in the middle of whatever was there -- and nothing on screen said why.
+     * A placement is remembered against the world it was made in, and only shows there.
+     */
+    private static final Map<String, String> placedIn = new LinkedHashMap<>();
+
+    /** The world the blocks currently on screen belong to; null until the first sweep. */
+    private static String standingWorld = null;
+
     /** What should be showing, and what was really there before it was. */
     /**
      * Positions held back only from directly underfoot, rather than from the whole space
@@ -280,6 +292,40 @@ public final class FakeBlocks {
 
         take(name);
         placed.put(name, corner.toImmutable());
+        placedIn.put(name, worldKey());
+        standingWorld = worldKey();
+
+        raise(name);
+        reindex();
+        return showing.size();
+    }
+
+    /**
+     * Moves a standing build by so many blocks, keeping its holes.
+     *
+     * <p>Down and up again rather than shifting what is on screen: the real blocks under
+     * the old position have to go back before the new position covers anything, and doing
+     * it in that order is what stops a nudge leaving a trail of the build behind it.
+     */
+    public static BlockPos move(String name, int dx, int dy, int dz) {
+        BlockPos corner = placed.get(name);
+        if (corner == null || !builds.containsKey(name)) return null;
+        return moveTo(name, corner.add(dx, dy, dz));
+    }
+
+    /** Puts a standing build's corner at an exact position. */
+    public static BlockPos moveTo(String name, BlockPos corner) {
+        if (!builds.containsKey(name) || !placed.containsKey(name)) return null;
+
+        BlockPos target = corner.toImmutable();
+        return put(name, target) < 0 ? null : target;
+    }
+
+    /** Paints a build's blocks in, without touching where it is recorded as standing. */
+    private static void raise(String name) {
+        Build build = builds.get(name);
+        BlockPos corner = placed.get(name);
+        if (build == null || corner == null) return;
 
         for (int i = 0; i < build.blocks.length; i += 4) {
             if (build.cuts.contains(new BlockPos(build.blocks[i], build.blocks[i + 1],
@@ -293,15 +339,17 @@ public final class FakeBlocks {
                     corner.getZ() + build.blocks[i + 2]);
             showing.put(pos, build.palette.get(build.blocks[i + 3]));
         }
-
-        reindex();
-        return showing.size();
     }
 
-    /** Takes a build back down, putting the real blocks back as it goes. */
-    public static boolean take(String name) {
+    /**
+     * Takes a build off the screen without forgetting it stands.
+     *
+     * <p>The half of taking down that a world change wants: the blocks go, the record
+     * stays, so walking back into the world it was put in stands it up again.
+     */
+    private static boolean lower(String name) {
         Build build = builds.get(name);
-        BlockPos corner = placed.remove(name);
+        BlockPos corner = placed.get(name);
         if (build == null || corner == null) return false;
 
         ClientWorld world = MinecraftClient.getInstance().world;
@@ -314,13 +362,108 @@ public final class FakeBlocks {
             showing.remove(pos);
             restore(world, pos);
         }
+        return true;
+    }
 
+    /** Takes a build back down, putting the real blocks back as it goes. */
+    public static boolean take(String name) {
+        if (!lower(name)) return false;
+
+        placed.remove(name);
+        placedIn.remove(name);
         reindex();
         return true;
     }
 
+    /**
+     * Takes down whichever build covers a position.
+     *
+     * <p>Looking at the thing you want gone beats remembering what you called it, which
+     * matters most for the build you put up in the wrong place a moment ago.
+     */
+    public static String takeAt(BlockPos pos) {
+        String name = owner(pos);
+        return name != null && take(name) ? name : null;
+    }
+
     public static void takeAll() {
         for (String name : new ArrayList<>(placed.keySet())) take(name);
+    }
+
+    /** Which world a build was stood up in, or null if it is not standing. */
+    public static String placedWorld(String name) {
+        return placedIn.get(name);
+    }
+
+    /** Whether a standing build belongs to the world that is open now. */
+    public static boolean belongsHere(String name) {
+        String where = placedIn.get(name);
+        return where == null || where.equals(worldKey());
+    }
+
+    /**
+     * Names the world well enough to tell two of them apart.
+     *
+     * <p>Asked for by reflection and by one exact name, because a wrong guess at a
+     * Minecraft method is a crash and this is only ever a label. When it cannot be
+     * answered every world gets the same empty name, which is exactly how this behaved
+     * before there was a name at all -- a build that shows everywhere, not one that
+     * shows nowhere.
+     */
+    private static java.lang.reflect.Method serverEntry = null;
+    private static boolean lookedForServerEntry = false;
+
+    public static String worldKey() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) return "";
+
+        try {
+            // Looked up once. This runs every tick, and resolving a method by name
+            // twenty times a second to answer a question that changes when you change
+            // servers is work for nothing.
+            if (!lookedForServerEntry) {
+                lookedForServerEntry = true;
+                serverEntry = client.getClass().getMethod("getCurrentServerEntry");
+            }
+            if (serverEntry == null) return "";
+
+            Object server = serverEntry.invoke(client);
+            if (server == null) return "";
+
+            for (java.lang.reflect.Field field : server.getClass().getFields()) {
+                if (field.getType() == String.class
+                        && field.getName().toLowerCase(java.util.Locale.ROOT)
+                                .contains("address")) {
+                    Object address = field.get(server);
+                    if (address != null) return address.toString();
+                }
+            }
+            // No address to read. Not toString(): a server entry's text can carry its
+            // ping and player count, so a key built from it would change every tick and
+            // churn every build down and up again. An empty name is the honest answer.
+            return "";
+        } catch (ReflectiveOperationException | RuntimeException unknown) {
+            // No way to tell worlds apart on this version; one name for all of them.
+            return "";
+        }
+    }
+
+    /**
+     * Raises what belongs in the world that is open, and lowers what does not.
+     *
+     * <p>Cheap to call every tick: it does nothing at all until the world actually
+     * changes, and a world change is the only moment the answer can differ.
+     */
+    public static void syncWorld() {
+        String now = worldKey();
+        if (now.equals(standingWorld)) return;
+        standingWorld = now;
+
+        for (String name : new ArrayList<>(placed.keySet())) {
+            if (belongsHere(name)) raise(name);
+            else lower(name);
+        }
+        reindex();
     }
 
     public static int showingCount() {
@@ -481,7 +624,12 @@ public final class FakeBlocks {
      */
     public static void tick(MinecraftClient client) {
         ClientWorld world = client.world;
-        if (world == null || order.isEmpty()) return;
+        if (world == null) return;
+
+        // Before the early return below: with nothing raised yet there is nothing to
+        // sweep, and raising it is precisely what this call is for.
+        syncWorld();
+        if (order.isEmpty()) return;
 
         if (!SelfFakes.enabled()) {
             hide(world);
@@ -753,6 +901,8 @@ public final class FakeBlocks {
         pinned = null;
         keepClear.clear();
         cursor = 0;
+        // The next world has to be looked at afresh; it may not be the one these stand in.
+        standingWorld = null;
     }
 
     /** Takes away every block a machine has placed, leaving the builds standing. */
@@ -834,6 +984,7 @@ public final class FakeBlocks {
             BlockPos corner = placed.get(build.name);
             if (corner != null) {
                 json.addProperty("at", corner.getX() + "," + corner.getY() + "," + corner.getZ());
+                json.addProperty("in", placedIn.getOrDefault(build.name, ""));
             }
             saved.add(json);
         }
@@ -877,18 +1028,24 @@ public final class FakeBlocks {
             }
             builds.put(build.name, build);
 
-            // Where it stood is remembered, but it is stood up again by the sweep rather
-            // than here, since the world is not loaded yet at this point.
+            // Where it stood is remembered, and in which world. Standing it up is left to
+            // the sweep: the world is not loaded at this point, and which world it turns
+            // out to be is the whole question.
             if (json.has("at")) {
                 BlockPos corner = readPos(json.get("at").getAsString());
-                if (corner != null) placed.put(build.name, corner);
+                if (corner != null) {
+                    placed.put(build.name, corner);
+                    // A file written before builds knew about worlds says nothing here,
+                    // and an empty world matches everywhere -- the old behaviour, kept for
+                    // builds that were already standing when this arrived.
+                    placedIn.put(build.name,
+                            json.has("in") ? json.get("in").getAsString() : "");
+                }
             }
         }
 
-        // Everything that was up when the file was written goes back up.
-        for (Map.Entry<String, BlockPos> entry : new ArrayList<>(placed.entrySet())) {
-            put(entry.getKey(), entry.getValue());
-        }
+        // Nothing goes up here. The first sweep in a world raises what belongs in it.
+        standingWorld = null;
     }
 
     private static String pack(int[] blocks) {

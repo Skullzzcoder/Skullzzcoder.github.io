@@ -114,7 +114,12 @@ check("restoring writes the real state back", "world.setBlockState(pos, was)" in
 check("restoring forgets the shadow", "real.remove(pos)" in restore)
 
 take = re.search(r"public static boolean take\(String name\) \{(.*?)\n    \}", blocks, re.S).group(1)
-check("taking a build down restores every block", "restore(world, pos)" in take)
+lower = re.search(r"private static boolean lower\(String name\) \{(.*?)\n    \}", blocks, re.S).group(1)
+# Taking down is lowering plus forgetting; the blocks go back either way.
+check("taking a build down restores every block",
+      "restore(world, pos)" in lower and "lower(name)" in take)
+check("and forgets that it stands", "placed.remove(name)" in take)
+check("lowering alone does not forget", "placed.remove" not in lower)
 
 # the master switch has to reach it, and hiding must not forget where anything stands
 check("the master switch reaches builds", "if (!SelfFakes.enabled()) {\n            hide(world);" in blocks)
@@ -134,7 +139,14 @@ check("holes are relative to the corner", "pos.getX() - corner.getX()" in cut)
 
 put = re.search(r"public static int put\(String name, BlockPos corner\) \{(.*?)\n    \}",
                 blocks, re.S).group(1)
-check("standing it up again keeps the holes", "cuts.contains" in put)
+raise_ = re.search(r"private static void raise\(String name\) \{(.*?)\n    \}",
+                   blocks, re.S).group(1)
+# Standing up is put() recording where, and raise() painting it; the holes are skipped
+# in the painting half, and put() must go through it rather than paint its own copy.
+check("standing it up again keeps the holes",
+      "cuts.contains" in raise_ and "raise(name);" in put)
+check("standing up records where it stands", "placed.put(name" in put)
+check("and which world it stands in", "placedIn.put(name" in put)
 check("holes are written", 'json.add("cuts", cuts)' in blocks)
 check("holes are read back", 'getAsJsonArray("cuts")' in blocks)
 

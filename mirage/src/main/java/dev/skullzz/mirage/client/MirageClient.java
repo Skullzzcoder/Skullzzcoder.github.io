@@ -989,7 +989,13 @@ public class MirageClient implements ClientModInitializer {
                         .then(ClientCommandManager.argument("name", StringArgumentType.word())
                                 .executes(MirageClient::buildPut)))
                 .then(ClientCommandManager.literal("take")
+                        // No name: take down whatever you are looking at. The build you
+                        // want gone is the one in front of you, and remembering what you
+                        // called it is a step you should not have to take.
+                        .executes(MirageClient::buildTakeLookedAt)
                         .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        FakeBlocks.placed().keySet(), builder))
                                 .executes(context -> {
                                     String name = StringArgumentType.getString(context, "name");
                                     if (!FakeBlocks.take(name)) {
@@ -998,6 +1004,22 @@ public class MirageClient implements ClientModInitializer {
                                     FakeBlocks.persist();
                                     return feedback(context, "Took '" + name + "' down.");
                                 })))
+                .then(ClientCommandManager.literal("move")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        FakeBlocks.placed().keySet(), builder))
+                                .then(ClientCommandManager.argument("east",
+                                                IntegerArgumentType.integer(-NUDGE, NUDGE))
+                                        .then(ClientCommandManager.argument("up",
+                                                        IntegerArgumentType.integer(-NUDGE, NUDGE))
+                                                .then(ClientCommandManager.argument("south",
+                                                                IntegerArgumentType.integer(-NUDGE, NUDGE))
+                                                        .executes(MirageClient::buildMove))))))
+                .then(ClientCommandManager.literal("align")
+                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        FakeBlocks.placed().keySet(), builder))
+                                .executes(MirageClient::buildAlign)))
                 .then(ClientCommandManager.literal("takeall").executes(context -> {
                     FakeBlocks.takeAll();
                     FakeBlocks.persist();
@@ -1128,6 +1150,80 @@ public class MirageClient implements ClientModInitializer {
                 + corner.getX() + " " + corner.getY() + " " + corner.getZ() + ".");
     }
 
+    /** How far one command may shove a build. Past this it is a new placement, not a nudge. */
+    private static final int NUDGE = 256;
+
+    /**
+     * Takes down the build you are looking at.
+     *
+     * <p>Looks at the painted block, not the real one behind it: pointing at the wall is
+     * how you say which wall, and the wall you are pointing at is the fake one.
+     */
+    private static int buildTakeLookedAt(CommandContext<FabricClientCommandSource> context) {
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) {
+            return error(context, "Look at the build you want gone, or name it:"
+                    + " /fake build take <name>. Everything at once is /fake build takeall.");
+        }
+
+        String name = FakeBlocks.takeAt(hit.getBlockPos());
+        if (name == null) {
+            return error(context, "That is not part of a build. Look at one of its blocks,"
+                    + " or name it: /fake build take <name>.");
+        }
+
+        FakeBlocks.persist();
+        return feedback(context, "Took '" + name + "' down.");
+    }
+
+    /**
+     * Shoves a standing build a few blocks, to line it up with something real.
+     *
+     * <p>Directions rather than x/y/z: the corner it was placed from is rarely the corner
+     * you are looking at, so "two east, one up" is the thing you can actually judge by eye.
+     */
+    private static int buildMove(CommandContext<FabricClientCommandSource> context) {
+        String name = StringArgumentType.getString(context, "name");
+        int east = IntegerArgumentType.getInteger(context, "east");
+        int up = IntegerArgumentType.getInteger(context, "up");
+        int south = IntegerArgumentType.getInteger(context, "south");
+
+        BlockPos corner = FakeBlocks.move(name, east, up, south);
+        if (corner == null) {
+            return error(context, "'" + name + "' is not standing. Put it up first with"
+                    + " /fake build put " + name + ".");
+        }
+
+        FakeBlocks.persist();
+        return feedback(context, "Moved '" + name + "' to " + corner.getX() + " "
+                + corner.getY() + " " + corner.getZ() + ". Again to keep nudging.");
+    }
+
+    /**
+     * Puts a build's corner exactly on the block you are looking at.
+     *
+     * <p>The coarse half of lining up: point at the corner of your platform and the build
+     * lands on it, then nudge from there. It aims at the block itself rather than the face
+     * you can see, because a corner you can point at is a corner you want filled.
+     */
+    private static int buildAlign(CommandContext<FabricClientCommandSource> context) {
+        String name = StringArgumentType.getString(context, "name");
+
+        BlockHitResult hit = lookedAt(128.0);
+        if (hit == null) return error(context, "Look at where the corner should sit.");
+
+        BlockPos corner = FakeBlocks.moveTo(name, hit.getBlockPos());
+        if (corner == null) {
+            return error(context, "'" + name + "' is not standing. Put it up first with"
+                    + " /fake build put " + name + ".");
+        }
+
+        FakeBlocks.persist();
+        return feedback(context, "'" + name + "' now starts at " + corner.getX() + " "
+                + corner.getY() + " " + corner.getZ() + ". Nudge it with /fake build move "
+                + name + " <east> <up> <south>.");
+    }
+
     private static int buildList(CommandContext<FabricClientCommandSource> context) {
         Map<String, FakeBlocks.Build> all = FakeBlocks.builds();
         if (all.isEmpty()) {
@@ -1139,10 +1235,17 @@ public class MirageClient implements ClientModInitializer {
         context.getSource().sendFeedback(Text.literal("Builds:").formatted(Formatting.AQUA));
         for (FakeBlocks.Build build : all.values()) {
             BlockPos at = FakeBlocks.placed().get(build.name);
+            String where = at == null ? ", down"
+                    : ", up at " + at.getX() + " " + at.getY() + " " + at.getZ();
+            // A build standing in another world is the answer to both "why can I not see
+            // it" and "why did that appear" -- so it is said, not left to be guessed.
+            if (at != null && !FakeBlocks.belongsHere(build.name)) {
+                String world = FakeBlocks.placedWorld(build.name);
+                where += " in " + (world == null || world.isEmpty() ? "another world" : world)
+                        + ", not here";
+            }
             context.getSource().sendFeedback(Text.literal("  " + build.name + " - "
-                    + build.count() + " blocks, " + build.size()
-                    + (at == null ? ", down"
-                            : ", up at " + at.getX() + " " + at.getY() + " " + at.getZ())));
+                    + build.count() + " blocks, " + build.size() + where));
         }
         return all.size();
     }
