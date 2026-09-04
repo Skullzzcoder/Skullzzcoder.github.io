@@ -36,16 +36,28 @@ The script now says which of two things happened, because they need different an
   is no build from here. A Fabric mod is compiled against mappings; if they do not exist,
   nothing can be compiled against them.
 
-If it is the second, there are exactly two honest options:
+If it is the second, **look at how far behind yarn's newest actually is before deciding
+to wait.** The script now asks Fabric whether it knows the version at all, because two
+situations look identical from yarn alone and want opposite responses:
 
-1. **Wait.** Yarn usually follows a release within days. Nothing in the project needs to
-   change; re-run the script when it lands.
-2. **Move to Mojang's official mappings.** Loom supports it, and it does not depend on
-   yarn. Be clear about the cost before starting: mojmap names are *different* names, not
-   a different spelling — `ClientWorld` is `ClientLevel`, `setBlockState` is `setBlock`.
-   That is all 92 imports and a large share of 571 call sites, and it is a rewrite of
-   every Minecraft-touching file, not a switch to flip. It also means the 1.21.11 build
-   and the 26.2 build no longer share source.
+- **Fabric does not know the version either** — nothing exists yet. Waiting is right.
+- **Fabric knows it, but yarn's newest is months older** — yarn is not the mapping source
+  for that version, and waiting will not help. This is what 26.2 looked like in September
+  2026: Fabric API shipped `0.159.0+26.2`, while yarn's newest was 1.21.11 and the
+  snapshot 25w46a, from about ten months earlier.
+
+In that second case, https://fabricmc.net/develop/ is the authority — pick the version
+there and see which mappings it offers. If it offers something other than yarn, that is
+the path, and the cost is worth knowing before starting:
+
+**Moving to Mojang's official mappings** is not a switch to flip. Mojmap names are
+*different names*, not a different spelling — `ClientWorld` is `ClientLevel`,
+`setBlockState` is `setBlock`, `ItemStack#getItem` differs again. That is all 92 imports
+and a large share of 571 call sites, a rewrite of every Minecraft-touching file, and it
+means the 1.21.11 and 26.2 builds stop sharing source.
+
+Four files come through untouched either way, because they have no Minecraft in them:
+`Nbt`, `Litematic`, `MapPalette`, `Disk`. So does everything in `tools/`.
 
 Either way the version file is still written, with the blank marked, so `-Ptarget` gets
 far enough to name what is missing instead of failing inside Loom.

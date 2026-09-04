@@ -98,11 +98,36 @@ if ($YarnMappings) {
                 Write-Host "  yarn has no mappings for $MinecraftVersion." -ForegroundColor Yellow
                 Write-Host "  Newest versions yarn does have:" -ForegroundColor Yellow
                 foreach ($game in $newest) { Write-Host "    $game" -ForegroundColor Yellow }
+
+                # "yarn has not caught up yet" and "yarn is not what this version uses"
+                # look identical from yarn alone, and they need opposite responses. Ask
+                # Fabric whether it knows the version at all: if it does, and yarn's
+                # newest is months older, then waiting for yarn is the wrong answer.
+                $knownToFabric = $false
+                try {
+                    $gameList = Get-Json "https://meta.fabricmc.net/v2/versions/game"
+                    $knownToFabric = (@($gameList.version) -contains $MinecraftVersion)
+                } catch {
+                    Write-Host "  (could not ask Fabric for its game list: $($_.Exception.Message))" -ForegroundColor Yellow
+                }
+
                 Write-Host ""
                 Write-Host "  A Fabric mod cannot be built against mappings that do not exist." -ForegroundColor Yellow
-                Write-Host "  Either wait for yarn to publish $MinecraftVersion, or pass one" -ForegroundColor Yellow
-                Write-Host "  by hand from https://fabricmc.net/develop/ :" -ForegroundColor Yellow
-                Write-Host "    -MinecraftVersion $MinecraftVersion -YarnMappings $MinecraftVersion+build.1" -ForegroundColor Yellow
+
+                if ($knownToFabric) {
+                    Write-Host "  Fabric DOES know $MinecraftVersion, but yarn has no mappings for it." -ForegroundColor Yellow
+                    Write-Host "  If yarn's newest above is a long way behind $MinecraftVersion, yarn is not" -ForegroundColor Yellow
+                    Write-Host "  the mapping source for this version -- waiting will not help." -ForegroundColor Yellow
+                    Write-Host "  Open https://fabricmc.net/develop/ , pick $MinecraftVersion, and see what" -ForegroundColor Yellow
+                    Write-Host "  mappings it gives you. That page is the authority; this script is not." -ForegroundColor Yellow
+                } else {
+                    Write-Host "  Fabric does not list $MinecraftVersion as a game version either, so there" -ForegroundColor Yellow
+                    Write-Host "  is nothing to build against yet. Check https://fabricmc.net/develop/ ." -ForegroundColor Yellow
+                }
+
+                Write-Host ""
+                Write-Host "  If that page does give you a yarn version, pass it in:" -ForegroundColor Yellow
+                Write-Host "    -MinecraftVersion $MinecraftVersion -YarnMappings <the version it shows>" -ForegroundColor Yellow
             }
         } catch {
             Write-Host "  (could not reach yarn's version list either: $($_.Exception.Message))" -ForegroundColor Yellow
