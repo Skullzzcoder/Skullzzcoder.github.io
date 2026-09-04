@@ -266,6 +266,23 @@ public final class FakeBlocks {
         return build;
     }
 
+    /**
+     * Takes in a build made somewhere other than the world -- a schematic read off disk.
+     *
+     * <p>Once it is here it is an ordinary build: standing it up, nudging it, cutting it
+     * and tying it to a world are the same code that has always done those things.
+     */
+    public static Build adopt(String name, List<BlockState> palette, int[] blocks,
+                              int width, int height, int depth) {
+        // Replacing one that is standing would leave its old blocks painted with nothing
+        // left pointing at them, so it comes down first.
+        take(name);
+
+        Build build = new Build(name, palette, blocks, width, height, depth);
+        builds.put(name, build);
+        return build;
+    }
+
     public static Map<String, Build> builds() {
         return builds;
     }

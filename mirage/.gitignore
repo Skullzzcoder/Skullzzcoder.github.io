@@ -4,3 +4,4 @@ run/
 remappedSrc/
 .idea/
 *.iml
+__pycache__/

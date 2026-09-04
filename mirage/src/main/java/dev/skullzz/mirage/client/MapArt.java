@@ -382,10 +382,9 @@ public final class MapArt {
         return pixels != null && paint(to, pixels);
     }
 
-    /** Where pictures to import are looked for. */
+    /** Where pictures to import are looked for. Made at startup so it is there to use. */
     public static java.nio.file.Path pictureFolder() {
-        return net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                .resolve("mirage-pictures");
+        return Disk.folder("mirage-pictures");
     }
 
     /**
@@ -397,25 +396,12 @@ public final class MapArt {
      * enough if the file is in any of them.
      */
     public static java.util.List<java.nio.file.Path> places() {
-        java.util.List<java.nio.file.Path> folders = new java.util.ArrayList<>();
-        folders.add(pictureFolder());
-
-        String home = System.getProperty("user.home");
-        if (home != null && !home.isEmpty()) {
-            java.nio.file.Path base = java.nio.file.Paths.get(home);
-            folders.add(base.resolve("Desktop"));
-            folders.add(base.resolve("Downloads"));
-            folders.add(base.resolve("Pictures"));
-            folders.add(base);
-        }
-        return folders;
+        return Disk.places(pictureFolder());
     }
 
     /** The same folders, written out for a message that has to be actionable. */
     public static String describePlaces() {
-        java.util.List<String> shown = new java.util.ArrayList<>();
-        for (java.nio.file.Path folder : places()) shown.add(folder.toString());
-        return String.join(", ", shown);
+        return Disk.describe(pictureFolder());
     }
 
     /**
@@ -427,33 +413,7 @@ public final class MapArt {
      * than returning, and a thrown import helps nobody.
      */
     public static java.nio.file.Path findPicture(String fileName) {
-        if (fileName == null || fileName.isEmpty()) return null;
-
-        String cleaned = fileName.trim();
-        // Quotes survive a copied path on both Windows and macOS; drop them rather than
-        // failing on a path the player pasted exactly as their file manager gave it.
-        if (cleaned.length() > 1 && cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
-            cleaned = cleaned.substring(1, cleaned.length() - 1);
-        }
-        if (cleaned.startsWith("~")) {
-            String home = System.getProperty("user.home");
-            if (home != null) cleaned = home + cleaned.substring(1);
-        }
-
-        try {
-            java.nio.file.Path given = java.nio.file.Paths.get(cleaned);
-            if (given.isAbsolute() && java.nio.file.Files.isRegularFile(given)) return given;
-
-            for (java.nio.file.Path folder : places()) {
-                java.nio.file.Path candidate = folder.resolve(cleaned);
-                if (java.nio.file.Files.isRegularFile(candidate)) return candidate;
-            }
-        } catch (RuntimeException ignored) {
-            // Not a path this system can express, which is a missing file by another name.
-            // RuntimeException alone: InvalidPathException is one, so naming both is not
-            // allowed -- alternatives in a multi-catch may not be related by subclassing.
-        }
-        return null;
+        return Disk.find(pictureFolder(), fileName);
     }
 
     /**
@@ -529,11 +489,8 @@ public final class MapArt {
     }
 
     /** The endings worth offering; anything else is not a picture ImageIO will read. */
-    private static final java.util.List<String> KINDS =
+    public static final java.util.List<String> KINDS =
             java.util.List.of(".png", ".jpg", ".jpeg", ".gif", ".bmp");
-
-    /** How many names to offer before the list stops being a help. */
-    private static final int MOST = 60;
 
     /**
      * What pictures are sitting where one can be imported from.
@@ -544,26 +501,7 @@ public final class MapArt {
      * nothing.
      */
     public static java.util.List<String> pictures() {
-        java.util.List<String> found = new java.util.ArrayList<>();
-
-        for (java.nio.file.Path folder : places()) {
-            try (java.util.stream.Stream<java.nio.file.Path> files =
-                         java.nio.file.Files.list(folder)) {
-                files.filter(java.nio.file.Files::isRegularFile)
-                        .map(path -> path.getFileName().toString())
-                        .filter(MapArt::looksLikePicture)
-                        .forEach(fileName -> {
-                            if (!found.contains(fileName) && found.size() < MOST) {
-                                found.add(fileName);
-                            }
-                        });
-            } catch (java.io.IOException | RuntimeException ignored) {
-                // A folder that is not there, or not ours to read, simply holds nothing.
-            }
-        }
-
-        java.util.Collections.sort(found);
-        return found;
+        return Disk.list(pictureFolder(), KINDS);
     }
 
     private static java.util.List<String> cachedPictures = java.util.List.of();
@@ -587,15 +525,6 @@ public final class MapArt {
             cachedAt = now;
         }
         return cachedPictures;
-    }
-
-    /** Whether a name ends in something ImageIO can open. */
-    private static boolean looksLikePicture(String fileName) {
-        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
-        for (String kind : KINDS) {
-            if (lower.endsWith(kind)) return true;
-        }
-        return false;
     }
 
     private static java.nio.file.Path file() {
@@ -626,13 +555,9 @@ public final class MapArt {
 
     public static void load() {
         designs.clear();
-        try {
-            // Made on the way in so there is somewhere obvious to drop a picture, rather
-            // than a folder you have to be told the name of and create yourself.
-            java.nio.file.Files.createDirectories(pictureFolder());
-        } catch (java.io.IOException ignored) {
-            // It can be made by hand; not being able to is not a reason to stop.
-        }
+        // Asking for the folder is what makes it, so there is somewhere obvious to drop
+        // a picture rather than a folder you have to be told the name of.
+        pictureFolder();
         if (!java.nio.file.Files.exists(file())) return;
 
         try {

@@ -7,6 +7,7 @@ failure that looks like "the feature is broken" rather than "the file is somewhe
 so both are pinned here."""
 import io, re, sys
 art  = io.open("src/main/java/dev/skullzz/mirage/client/MapArt.java", encoding="utf-8").read()
+disk = io.open("src/main/java/dev/skullzz/mirage/client/Disk.java", encoding="utf-8").read()
 mc   = io.open("src/main/java/dev/skullzz/mirage/client/MirageClient.java", encoding="utf-8").read()
 dash = io.open("src/main/java/dev/skullzz/mirage/client/WebDashboard.java", encoding="utf-8").read()
 
@@ -32,40 +33,44 @@ check("a path is not parsed as a bare word", fileArg and fileArg.group(1) != "wo
 check("the file argument takes a whole path", fileArg and fileArg.group(1) == "string")
 
 # ------------------------------------------------------------ where it looks
-places = body(art, "public static java.util.List<java.nio.file.Path> places() {")
+places = body(disk, "public static List<Path> places(Path own) {")
 check("the mod's own folder is looked in first",
-      places.index("pictureFolder()") < places.index("user.home"))
+      places.index("folders.add(own)") < places.index("user.home"))
 for folder in ("Desktop", "Downloads", "Pictures"):
     check("%s is looked in" % folder, '"%s"' % folder in places)
 check("and the home folder itself", "folders.add(base);" in places)
 check("no home means no crash", "home != null" in places)
 
-find = body(art, "public static java.nio.file.Path findPicture(String fileName) {")
+find = body(disk, "public static Path find(Path own, String fileName) {")
 check("a whole path is taken as it stands", "given.isAbsolute()" in find)
 check("a home-relative path is expanded", 'cleaned.startsWith("~")' in find)
 check("a pasted path keeps its quotes out of the name", 'startsWith("\\"")' in find)
-check("a name alone is looked for in every folder", "for (java.nio.file.Path folder : places())" in find)
+check("a name alone is looked for in every folder", "for (Path folder : places(own))" in find)
 # On Windows a stray character throws rather than returning; a thrown import helps nobody.
 # RuntimeException alone catches it: InvalidPathException is one, and naming both is a
 # compile error (see check-catch.py), which is exactly how this was first written.
 check("an impossible path is a missing file, not a crash",
       "catch (RuntimeException" in find)
+# One copy, two callers. The last time this rule lived in two places, one copy was fixed.
+check("pictures and schematics use the same finding", "Disk.find(" in art
+      and "Disk.find(" in io.open("src/main/java/dev/skullzz/mirage/client/Schematic.java",
+                                  encoding="utf-8").read())
 check("nothing found is nothing returned", find.rstrip().endswith("return null;"))
 
 # -------------------------------------------------------------- what it offers
-pics = body(art, "public static java.util.List<String> pictures() {")
-check("every folder is listed, not just one", "for (java.nio.file.Path folder : places())" in pics)
-check("only pictures are offered", "looksLikePicture" in pics)
+pics = body(disk, "public static List<String> list(Path own, List<String> kinds) {")
+check("every folder is listed, not just one", "for (Path folder : places(own))" in pics)
+check("only the right kinds are offered", "looksRight(fileName, kinds)" in pics)
 check("a huge folder cannot flood the list", "found.size() < MOST" in pics)
 check("the same name twice is offered once", "!found.contains(fileName)" in pics)
-check("an unreadable folder holds nothing", "catch (java.io.IOException | RuntimeException" in pics)
-MOST = int(re.search(r"int MOST = (\d+);", art).group(1))
+check("an unreadable folder holds nothing", "catch (IOException | RuntimeException" in pics)
+MOST = int(re.search(r"int MOST = (\d+);", disk).group(1))
 check("the cap is a help rather than a wall", 10 <= MOST <= 200)
 
 KINDS = re.search(r"KINDS =\s*java\.util\.List\.of\(([^)]*)\)", art).group(1)
 for kind in (".png", ".jpg", ".jpeg"):
     check("%s is offered" % kind, '"%s"' % kind in KINDS)
-check("the ending is matched whatever its case", "toLowerCase" in art)
+check("the ending is matched whatever its case", "toLowerCase" in disk)
 
 # The dashboard rebuilds twenty times a second; walking four folders that often is a
 # stutter you can feel, so the listing it uses has to be the cached one.

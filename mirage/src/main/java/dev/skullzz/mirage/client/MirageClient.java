@@ -81,6 +81,7 @@ public class MirageClient implements ClientModInitializer {
                         .then(presetBranch())
                         .then(decorBranch())
                         .then(buildBranch())
+                        .then(schematicBranch())
                         .then(rigBranch())
                         .then(ClientCommandManager.literal("prices")
                                 .then(ClientCommandManager.literal("reload")
@@ -306,6 +307,10 @@ public class MirageClient implements ClientModInitializer {
                 openKeys = false;
                 client.setScreen(new MirageKeysScreen());
             }
+            if (openSchems) {
+                openSchems = false;
+                client.setScreen(new MirageSchematicsScreen());
+            }
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -387,6 +392,9 @@ public class MirageClient implements ClientModInitializer {
 
     /** Set by the command, acted on by the next tick, since a command cannot open a screen. */
     private static boolean openKeys;
+
+    /** Same reason as openKeys: a screen cannot be set from inside a command. */
+    private static boolean openSchems;
 
     private static String lastPublished = "";
 
@@ -515,6 +523,31 @@ public class MirageClient implements ClientModInitializer {
             if (!firstPicture) json.append(',');
             firstPicture = false;
             json.append('"').append(WebDashboard.escape(picture)).append('"');
+        }
+        json.append("]},\"schematics\":{\"folder\":\"")
+                .append(WebDashboard.escape(Schematic.folder().toString()))
+                .append("\",\"files\":[");
+        boolean firstSchem = true;
+        for (String file : Schematic.filesCached()) {
+            if (!firstSchem) json.append(',');
+            firstSchem = false;
+            json.append('"').append(WebDashboard.escape(file)).append('"');
+        }
+        json.append("],\"builds\":[");
+        boolean firstBuild = true;
+        for (java.util.Map.Entry<String, FakeBlocks.Build> entry
+                : FakeBlocks.builds().entrySet()) {
+            if (!firstBuild) json.append(',');
+            firstBuild = false;
+            BlockPos at = FakeBlocks.placed().get(entry.getKey());
+            json.append("{\"name\":\"").append(WebDashboard.escape(entry.getKey()))
+                    .append("\",\"blocks\":").append(entry.getValue().count())
+                    .append(",\"size\":\"").append(WebDashboard.escape(entry.getValue().size()))
+                    .append("\",\"at\":\"")
+                    .append(at == null ? "" : at.getX() + " " + at.getY() + " " + at.getZ())
+                    .append("\",\"here\":").append(at == null
+                            || FakeBlocks.belongsHere(entry.getKey()))
+                    .append('}');
         }
         json.append("]},\"machines\":[");
 
@@ -977,6 +1010,57 @@ public class MirageClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1, 127))
                                         .executes(context -> setContainer(context, SelfFakes.DISPENSER,
                                                 IntegerArgumentType.getInteger(context, "count"))))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> schematicBranch() {
+        return ClientCommandManager.literal("schem")
+                .executes(MirageClient::openSchematics)
+                .then(ClientCommandManager.literal("ui").executes(MirageClient::openSchematics))
+                .then(ClientCommandManager.literal("files").executes(MirageClient::schematicFiles))
+                .then(ClientCommandManager.literal("folder").executes(MirageClient::schematicFolder))
+                .then(ClientCommandManager.literal("load")
+                        .then(ClientCommandManager.argument("file", StringArgumentType.string())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(
+                                        Schematic.files(), builder))
+                                .then(ClientCommandManager.argument("name",
+                                                StringArgumentType.word())
+                                        .executes(MirageClient::schematicLoad))));
+    }
+
+    private static int openSchematics(CommandContext<FabricClientCommandSource> context) {
+        // Opened next tick: a screen cannot be set from inside the command, which runs
+        // while the chat screen it was typed into is still closing.
+        openSchems = true;
+        return 1;
+    }
+
+    private static int schematicFiles(CommandContext<FabricClientCommandSource> context) {
+        List<String> files = Schematic.files();
+        if (files.isEmpty()) {
+            return feedback(context, "No schematics found. Looked in: "
+                    + Schematic.describePlaces() + ". Drop a .litematic in any of those,"
+                    + " or give the whole path in quotes.");
+        }
+        return feedback(context, "Ready to load (" + files.size() + "): "
+                + String.join(", ", files));
+    }
+
+    private static int schematicFolder(CommandContext<FabricClientCommandSource> context) {
+        return feedback(context, "Schematics folder: " + Schematic.folder()
+                + " -- it is made for you at startup. Also looked in: "
+                + Schematic.describePlaces() + ". The dashboard shows this too.");
+    }
+
+    private static int schematicLoad(CommandContext<FabricClientCommandSource> context) {
+        String file = StringArgumentType.getString(context, "file");
+        String name = StringArgumentType.getString(context, "name");
+
+        int blocks = Schematic.load(file, name);
+        if (blocks < 0) return error(context, Schematic.lastReason());
+
+        return feedback(context, "'" + name + "' " + Schematic.lastReason()
+                + ". Stand it up with /fake build put " + name + ", then line it up with"
+                + " /fake build align " + name + ".");
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> buildBranch() {

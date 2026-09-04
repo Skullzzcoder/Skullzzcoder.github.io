@@ -404,6 +404,12 @@ public final class WebDashboard {
               <div class="panel"><h3>Machines</h3><div id="machines"></div></div>
               <div class="panel"><h3>What the machines did</h3><div id="fires" class="log"></div></div>
               <div class="panel"><h3>Messages</h3><div id="notices" class="log"></div></div>
+              <div class="panel"><h3>Schematics</h3>
+                <div id="schempath" class="path"></div>
+                <button id="copyschem">Copy this folder path</button>
+                <div id="schemfiles" class="log"></div>
+                <div id="schembuilds" class="log"></div>
+              </div>
               <div class="panel"><h3>Map pictures</h3>
                 <div id="picpath" class="path"></div>
                 <button id="copypath">Copy this folder path</button>
@@ -662,7 +668,26 @@ public final class WebDashboard {
               renderLog('fires', s.fires);
               renderLog('notices', s.notices);
               renderPictures(s);
+              renderSchematics(s);
             }
+
+            const renderSchematics = s => {
+              const schem = s.schematics || { folder: '', files: [], builds: [] };
+              el('schempath').textContent = schem.folder || 'unknown';
+
+              const files = schem.files || [];
+              renderLog('schemfiles', files.length
+                  ? files.map(f => f + '   \u00b7   /fake schem load ' + f + ' <name>')
+                  : ['No .litematic files yet. Drop them in the folder above,',
+                     'or in Desktop, Downloads or Pictures.']);
+
+              const builds = schem.builds || [];
+              renderLog('schembuilds', builds.length
+                  ? builds.map(b => b.name + '   \u00b7   ' + b.blocks + ' blocks, ' + b.size
+                      + (b.at ? '   \u00b7   up at ' + b.at + (b.here ? '' : ' (another world)')
+                              : '   \u00b7   down'))
+                  : ['Nothing loaded. /fake schem opens the picker in game.']);
+            };
 
             const renderPictures = s => {
               const pics = s.pictures || { folder: '', files: [] };
@@ -678,16 +703,20 @@ public final class WebDashboard {
 
             // Copying beats reading: the path is long, and typing it out by hand is
             // exactly the step that was going wrong.
-            el('copypath').onclick = async () => {
-              const text = el('picpath').textContent;
-              const button = el('copypath');
+            const wireCopy = (buttonId, pathId) => {
+              el(buttonId).onclick = () => copyFrom(buttonId, pathId);
+            };
+
+            const copyFrom = async (buttonId, pathId) => {
+              const text = el(pathId).textContent;
+              const button = el(buttonId);
               try {
                 await navigator.clipboard.writeText(text);
                 button.textContent = 'Copied';
               } catch (failure) {
                 // Some browsers refuse the clipboard outright; selecting it is still a copy.
                 const range = document.createRange();
-                range.selectNodeContents(el('picpath'));
+                range.selectNodeContents(el(pathId));
                 const selection = window.getSelection();
                 selection.removeAllRanges();
                 selection.addRange(range);
@@ -695,6 +724,9 @@ public final class WebDashboard {
               }
               setTimeout(() => { button.textContent = 'Copy this folder path'; }, 2000);
             };
+
+            wireCopy('copypath', 'picpath');
+            wireCopy('copyschem', 'schempath');
 
             refresh();
             setInterval(refresh, 1000);

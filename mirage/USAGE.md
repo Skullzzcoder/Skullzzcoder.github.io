@@ -663,6 +663,52 @@ and *why did that just appear*.
 > blank name and everything shows everywhere, exactly as it did before. It fails
 > towards showing your build, never towards hiding it.
 
+### Litematica schematics
+
+Drop `.litematic` files in a folder and stand them up. **`/fake schem`** opens the
+picker: what is on disk down the left, what you have loaded down the right, with
+**Load**, **Put**, **Take**, **Forget** and a row of nudge buttons.
+
+    /fake schem                  open the picker
+    /fake schem files            what it can see, anywhere
+    /fake schem folder           where to put them
+    /fake schem load castle.litematic castle
+
+Same finding rules as pictures: **you do not have to find the folder.** Desktop,
+Downloads and Pictures are searched by name, and a whole path works if you paste it
+in quotes. `config/mirage-schematics/` is made for you if you would rather keep them
+together.
+
+**A loaded schematic is an ordinary build.** That is the whole design — everything
+that already works on builds works on these, without being written twice:
+
+    /fake build put castle        stand it up
+    /fake build align castle      corner onto the block you are looking at
+    /fake build move castle 1 0 0 nudge it
+    /fake build cut               open a hole in it
+    /fake build take              take it down
+
+It is bound to the world you placed it in, saved across restarts, and counts against
+the same 500,000-block cap.
+
+**What it reads:** every region in the file, merged into one build, with the
+palettes combined so a block used in two regions is one entry. Negative region
+sizes are handled. Air, cave air and void air are skipped.
+
+**What it does not do:** rotation and mirroring, entities, tile-entity contents
+(a chest arrives empty), and the material list. Litematica's placement is a *ghost*
+you build along; this paints solid blocks that only you can see. It is not a
+building aid — you cannot place a real block by looking at a fake one.
+
+> **A block this version of Minecraft does not have shows as stone**, and the load
+> says how many did. A gap in a wall is harder to notice than a wrong block in one.
+
+> **A file it cannot read is refused by name, not half-read.** A schematic read the
+> wrong way does not look wrong — it looks like a different building. So the packed
+> block data must be exactly the length the size and palette require, and every index
+> must land inside the palette; if either fails it tells you rather than painting
+> rubbish.
+
 Builds live in `config/mirage-builds.json`, written only when one changes.
 Air is skipped, so only what is really built is carried, and the corner is
 measured from the lowest of the three axes.
