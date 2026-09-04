@@ -130,14 +130,16 @@ public class MirageClient implements ClientModInitializer {
                                                         .executes(MirageClient::saveDesign))))
                                 .then(ClientCommandManager.literal("import")
                                         .then(ClientCommandManager.argument("file",
-                                                        StringArgumentType.word())
+                                                        StringArgumentType.string())
                                                 .suggests((context, builder) ->
-                                                        CommandSource.suggestMatching(MapArt.pictures(), builder))
+                                                        CommandSource.suggestMatching(MapArt.picturesCached(), builder))
                                                 .then(ClientCommandManager.argument("name",
                                                                 StringArgumentType.word())
                                                         .executes(MirageClient::importPicture))))
                                 .then(ClientCommandManager.literal("pictures")
                                         .executes(MirageClient::listPictures))
+                                .then(ClientCommandManager.literal("folder")
+                                        .executes(MirageClient::pictureFolder))
                                 .then(ClientCommandManager.literal("load")
                                         .then(ClientCommandManager.argument("name",
                                                         StringArgumentType.word())
@@ -505,7 +507,16 @@ public class MirageClient implements ClientModInitializer {
             }
             json.append(']');
         }
-        json.append("},\"machines\":[");
+        json.append("},\"pictures\":{\"folder\":\"")
+                .append(WebDashboard.escape(MapArt.pictureFolder().toString()))
+                .append("\",\"files\":[");
+        boolean firstPicture = true;
+        for (String picture : MapArt.picturesCached()) {
+            if (!firstPicture) json.append(',');
+            firstPicture = false;
+            json.append('"').append(WebDashboard.escape(picture)).append('"');
+        }
+        json.append("]},\"machines\":[");
 
         first = true;
         for (BlockPos pos : ClientDispensers.watchedPositions()) {
@@ -662,11 +673,23 @@ public class MirageClient implements ClientModInitializer {
     private static int listPictures(CommandContext<FabricClientCommandSource> context) {
         List<String> pictures = MapArt.pictures();
         if (pictures.isEmpty()) {
-            return feedback(context, "No pictures to import. Drop image files into "
-                    + MapArt.pictureFolder() + " and run this again.");
+            return feedback(context, "No pictures found. Looked in: " + MapArt.describePlaces()
+                    + ". Drop an image in any of those, or give the whole path in quotes.");
         }
-        return feedback(context, "Ready to import from " + MapArt.pictureFolder() + ": "
+        return feedback(context, "Ready to import (" + pictures.size() + "): "
                 + String.join(", ", pictures));
+    }
+
+    /**
+     * Prints the folder itself.
+     *
+     * <p>The whole path, not the name of it: a folder you have to go and find is a folder
+     * that stops the feature working, and the mod already knows exactly where it is.
+     */
+    private static int pictureFolder(CommandContext<FabricClientCommandSource> context) {
+        return feedback(context, "Pictures folder: " + MapArt.pictureFolder()
+                + " -- it is made for you at startup. Also looked in: "
+                + MapArt.describePlaces() + ". The dashboard shows this too.");
     }
 
     private static int loadDesign(CommandContext<FabricClientCommandSource> context) {

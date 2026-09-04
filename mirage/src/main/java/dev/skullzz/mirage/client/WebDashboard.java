@@ -338,6 +338,10 @@ public final class WebDashboard {
                        border: 1px solid #343a44; background: #1e2127; color: #e8eaed;
                        font: inherit; font-weight: 550; cursor: pointer; }
               button:hover { background: #262a31; }
+              .path { font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+                      font-size: 13px; word-break: break-all; user-select: all;
+                      background: #14161a; border: 1px solid #2b2f37; border-radius: 8px;
+                      padding: 10px 12px; margin-bottom: 10px; }
               button[aria-pressed="true"] { border-color: currentColor; }
               #rigs button { flex: 0 0 auto; min-width: 0; padding: 8px 16px; font-size: 14px;
                              border-radius: 999px; }
@@ -400,6 +404,11 @@ public final class WebDashboard {
               <div class="panel"><h3>Machines</h3><div id="machines"></div></div>
               <div class="panel"><h3>What the machines did</h3><div id="fires" class="log"></div></div>
               <div class="panel"><h3>Messages</h3><div id="notices" class="log"></div></div>
+              <div class="panel"><h3>Map pictures</h3>
+                <div id="picpath" class="path"></div>
+                <button id="copypath">Copy this folder path</button>
+                <div id="picfiles" class="log"></div>
+              </div>
             <script>
             const el = id => document.getElementById(id);
 
@@ -652,9 +661,41 @@ public final class WebDashboard {
               renderMachines(s);
               renderLog('fires', s.fires);
               renderLog('notices', s.notices);
+              renderPictures(s);
             }
 
+            const renderPictures = s => {
+              const pics = s.pictures || { folder: '', files: [] };
+              el('picpath').textContent = pics.folder || 'unknown';
+              const files = pics.files || [];
+              renderLog('picfiles', files.length
+                  ? files.map(f => f + '   \u00b7   /fake map import ' + f + ' <name>')
+                  : ['Nothing yet. Drop a png or jpg in the folder above,',
+                     'or in Desktop, Downloads or Pictures.']);
+            };
+
             wireButtons();
+
+            // Copying beats reading: the path is long, and typing it out by hand is
+            // exactly the step that was going wrong.
+            el('copypath').onclick = async () => {
+              const text = el('picpath').textContent;
+              const button = el('copypath');
+              try {
+                await navigator.clipboard.writeText(text);
+                button.textContent = 'Copied';
+              } catch (failure) {
+                // Some browsers refuse the clipboard outright; selecting it is still a copy.
+                const range = document.createRange();
+                range.selectNodeContents(el('picpath'));
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                button.textContent = 'Selected - press Ctrl+C';
+              }
+              setTimeout(() => { button.textContent = 'Copy this folder path'; }, 2000);
+            };
+
             refresh();
             setInterval(refresh, 1000);
             </script>

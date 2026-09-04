@@ -389,6 +389,72 @@ public final class MapArt {
     }
 
     /**
+     * Every folder a picture is looked for in, best first.
+     *
+     * <p>Finding one folder on disk is a worse problem than it sounds, and it is not the
+     * player's problem to solve: the mod's own folder is first, then the three places a
+     * downloaded picture actually lands, then the home folder itself. A name alone is
+     * enough if the file is in any of them.
+     */
+    public static java.util.List<java.nio.file.Path> places() {
+        java.util.List<java.nio.file.Path> folders = new java.util.ArrayList<>();
+        folders.add(pictureFolder());
+
+        String home = System.getProperty("user.home");
+        if (home != null && !home.isEmpty()) {
+            java.nio.file.Path base = java.nio.file.Paths.get(home);
+            folders.add(base.resolve("Desktop"));
+            folders.add(base.resolve("Downloads"));
+            folders.add(base.resolve("Pictures"));
+            folders.add(base);
+        }
+        return folders;
+    }
+
+    /** The same folders, written out for a message that has to be actionable. */
+    public static String describePlaces() {
+        java.util.List<String> shown = new java.util.ArrayList<>();
+        for (java.nio.file.Path folder : places()) shown.add(folder.toString());
+        return String.join(", ", shown);
+    }
+
+    /**
+     * Turns whatever was typed into a file on disk, or nothing.
+     *
+     * <p>A whole path is taken as it stands, so a picture never has to be moved at all;
+     * otherwise the name is looked for in each of the usual folders. An unusable path is
+     * the same answer as a missing file -- on Windows a stray character throws rather
+     * than returning, and a thrown import helps nobody.
+     */
+    public static java.nio.file.Path findPicture(String fileName) {
+        if (fileName == null || fileName.isEmpty()) return null;
+
+        String cleaned = fileName.trim();
+        // Quotes survive a copied path on both Windows and macOS; drop them rather than
+        // failing on a path the player pasted exactly as their file manager gave it.
+        if (cleaned.length() > 1 && cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        }
+        if (cleaned.startsWith("~")) {
+            String home = System.getProperty("user.home");
+            if (home != null) cleaned = home + cleaned.substring(1);
+        }
+
+        try {
+            java.nio.file.Path given = java.nio.file.Paths.get(cleaned);
+            if (given.isAbsolute() && java.nio.file.Files.isRegularFile(given)) return given;
+
+            for (java.nio.file.Path folder : places()) {
+                java.nio.file.Path candidate = folder.resolve(cleaned);
+                if (java.nio.file.Files.isRegularFile(candidate)) return candidate;
+            }
+        } catch (java.nio.file.InvalidPathException | RuntimeException ignored) {
+            // Not a path this system can express, which is a missing file by another name.
+        }
+        return null;
+    }
+
+    /**
      * Turns an image file into a design.
      *
      * <p>The only way in that needs nothing in the game at all. Reading and scaling the image
@@ -400,9 +466,12 @@ public final class MapArt {
      * logo with a cut-out background should keep it rather than gain a white square.
      */
     public static boolean importPicture(String fileName, String name) {
-        java.nio.file.Path path = pictureFolder().resolve(fileName);
-        if (!java.nio.file.Files.exists(path)) {
-            lastReason = "no file at " + path + ". Put the picture there and try again.";
+        java.nio.file.Path path = findPicture(fileName);
+        if (path == null) {
+            lastReason = "no picture called " + fileName + ". Looked in: "
+                    + describePlaces() + ". Drop it in one of those, or give the whole path"
+                    + " in quotes: /fake map import \"C:\\Users\\you\\Desktop\\art.png\" "
+                    + name;
             return false;
         }
 
@@ -457,18 +526,74 @@ public final class MapArt {
         return pixels;
     }
 
-    /** What pictures are sitting in the folder waiting to be imported. */
+    /** The endings worth offering; anything else is not a picture ImageIO will read. */
+    private static final java.util.List<String> KINDS =
+            java.util.List.of(".png", ".jpg", ".jpeg", ".gif", ".bmp");
+
+    /** How many names to offer before the list stops being a help. */
+    private static final int MOST = 60;
+
+    /**
+     * What pictures are sitting where one can be imported from.
+     *
+     * <p>Every folder in {@link #places()}, not just the mod's own, so a picture that was
+     * just downloaded turns up under tab-complete without being moved first. Pictures only,
+     * and a cap: a home folder can hold thousands of files and a list that long answers
+     * nothing.
+     */
     public static java.util.List<String> pictures() {
         java.util.List<String> found = new java.util.ArrayList<>();
-        try (java.util.stream.Stream<java.nio.file.Path> files =
-                     java.nio.file.Files.list(pictureFolder())) {
-            files.filter(java.nio.file.Files::isRegularFile)
-                    .forEach(path -> found.add(path.getFileName().toString()));
-        } catch (java.io.IOException ignored) {
-            // No folder yet is the same answer as an empty one.
+
+        for (java.nio.file.Path folder : places()) {
+            try (java.util.stream.Stream<java.nio.file.Path> files =
+                         java.nio.file.Files.list(folder)) {
+                files.filter(java.nio.file.Files::isRegularFile)
+                        .map(path -> path.getFileName().toString())
+                        .filter(MapArt::looksLikePicture)
+                        .forEach(fileName -> {
+                            if (!found.contains(fileName) && found.size() < MOST) {
+                                found.add(fileName);
+                            }
+                        });
+            } catch (java.io.IOException | RuntimeException ignored) {
+                // A folder that is not there, or not ours to read, simply holds nothing.
+            }
         }
+
         java.util.Collections.sort(found);
         return found;
+    }
+
+    private static java.util.List<String> cachedPictures = java.util.List.of();
+    private static long cachedAt = 0L;
+
+    /** How long a folder listing is trusted, in milliseconds. */
+    private static final long CACHE_MS = 3000L;
+
+    /**
+     * The same listing, but safe to ask for constantly.
+     *
+     * <p>The dashboard rebuilds twenty times a second and tab-complete asks whenever it
+     * feels like it; walking four folders on disk that often would be a stutter you could
+     * feel. Three seconds stale is not stale for a folder a person drops files into by
+     * hand, and the explicit command still scans afresh.
+     */
+    public static java.util.List<String> picturesCached() {
+        long now = System.currentTimeMillis();
+        if (now - cachedAt > CACHE_MS) {
+            cachedPictures = pictures();
+            cachedAt = now;
+        }
+        return cachedPictures;
+    }
+
+    /** Whether a name ends in something ImageIO can open. */
+    private static boolean looksLikePicture(String fileName) {
+        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        for (String kind : KINDS) {
+            if (lower.endsWith(kind)) return true;
+        }
+        return false;
     }
 
     private static java.nio.file.Path file() {

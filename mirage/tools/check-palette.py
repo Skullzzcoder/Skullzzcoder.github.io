@@ -69,7 +69,8 @@ check("the drawn black is the black base", sum(BASES[BLACK]) < 90)
 # -------------------------------------------------------------- importing
 imp = re.search(r"public static boolean importPicture\(String fileName, String name\) \{"
                 r"(.*?)\n    \}", art, re.S).group(1)
-check("a missing file is named", "no file at" in imp)
+check("a missing file is named", "no picture called" in imp and "fileName" in imp)
+check("and so is every folder that was searched", "describePlaces()" in imp)
 check("something that is not a picture is named", "not a picture this can read" in imp)
 check("nothing thrown escapes", "catch (java.io.IOException | RuntimeException" in imp)
 check("an import is kept at once", "persist();" in imp)
@@ -93,7 +94,7 @@ check("nothing held says so", "You are not holding a map" in mc)
 for command in ("import", "pictures"):
     check("there is a %s command" % command, 'literal("%s")' % command in mc)
 check("held is a way to save", 'literal("held")' in mc and "saveHeldDesign" in mc)
-check("the files are suggested", "CommandSource.suggestMatching(MapArt.pictures(), builder)" in mc)
+check("the files are suggested", "CommandSource.suggestMatching(MapArt.picturesCached(), builder)" in mc)
 
 print("FAILED: " + "; ".join(fails) if fails else
       "%d bases x %d shades = %d colours, all distinct and self-matching; pictures scale, "

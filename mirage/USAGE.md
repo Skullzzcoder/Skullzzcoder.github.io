@@ -771,14 +771,45 @@ art, bought, found or given.
 
 ### Importing a picture from your computer
 
-Nothing in the game is needed for this half. Drop image files — png, jpg, gif,
-bmp — into:
+Nothing in the game is needed for this half.
 
-    config/mirage-pictures/
+**You do not have to find any folder.** Three ways in, easiest first:
 
-Then:
+**1. Leave the picture where it already is.** Desktop, Downloads and Pictures are
+searched by name, so a file you just downloaded works as it sits:
 
-    /fake map pictures                  (what is in the folder)
+    /fake map pictures                  (everything it can see, anywhere)
+    /fake map import wolf.png dragon
+
+**2. Paste the whole path**, in quotes. Right-click the file → *Copy as path* on
+Windows, or ⌥-right-click → *Copy as Pathname* on a Mac:
+
+    /fake map import "C:\Users\you\Desktop\wolf.png" dragon
+
+Quotes, spaces and `~` all work. The name after it is what you call the design.
+
+**3. Use the mod's own folder**, if you would rather keep them together. It is made
+for you at startup, and the mod will tell you exactly where it is:
+
+    /fake map folder
+
+That prints the whole path — and the **dashboard** shows it too, with a **Copy this
+folder path** button, which beats retyping it. It is inside your Minecraft folder,
+not the mod jar:
+
+| Launcher | Where `config/` lives |
+| --- | --- |
+| Vanilla / Mojang, Windows | `%appdata%\.minecraft\config\mirage-pictures` |
+| Vanilla / Mojang, macOS | `~/Library/Application Support/minecraft/config/mirage-pictures` |
+| Vanilla / Mojang, Linux | `~/.minecraft/config/mirage-pictures` |
+| CurseForge / Prism / MultiMC / ATLauncher | inside *that instance's* folder — use the instance's **Open Folder** button, then `config/` |
+
+The instance ones are the common trap: a launcher gives each instance its own
+`config/`, so the one next to `.minecraft` may not be the one this mod is reading.
+`/fake map folder` prints the one that is actually being read, which is why it exists.
+
+Then either way:
+
     /fake map import logo.png dragon    (keep it as a design)
     /fake map load dragon 118           (put it on a map you own)
 
