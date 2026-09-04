@@ -32,7 +32,7 @@ first.
 
 With no `-Ptarget` the values in `gradle.properties` are used, exactly as before.
 
-## Expect the second target not to compile first time
+## Expect the second target not to compile first time — see PORTING.md
 
 This is normal and it is not a mistake in the setup. Between Minecraft versions, yarn
 names move. What you will see is a list of `cannot find symbol` errors naming the methods

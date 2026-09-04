@@ -54,9 +54,15 @@ That writes `versions/26.2.properties` and builds `mirage-mc26.2-1.0.0.jar` besi
 
 **One jar per Minecraft version** — a Fabric mod is compiled against remapped Minecraft
 names and those names move between releases, so a jar built for one will not load on
-another. Expect a second target to need source fixes the first time; `gradlew inspectApi
--Ptarget=26.2` prints the real names rather than leaving them to be guessed at. See
-[PUBLISHING.md](PUBLISHING.md).
+another. Expect a second target to need source fixes the first time:
+
+```
+gradlew portCheck -Ptarget=26.2
+```
+
+lists every type, constant and method name the target no longer has, in one pass, with
+what each class *does* have printed beside it — so replacements are looked up rather than
+guessed. See [PORTING.md](PORTING.md) and [PUBLISHING.md](PUBLISHING.md).
 
 ### Checking calls without a build
 

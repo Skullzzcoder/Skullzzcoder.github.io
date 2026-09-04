@@ -60,6 +60,17 @@ def minecraftDepend = targetProps.containsKey('minecraft_depend')
         ? targetProps['minecraft_depend']
         : (project.findProperty('minecraft_depend') ?: "~${prop('minecraft_version')}")
 
+// Handed to portcheck.gradle: an applied script cannot see this one's local variables.
+ext.mirageTarget = target == null ? '' : target.toString()
+ext.mirageMinecraft = prop('minecraft_version').toString()
+
+// Applied only if present, and it defines one diagnostic task. If it ever misbehaves,
+// deleting the file restores the build -- which matters because a broken build script
+// stops every target, not just the one being ported.
+if (file('portcheck.gradle').exists()) {
+    apply from: 'portcheck.gradle'
+}
+
 version = project.findProperty('mod_version') ?: '1.0.0'
 group = project.findProperty('maven_group') ?: 'dev.skullzz'
 

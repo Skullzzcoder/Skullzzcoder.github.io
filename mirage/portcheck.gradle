@@ -1,0 +1,141 @@
+/**
+ * What this mod uses that a target Minecraft version no longer has.
+ *
+ * <p>The port loop. Moving between Minecraft versions breaks on renamed yarn names, and
+ * the compiler only tells you once it can compile everything before the error -- so a
+ * port is normally a queue of one-error builds, each taking a minute. This reads the
+ * source, then asks the remapped classpath about every type, constant and method name it
+ * mentions, and reports the whole list at once.
+ *
+ * <p>It reports names, never guesses at them. Where something is gone it lists what the
+ * class does have, so the replacement is looked up rather than invented -- which is how
+ * four guesses in a row left the keys screen unfinished.
+ *
+ *   gradlew portCheck -Ptarget=26.2
+ */
+tasks.register('portCheck') {
+    group = 'help'
+    description = 'Lists everything this mod uses that the target Minecraft no longer has.'
+    notCompatibleWithConfigurationCache('Loads classes from the compile classpath.')
+
+    def compileClasspath = sourceSets.main.compileClasspath
+    def sourceDir = file('src/main/java')
+    def report = layout.buildDirectory.file('mirage-port-report.txt')
+    def targetName = project.mirageTarget.isEmpty()
+            ? project.mirageMinecraft : project.mirageTarget
+
+    doLast {
+        new File(projectDir, 'logs').mkdirs()
+
+        def out = new StringBuilder()
+        def say = { String line -> out.append(line).append('\n') }
+
+        def sources = []
+        sourceDir.eachFileRecurse { if (it.name.endsWith('.java')) sources << it }
+
+        // What the mod mentions. Imports are exact; the rest is deliberately broad, since
+        // the point is to surface anything that might have moved, not to be minimal.
+        def imports = [] as TreeSet
+        def statics = [:].withDefault { [] as TreeSet }
+        def calls = [] as TreeSet
+
+        sources.each { source ->
+            def text = source.text
+            (text =~ /import\s+((?:net\.minecraft|net\.fabricmc|com\.mojang)[\w.]*)\s*;/)
+                    .each { match -> imports << match[1] }
+            // Type.CONSTANT -- a renamed constant is a compile error with no near miss.
+            (text =~ /\b([A-Z][A-Za-z0-9]*)\.([A-Z][A-Z0-9_]{2,})\b/).each { match ->
+                statics[match[1]] << match[2]
+            }
+            (text =~ /\.([a-z][A-Za-z0-9]*)\s*\(/).each { match -> calls << match[1] }
+        }
+
+        say("Mirage port check against Minecraft ${targetName}")
+        say("${sources.size()} source files, ${imports.size()} imported types")
+
+        def urls = compileClasspath.files.collect { it.toURI().toURL() }
+        def loader = new URLClassLoader(urls as URL[], (ClassLoader) null)
+
+        def loaded = [:]
+        def missingTypes = []
+        imports.each { name ->
+            try {
+                loaded[name] = loader.loadClass(name)
+            } catch (Throwable ignored) {
+                missingTypes << name
+            }
+        }
+
+        // Every member name the classpath knows about, and which types carry it. A called
+        // name that appears nowhere is the strongest signal available without a compile.
+        def membersByName = [:].withDefault { [] as TreeSet }
+        def simpleNames = [:]
+        loaded.each { name, type ->
+            simpleNames[type.simpleName] = type
+            try {
+                type.methods.each { membersByName[it.name] << type.simpleName }
+                type.fields.each { membersByName[it.name] << type.simpleName }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        say('')
+        say('== Types that are gone')
+        if (missingTypes.isEmpty()) say('  none -- every imported type still exists')
+        else missingTypes.each { say("  ${it}") }
+
+        say('')
+        say('== Constants that are gone')
+        def missingStatics = []
+        statics.each { simple, names ->
+            def type = simpleNames[simple]
+            if (type == null) return
+            names.each { constant ->
+                try {
+                    type.getField(constant)
+                } catch (Throwable ignored) {
+                    missingStatics << "${simple}.${constant}"
+                }
+            }
+        }
+        if (missingStatics.isEmpty()) say('  none')
+        else missingStatics.sort().each { name ->
+            def simple = name.split('\\.')[0]
+            def type = simpleNames[simple]
+            say("  ${name}")
+            try {
+                def had = type.fields.findAll { it.name ==~ /[A-Z][A-Z0-9_]*/ }
+                        .collect { it.name }.sort()
+                say("      ${simple} has: ${had.join(', ')}")
+            } catch (Throwable ignored) {
+            }
+        }
+
+        say('')
+        say('== Method names this mod calls that no imported type has')
+        say('   (a name here is either gone, or belongs to a type not imported directly --')
+        say('    check each against the class it is called on before changing anything)')
+        def orphans = calls.findAll { !membersByName.containsKey(it) }
+        if (orphans.isEmpty()) say('  none')
+        else orphans.each { name ->
+            // Same name in a different case, or with a prefix, is the usual rename.
+            def lower = name.toLowerCase()
+            def near = membersByName.keySet().findAll {
+                def other = it.toLowerCase()
+                other.contains(lower) || lower.contains(other)
+            }.sort().take(6)
+            say("  ${name}()${near.isEmpty() ? '' : '   near: ' + near.join(', ')}")
+        }
+
+        say('')
+        say("Nothing above is a guess. Where a name is gone, what the class does have is")
+        say("listed beside it -- look the replacement up there rather than inventing one.")
+
+        println out.toString()
+        def file = report.get().asFile
+        file.parentFile.mkdirs()
+        file.text = out.toString()
+        println ""
+        println "Written to ${file}"
+    }
+}
