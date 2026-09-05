@@ -62,13 +62,23 @@ for field, probe in (("which game is on", "shown.mode()"),
                      ("whether quiet is on", "SelfFakes.quiet()")):
     check("the dashboard publishes %s" % field, probe in pub)
 
-# And the page has to actually draw them, or publishing is talking to itself.
-for name in ("renderHead", "renderSettings", "renderMachines", "renderLog"):
-    check("the page has %s" % name, "function %s(" % name in web)
-    check("and calls it", re.search(r"\n\s+%s\(" % name, web) is not None)
-check("a machine that is not ok is marked", "'machine' + (m.state === 'ok' ? '' : ' bad')" in web)
+# And the page has to actually draw them, or publishing is talking to itself. Pinned by
+# what each section reads rather than by the name of the function that draws it, since the
+# page has been laid out twice now and the field is the thing that matters.
+for section in ("overview", "rigs", "machines", "builds", "schematics", "mapart", "log"):
+    check("the page has a %s section" % section, "pages.%s = " % section in web)
+for field in ("s.machines", "s.fires", "s.notices", "s.mix", "s.blackjack", "s.paper",
+              "s.rigs", "s.rigsOn", "s.answer"):
+    check("the page reads %s" % field, field in web)
+
+# Three things the first layout did that the second nearly lost. All three are the same
+# rule: the state you opened the page to find must not be the state that looks ordinary.
+check("a machine that is not ready is marked",
+      "machines[i].state === 'ok' ? '' : 'bad'" in web and "tr.bad td" in web)
 check("a stopped fire is marked", "line.includes('STOPPED')" in web)
 check("the newest line is first", ".slice().reverse()" in web)
+check("a machine that is not ready is counted where you land",
+      "'Machines not ready'" in web)
 
 # ------------------------------------------------------------- the break time
 # A prize that vanishes the instant it is touched does not read as having been mined.

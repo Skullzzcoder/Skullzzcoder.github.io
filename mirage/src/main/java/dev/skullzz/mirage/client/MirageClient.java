@@ -559,6 +559,13 @@ public class MirageClient implements ClientModInitializer {
                 .append("\",\"back\":\"").append(WebDashboard.escape(shown.backLabel()))
                 .append("\",\"quiet\":").append(SelfFakes.quiet())
                 .append(",\"rigsOn\":").append(SelfFakes.rigsOn())
+                // The dashboard paints itself in whichever theme is chosen in game, so the
+                // two do not drift into looking like different programs.
+                .append(",\"theme\":\"")
+                .append(WebDashboard.escape(RyneTheme.current().name))
+                .append("\",\"accent\":\"")
+                .append(String.format("#%06x", RyneTheme.current().accent & 0xFFFFFF))
+                .append('"')
                 .append(",\"place\":").append(shown.placeOutput)
                 .append(",\"breakSeconds\":").append(shown.breakSeconds);
 

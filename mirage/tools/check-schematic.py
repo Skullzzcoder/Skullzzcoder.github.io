@@ -81,8 +81,8 @@ check("a path can be pasted", "StringArgumentType.string()" in body(client,
 check("the screen is opened on the next tick, not inside the command", "openSchems" in client)
 check("the dashboard carries the schematics", '\\"schematics\\":{\\"folder\\":' in client)
 check("and what is loaded", '\\"builds\\":[' in client)
-check("the page shows the folder", 'id="schempath"' in dash)
-check("with a copy button", 'id="copyschem"' in dash)
+check("the page shows the folder", "path.id = 'schempath'" in dash)
+check("with a copy button", "copyButton(host, 'schempath')" in dash)
 # One copy of the copying, two buttons: the same rule that put finding a file in Disk.
 check("both copy buttons share one implementation", dash.count("navigator.clipboard.writeText") == 1)
 check("the dashboard listing is cached", "filesCached()" in client and "filesCached()" in schem)

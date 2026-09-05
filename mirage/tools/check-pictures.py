@@ -92,9 +92,11 @@ check("an empty listing still says where it looked", "describePlaces()" in listi
 
 # The dashboard is the one place a path can be copied rather than retyped.
 check("the dashboard carries the folder", '\\"pictures\\":{\\"folder\\":' in mc)
-check("the page shows it", 'id="picpath"' in dash)
+check("the page shows it", "path.id = 'picpath'" in dash)
 check("selectable, not just readable", "user-select: all" in dash)
-check("there is a copy button", 'id="copypath"' in dash)
+# One copy button, built by one function, used by both folder pages.
+check("there is a copy button", "copyButton(host, 'picpath')" in dash
+      and "const copyButton = " in dash)
 check("a refused clipboard still leaves it selected",
       "selectNodeContents" in dash and "catch (failure)" in dash)
 check("an empty folder says what to do", "Drop a png or jpg" in dash)
