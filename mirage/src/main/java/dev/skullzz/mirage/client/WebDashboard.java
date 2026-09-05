@@ -467,6 +467,7 @@ public final class WebDashboard {
               { id: 'builds',     label: 'Builds',     group: 'MODULES' },
               { id: 'schematics', label: 'Schematics', group: 'MODULES' },
               { id: 'mapart',     label: 'Map art',    group: 'MODULES' },
+              { id: 'tracker',    label: 'Tracker',    group: 'MODULES' },
               { id: 'log',        label: 'Activity',   group: 'CLIENT' },
             ];
 
@@ -583,6 +584,17 @@ public final class WebDashboard {
               card(grid, s.forward || '--', 'F does this');
               card(grid, s.back || '--', 'R does this');
               host.appendChild(grid);
+
+              const t = s.tracker || {};
+              if (t.session) {
+                const money = make('div', 'row');
+                stat(money, t.session.net, 'Session net', !t.session.up);
+                stat(money, t.session.wins + 'W / ' + t.session.losses + 'L', 'Trades');
+                if (t.session.streak >= (t.alertAfter || 5)) {
+                  stat(money, t.session.streak, 'Out in a row', true);
+                }
+                host.appendChild(money);
+              }
 
               if (s.answer && s.answer !== 'yes') {
                 host.appendChild(make('div', 'sub', 'Why nothing will fire: ' + s.answer));
@@ -706,6 +718,57 @@ public final class WebDashboard {
                 return;
               }
               logInto(host, files.map(f => f + '   -   /fake map import ' + f + ' <name>'));
+            };
+
+            pages.tracker = (host, s) => {
+              host.appendChild(make('h2', '', 'Tracker'));
+              const t = s.tracker || {};
+
+              if (t.hooked === false) {
+                host.appendChild(make('div', 'none',
+                    'Not reading chat: ' + (t.why || 'unknown') + '. Nothing is being '
+                    + 'counted, which is better than counting it wrongly.'));
+                return;
+              }
+
+              const session = t.session;
+              const row = make('div', 'row');
+              stat(row, t.tracking ? 'ON' : 'OFF', 'Tracking', !t.tracking);
+              if (session) {
+                stat(row, session.net, 'Session', !session.up);
+                stat(row, session.in, 'In');
+                stat(row, session.out, 'Out');
+                stat(row, session.wins + 'W / ' + session.losses + 'L', 'Trades');
+                stat(row, session.streak, 'Out in a row',
+                    session.streak >= (t.alertAfter || 5));
+              } else {
+                stat(row, '--', 'No session started');
+              }
+              host.appendChild(row);
+
+              if (!session) {
+                host.appendChild(make('div', 'none',
+                    'Start a session from the Tracker page in game, or with /fake track '
+                    + 'start. Nothing counts until you do.'));
+              }
+
+              host.appendChild(make('div', 'grouphead', 'Recent payments'));
+              const recent = t.recent || [];
+              if (!recent.length) {
+                host.appendChild(make('div', 'none',
+                    t.tracking ? 'Nothing yet.' : 'Tracking is off, so nothing is recorded.'));
+              } else {
+                table(host, ['', 'Player', 'Amount'],
+                    recent.map(p => [p.in ? 'in' : 'out', p.who, p.amount]),
+                    i => recent[i].in ? '' : 'bad');
+              }
+
+              const owed = t.owed || [];
+              if (owed.length) {
+                host.appendChild(make('div', 'grouphead', 'Rakeback owed'));
+                table(host, ['Player', 'Sent you', 'You owe'],
+                    owed.map(o => [o.who, o.sent, o.owed]));
+              }
             };
 
             pages.log = (host, s) => {

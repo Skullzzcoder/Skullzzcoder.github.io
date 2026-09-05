@@ -663,6 +663,45 @@ and *why did that just appear*.
 > blank name and everything shows everywhere, exactly as it did before. It fails
 > towards showing your build, never towards hiding it.
 
+## Tracker — what you have won and lost
+
+Reads chat and adds it up. Accounting, not advantage: every line it reads is one already
+on your screen.
+
+    /fake track            where it stands, and why it might not be counting
+    /fake track on         start reading chat
+    /fake track start      start a session
+    /fake track end        end it and keep it
+    /fake track rake 5     rakeback percentage
+    /fake track alert 5    say something after this many payments out in a row
+
+Or the **Tracker** page in the client menu (Right Shift), and on the dashboard.
+
+**Nothing counts until you turn both on.** Reading chat is off by default and a session
+has to be started by hand — a tally that starts itself is a tally you cannot trust the
+start of.
+
+It shows session net, in, out, wins and losses, the current run of payments out, the
+worst run and the best, recent payments, and rakeback owed per player at whatever
+percentage you set.
+
+> **Only DonutSMP's payment lines.** `Player paid you $X` and `You paid Player $X`, and
+> both must be at the **start** of the line. Chat is written by other people: without that
+> anchor, anyone typing "you paid Bob $10000000" in public chat would land in your tally.
+> A leading `[tag]` from the server is allowed; a sentence in front of it is not.
+
+> **Money is held in cents, not dollars.** `$1.5M`, `$1,500` and `$1.50` are three
+> different numbers and two of them look alike. A line it cannot read exactly is skipped
+> rather than guessed at — a gap you can see beats a total you cannot trust.
+
+> **If it cannot read chat at all it says so, first, everywhere.** The event it listens
+> through is looked up at runtime rather than named, so a version that moved it is a
+> message rather than a mod that will not build. A zero that means "nothing happened"
+> looks exactly like a zero that means "nothing was heard", so it never leaves you to
+> guess which one you are looking at.
+
+Sessions live in `config/mirage-sessions.json`.
+
 ## The menus
 
 Two keys, both on defaults vanilla leaves alone:

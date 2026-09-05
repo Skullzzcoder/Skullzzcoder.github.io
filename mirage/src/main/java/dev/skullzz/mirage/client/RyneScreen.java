@@ -33,6 +33,7 @@ public class RyneScreen extends Screen {
         SCHEMATICS("Schematics", "MODULES"),
         MAP_ART("Map art", "MODULES"),
         ITEMS("Fake items", "MODULES"),
+        TRACKER("Tracker", "MODULES"),
         RIGS("Rigs", "MODULES"),
         KEYS("Keys", "GENERAL"),
         THEME("Theme", "GENERAL");
@@ -200,6 +201,34 @@ public class RyneScreen extends Screen {
                                     : "Rigs back on, set up as they were.";
                         });
             }
+            case TRACKER -> {
+                boolean on = Sessions.tracking();
+                add(on ? "Tracking is ON" : "Tracking is OFF", x, y, 150, () -> {
+                    Sessions.setTracking(!on);
+                    this.said = on ? "Stopped reading chat." : "Reading chat for payments.";
+                });
+                boolean running = Sessions.current() != null;
+                add(running ? "End session" : "Start session", x + 156, y, 130, () -> {
+                    if (running) Sessions.stop();
+                    else Sessions.start();
+                    this.said = running ? "Session ended and kept." : "Session started.";
+                });
+                add(Sessions.hud() ? "HUD bar on" : "HUD bar off", x + 292, y, 120, () -> {
+                    Sessions.setHud(!Sessions.hud());
+                    this.said = "HUD " + (Sessions.hud() ? "on" : "off") + ".";
+                });
+
+                // The alert threshold and the rake, stepped rather than typed: both are
+                // small whole numbers and a field for either is a field to get wrong.
+                add("Alert after " + Sessions.alertAfter() + " -", x, y + 26, 130, () ->
+                        Sessions.setAlertAfter(Sessions.alertAfter() - 1));
+                add("+", x + 136, y + 26, 30, () ->
+                        Sessions.setAlertAfter(Sessions.alertAfter() + 1));
+                add("Rake " + rake() + " -", x + 176, y + 26, 110, () ->
+                        Sessions.setRakebackBps(Sessions.rakebackBps() - 50));
+                add("+", x + 292, y + 26, 30, () ->
+                        Sessions.setRakebackBps(Sessions.rakebackBps() + 50));
+            }
             case KEYS -> add("Open the keys screen", x, y, 200, () -> {
                 if (this.client != null) this.client.setScreen(new MirageKeysScreen(this));
             });
@@ -307,9 +336,30 @@ public class RyneScreen extends Screen {
             case RIGS -> SelfFakes.rigsOn()
                     ? "Rig: " + ClientDispensers.active().name
                     : "Off. Builds, schematics and map art are unaffected.";
+            case TRACKER -> describeTracker();
             case KEYS -> MirageClient.binds().size() + " keys";
             case THEME -> "Pick one. It is remembered.";
         };
+    }
+
+    /** The rake as a percentage, from basis points, without losing the half. */
+    private static String rake() {
+        int points = Sessions.rakebackBps();
+        return (points % 100 == 0 ? String.valueOf(points / 100)
+                : String.format("%.1f", points / 100.0)) + "%";
+    }
+
+    private String describeTracker() {
+        if (!ChatHook.attached()) return "Cannot read chat: " + ChatHook.reason();
+        Tracker.Session session = Sessions.current();
+        if (session == null) {
+            return Sessions.tracking() ? "Tracking, but no session started"
+                    : "Off. Nothing is being read.";
+        }
+        return Tracker.money(session.net()) + " over " + session.payments.size()
+                + " payments  -  " + session.wins() + "W / " + session.losses() + "L"
+                + (session.lossStreak() > 1 ? "  -  " + session.lossStreak()
+                        + " out in a row" : "");
     }
 
     @Override

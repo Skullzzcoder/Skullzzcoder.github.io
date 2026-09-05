@@ -256,6 +256,54 @@ public class MirageClient implements ClientModInitializer {
                                     return feedback(context, "Rigs back on, set up exactly as"
                                             + " they were.");
                                 })))
+                        .then(ClientCommandManager.literal("track")
+                                .executes(MirageClient::trackStatus)
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    Sessions.setTracking(true);
+                                    return feedback(context, ChatHook.attached()
+                                            ? "Reading chat for payments."
+                                            : "Turned on, but chat cannot be read: "
+                                                    + ChatHook.reason());
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    Sessions.setTracking(false);
+                                    return feedback(context, "Not reading chat.");
+                                }))
+                                .then(ClientCommandManager.literal("start").executes(context -> {
+                                    Sessions.start();
+                                    return feedback(context, "Session started. "
+                                            + (Sessions.tracking() ? ""
+                                                    : "Tracking is off - /fake track on."));
+                                }))
+                                .then(ClientCommandManager.literal("end").executes(context -> {
+                                    if (Sessions.current() == null) {
+                                        return error(context, "No session running.");
+                                    }
+                                    String net = Tracker.money(Sessions.current().net());
+                                    Sessions.stop();
+                                    return feedback(context, "Session ended at " + net + ".");
+                                }))
+                                .then(ClientCommandManager.literal("rake")
+                                        .then(ClientCommandManager.argument("percent",
+                                                        DoubleArgumentType.doubleArg(0, 50))
+                                                .executes(context -> {
+                                                    double percent = DoubleArgumentType
+                                                            .getDouble(context, "percent");
+                                                    Sessions.setRakebackBps(
+                                                            (int) Math.round(percent * 100));
+                                                    return feedback(context, "Rakeback at "
+                                                            + percent + "%.");
+                                                })))
+                                .then(ClientCommandManager.literal("alert")
+                                        .then(ClientCommandManager.argument("count",
+                                                        IntegerArgumentType.integer(2, 20))
+                                                .executes(context -> {
+                                                    Sessions.setAlertAfter(IntegerArgumentType
+                                                            .getInteger(context, "count"));
+                                                    return feedback(context, "Says something "
+                                                            + "after " + Sessions.alertAfter()
+                                                            + " out in a row.");
+                                                }))))
                         .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
                         .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
 
@@ -391,6 +439,8 @@ public class MirageClient implements ClientModInitializer {
 
         FakeClicks.register();
         FakeHands.register();
+        Sessions.load();
+        ChatHook.register();
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
 
@@ -635,6 +685,53 @@ public class MirageClient implements ClientModInitializer {
                     .append("\",\"here\":").append(at == null
                             || FakeBlocks.belongsHere(entry.getKey()))
                     .append('}');
+        }
+        json.append("]},\"tracker\":{\"hooked\":").append(ChatHook.attached())
+                .append(",\"why\":\"").append(WebDashboard.escape(ChatHook.reason()))
+                .append("\",\"tracking\":").append(Sessions.tracking())
+                .append(",\"alertAfter\":").append(Sessions.alertAfter())
+                .append(",\"rakeBps\":").append(Sessions.rakebackBps());
+
+        Tracker.Session session = Sessions.current();
+        json.append(",\"session\":");
+        if (session == null) {
+            json.append("null");
+        } else {
+            json.append("{\"net\":\"").append(Tracker.money(session.net()))
+                    .append("\",\"in\":\"").append(Tracker.money(session.in()))
+                    .append("\",\"out\":\"").append(Tracker.money(session.out()))
+                    .append("\",\"wins\":").append(session.wins())
+                    .append(",\"losses\":").append(session.losses())
+                    .append(",\"streak\":").append(session.lossStreak())
+                    .append(",\"worst\":").append(session.worstLossRun())
+                    .append(",\"best\":").append(session.bestWinRun())
+                    .append(",\"up\":").append(session.net() >= 0)
+                    .append('}');
+        }
+
+        json.append(",\"recent\":[");
+        boolean firstPay = true;
+        java.util.List<Tracker.Payment> recent = Sessions.recent();
+        for (int i = recent.size() - 1; i >= 0; i--) {
+            Tracker.Payment payment = recent.get(i);
+            if (!firstPay) json.append(',');
+            firstPay = false;
+            json.append("{\"who\":\"").append(WebDashboard.escape(payment.player))
+                    .append("\",\"amount\":\"").append(Tracker.money(payment.cents))
+                    .append("\",\"in\":").append(payment.incoming).append('}');
+        }
+        json.append("],\"owed\":[");
+        if (session != null) {
+            boolean firstOwed = true;
+            for (java.util.Map.Entry<String, long[]> entry
+                    : session.rakeback(Sessions.rakebackBps()).entrySet()) {
+                if (!firstOwed) json.append(',');
+                firstOwed = false;
+                json.append("{\"who\":\"").append(WebDashboard.escape(entry.getKey()))
+                        .append("\",\"sent\":\"").append(Tracker.money(entry.getValue()[0]))
+                        .append("\",\"owed\":\"").append(Tracker.money(entry.getValue()[1]))
+                        .append("\"}");
+            }
         }
         json.append("]},\"machines\":[");
 
@@ -1403,6 +1500,41 @@ public class MirageClient implements ClientModInitializer {
         return feedback(context, "'" + name + "' now starts at " + corner.getX() + " "
                 + corner.getY() + " " + corner.getZ() + ". Nudge it with /fake build move "
                 + name + " <east> <up> <south>.");
+    }
+
+    /**
+     * Where the tracker stands, and why it might not be counting.
+     *
+     * <p>The hook comes first. Everything else is describing a tally that will stay at
+     * zero if chat cannot be read, and a zero that means "nothing happened" looks exactly
+     * like a zero that means "nothing was heard".
+     */
+    private static int trackStatus(CommandContext<FabricClientCommandSource> context) {
+        StringBuilder out = new StringBuilder("--- tracker ---");
+        out.append("\n1. Chat        ").append(ChatHook.attached()
+                ? ChatHook.reason() : "NOT READING  <-- " + ChatHook.reason());
+        out.append("\n2. Tracking    ").append(Sessions.tracking()
+                ? "on" : "OFF  <-- /fake track on");
+
+        Tracker.Session session = Sessions.current();
+        if (session == null) {
+            out.append("\n3. Session     none  <-- /fake track start");
+        } else {
+            out.append("\n3. Session     ").append(Tracker.money(session.net()))
+                    .append("  (in ").append(Tracker.money(session.in()))
+                    .append(", out ").append(Tracker.money(session.out())).append(')')
+                    .append("\n4. Trades      ").append(session.wins()).append("W / ")
+                    .append(session.losses()).append("L, worst run ")
+                    .append(session.worstLossRun()).append(" out")
+                    .append("\n5. Right now   ").append(session.lossStreak())
+                    .append(" out in a row (says something at ")
+                    .append(Sessions.alertAfter()).append(')');
+        }
+        out.append("\n   Kept         ").append(Sessions.past().size())
+                .append(" past session(s)");
+
+        context.getSource().sendFeedback(Text.literal(out.toString()));
+        return 1;
     }
 
     private static int buildList(CommandContext<FabricClientCommandSource> context) {

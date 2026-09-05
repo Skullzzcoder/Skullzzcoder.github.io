@@ -82,7 +82,21 @@ STATES = {
                             "builds": [{"name": "casino", "blocks": 900, "size": "9x3x9",
                                         "at": "1 2 3", "here": True}]},
              "pictures": {"folder": "C:/y", "files": ["logo.png"]},
-             "fires": ["1 2 3  fires  Paper"], "notices": ["hello"]},
+             "fires": ["1 2 3  fires  Paper"], "notices": ["hello"],
+             "tracker": {"hooked": True, "tracking": True, "alertAfter": 5,
+                         "rakeBps": 500,
+                         "session": {"net": "$1,200", "in": "$3,000", "out": "$1,800",
+                                     "wins": 4, "losses": 6, "streak": 3, "worst": 4,
+                                     "best": 2, "up": True},
+                         "recent": [{"who": "Bob", "amount": "$500", "in": True},
+                                    {"who": "Al", "amount": "$200", "in": False}],
+                         "owed": [{"who": "Bob", "sent": "$3,000", "owed": "$150"}]}},
+    "nochat": {"on": True, "rigsOn": True, "rig": "x", "mode": "50/50",
+               "tracker": {"hooked": False,
+                           "why": "no class net.fabricmc...ClientReceiveMessageEvents"}},
+    "nosession": {"on": True, "rigsOn": True, "rig": "x", "mode": "50/50",
+                  "tracker": {"hooked": True, "tracking": False, "session": None,
+                              "recent": [], "owed": []}},
 }
 
 work = tempfile.mkdtemp(prefix="mirage-dash-")
@@ -106,7 +120,7 @@ const out = {};
 for (const [name, state] of Object.entries(cases)) {
   globalThis.__setState(state);
   globalThis.__setQuery('');
-  const pages = ['overview','rigs','machines','builds','schematics','mapart','log'];
+  const pages = ['overview','rigs','machines','builds','schematics','mapart','tracker','log'];
   out[name] = {};
   for (const page of pages) {
     globalThis.__setState(state);
@@ -115,12 +129,15 @@ for (const [name, state] of Object.entries(cases)) {
       globalThis.__draw();
       const button = globalThis.__navNode.find(n => n.tag === 'button' &&
           n.text.trim().startsWith(({overview:'Overview',rigs:'Rigs',machines:'Machines',
-          builds:'Builds',schematics:'Schematics',mapart:'Map art',log:'Activity'})[page]));
+          builds:'Builds',schematics:'Schematics',mapart:'Map art',tracker:'Tracker',log:'Activity'})[page]));
       if (button.length) button[0].onclick();
       const drawn = globalThis.__pageNode.text.trim();
       const heading = (globalThis.__pageNode.find(n => n.tag === 'h2')[0] || {}).text || '';
+      const classes = globalThis.__pageNode.find(n => n.className)
+          .map(n => n.className).join(' ');
       out[name][page] = { ok: true, text: drawn.length,
-                          beyondHeading: drawn.replace(heading.trim(), '').trim().length };
+                          beyondHeading: drawn.replace(heading.trim(), '').trim().length,
+                          says: drawn, classes: classes };
     } catch (failure) {
       out[name][page] = { ok: false, why: String(failure) };
     }
@@ -158,6 +175,23 @@ console.log(JSON.stringify(out));
 finally:
     shutil.rmtree(work, ignore_errors=True)
 
+# ------------------------------------------------- the states you opened it to find
+# A page that renders is not the same as a page that answers. These are the three moments
+# the tracker exists for, and each has to be unmistakable rather than merely present.
+tracker = {name: pages.get("tracker", {}) for name, pages in report.items()}
+
+check("an unhooked chat says why it is not counting",
+      "why" in tracker.get("nochat", {}).get("says", "")
+      or "Not reading chat" in tracker.get("nochat", {}).get("says", ""))
+# "No session started" is a label, not an instruction: it satisfied a looser test while
+# saying nothing about what to do. The page has to name the thing you would type.
+check("a session that has not started says how to start one",
+      "/fake track" in tracker.get("nosession", {}).get("says", ""))
+# Money out has to look different from money in, or the table is a list of numbers.
+check("money out is marked", "bad" in tracker.get("full", {}).get("classes", ""))
+check("a losing run is called out",
+      "row" in tracker.get("full", {}).get("classes", ""))
+
 # ------------------------------------------------------------------- what it offers
 for endpoint in ("/power", "/rigs", "/fire", "/refill", "/rig", "/winner", "/arm"):
     check("the page can reach %s" % endpoint, endpoint in script)
@@ -168,6 +202,6 @@ check("a dead client leaves the last state up rather than blanking it",
       "catch (failure)" in script and "last = text" in script)
 
 print("FAILED:\n  " + "\n  ".join(fails) if fails else
-      "the page renders %d states x 7 sections plus search, all without throwing and all "
+      "the page renders %d states x 8 sections plus search, all without throwing and all "
       "saying something" % len(STATES))
 sys.exit(1 if fails else 0)

@@ -18,6 +18,7 @@ PARENTS = {
     "IllegalStateException":       {"RuntimeException", "Exception", "Throwable"},
     "NumberFormatException":       {"IllegalArgumentException", "RuntimeException",
                                     "Exception", "Throwable"},
+    "ArithmeticException":         {"RuntimeException", "Exception", "Throwable"},
     "InvalidPathException":        {"IllegalArgumentException", "RuntimeException",
                                     "Exception", "Throwable"},
     "NullPointerException":        {"RuntimeException", "Exception", "Throwable"},
