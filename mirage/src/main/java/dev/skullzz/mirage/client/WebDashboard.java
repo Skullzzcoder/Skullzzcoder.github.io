@@ -40,6 +40,9 @@ public final class WebDashboard {
     private static final AtomicReference<String> requestedWinner = new AtomicReference<>(null);
     /** Which way a browser threw the master switch, or null when unasked. */
     private static final AtomicReference<Boolean> requestedPower = new AtomicReference<>(null);
+
+    /** The rig half's own switch, asked for from the dashboard. */
+    private static final AtomicReference<Boolean> requestedRigs = new AtomicReference<>(null);
     /** Whether a browser asked for the watched dispensers to be laid out again. */
     private static final java.util.concurrent.atomic.AtomicBoolean requestedRefill =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -103,6 +106,7 @@ public final class WebDashboard {
             server.createContext("/refill", WebDashboard::handleRefill);
             server.createContext("/winner", WebDashboard::handleWinner);
             server.createContext("/power", WebDashboard::handlePower);
+            server.createContext("/rigs", WebDashboard::handleRigs);
             server.setExecutor(null);
             server.start();
 
@@ -159,6 +163,10 @@ public final class WebDashboard {
     }
 
     /** @return which way a browser threw the master switch, or null if it did not. */
+    public static Boolean pollRigs() {
+        return requestedRigs.getAndSet(null);
+    }
+
     public static Boolean pollPower() {
         return requestedPower.getAndSet(null);
     }
@@ -201,6 +209,12 @@ public final class WebDashboard {
     private static void handlePower(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
         requestedPower.set(query != null && query.contains("on=1"));
+        respond(exchange, 200, "application/json", "{\"ok\":true}");
+    }
+
+    private static void handleRigs(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        requestedRigs.set(query != null && query.contains("on=1"));
         respond(exchange, 200, "application/json", "{\"ok\":true}");
     }
 
@@ -394,6 +408,7 @@ public final class WebDashboard {
               <div class="row" id="buttons"></div>
               <button id="arm" hidden></button>
               <button id="power"></button>
+              <button id="rigs"></button>
               <button id="fire">Fire the watched dispensers</button>
               <button id="refill">Refill them</button>
               <div class="row" id="chambers"></div>
@@ -516,7 +531,11 @@ public final class WebDashboard {
             function wireButtons() {
               el('fire').onclick = () => post('/fire');
               el('refill').onclick = () => post('/refill');
+              el('rigs').onclick = () => post('/rigs?on=' + (last9rigs ? '0' : '1'));
             }
+
+            // What the button last drew, so a click knows which way to flip.
+            let last9rigs = true;
 
             function renderArm(s) {
               const button = el('arm');
@@ -669,7 +688,18 @@ public final class WebDashboard {
               renderLog('notices', s.notices);
               renderPictures(s);
               renderSchematics(s);
+              renderRigs2(s);
             }
+
+            // Named apart from renderRigs, which draws the list of rigs to pick from.
+            // This one is the switch that decides whether any of them run at all.
+            const renderRigs2 = s => {
+              const on = s.rigsOn !== false;
+              last9rigs = on;
+              el('rigs').textContent = on ? 'Rigs on - turn them off' : 'Rigs OFF - turn them on';
+              el('rigs').style.borderColor = on ? '#343a44' : '#e0a55f';
+              el('rigs').style.color = on ? '#e8eaed' : '#e0a55f';
+            };
 
             const renderSchematics = s => {
               const schem = s.schematics || { folder: '', files: [], builds: [] };

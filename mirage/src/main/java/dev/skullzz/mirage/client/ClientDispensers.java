@@ -394,6 +394,19 @@ public final class ClientDispensers {
         FakeBlocks.keepClear(clear);
     }
 
+    /**
+     * Lets go of everything the rigs were holding, without forgetting any of it.
+     *
+     * <p>Called while the rig half is switched off. The machine guard is the part that
+     * matters: it keeps builds from painting over a watched dispenser, and a guard left
+     * standing after the rigs stop would punch a hole in a build for a machine nothing is
+     * listening to any more. Which machines are watched, and every rig's settings, are
+     * untouched -- switching back on picks up exactly where it left off.
+     */
+    public static void standDown() {
+        FakeBlocks.keepClear(java.util.Set.of());
+    }
+
     public static boolean watch(BlockPos pos) {
         boolean added = watched.add(pos.toImmutable());
         guardMachines();

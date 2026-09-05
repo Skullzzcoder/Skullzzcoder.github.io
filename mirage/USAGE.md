@@ -663,6 +663,38 @@ and *why did that just appear*.
 > blank name and everything shows everywhere, exactly as it did before. It fails
 > towards showing your build, never towards hiding it.
 
+## Turning the rigs off and keeping the rest
+
+The mod has two halves that have nothing to do with each other. Builds, schematics and
+map art are pictures on your own screen. The rigs decide what comes out of a machine.
+One switch separates them:
+
+    /fake rigs off
+    /fake rigs on
+    /fake rigs            (says which it is)
+
+There is a button on the dashboard too, next to the master switch.
+
+**With the rigs off:** nothing watches a dispenser, no game key does anything, and the
+guard the rigs hold over watched machines is let go — so a build paints straight over a
+dispenser again instead of leaving a hole for it.
+
+**Still working:** every build, schematic and map art, `B` to cut a hole, the fake-items
+screen and inventory fakes, and the whole `/fake build`, `/fake schem` and `/fake map`
+side.
+
+**Nothing is forgotten.** Which machines are watched, every rig's presets, payouts,
+winners and settings all stay exactly as they were. `/fake rigs on` picks up where it
+left off.
+
+The keys are *drained* while off, not ignored — a rig key read with
+`while (wasPressed())` walks a queue, so simply skipping the read would leave the presses
+sitting there and fire them all at once when you switched back on.
+
+`/fake doctor` says so on its second line, before anything about a particular rig,
+because with the switch off every line after it is describing something that is not
+running.
+
 ### Litematica schematics
 
 Drop `.litematic` files in a folder and stand them up. **`/fake schem`** opens the

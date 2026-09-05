@@ -91,6 +91,9 @@ public final class SelfFakes {
     private static boolean autoCollect = true;
     /** The master switch. Off puts everything real back without forgetting any of it. */
     private static boolean enabled = true;
+
+    /** The rig half. Off leaves builds, schematics and map art running. */
+    private static boolean rigsOn = true;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private SelfFakes() {
@@ -243,6 +246,25 @@ public final class SelfFakes {
 
     public static void setEnabled(boolean on) {
         enabled = on;
+        save();
+    }
+
+    /**
+     * Whether the rig half runs.
+     *
+     * <p>Separate from the master switch because the two halves of this mod have nothing
+     * to do with each other. Builds, schematics and map art are pictures on your own
+     * screen; the rigs decide what comes out of a machine. Turning the rigs off leaves
+     * every build standing.
+     *
+     * <p>On by default, so an existing setup behaves exactly as it did.
+     */
+    public static boolean rigsOn() {
+        return rigsOn;
+    }
+
+    public static void setRigsOn(boolean on) {
+        rigsOn = on;
         save();
     }
 
@@ -651,6 +673,8 @@ public final class SelfFakes {
             showPrices = root.has("showPrices") && root.get("showPrices").getAsBoolean();
             autoCollect = !root.has("autoCollect") || root.get("autoCollect").getAsBoolean();
             enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
+            // Absent means on: a config written before this existed had the rigs running.
+            rigsOn = !root.has("rigsOn") || root.get("rigsOn").getAsBoolean();
             ClientDispensers.load(root);
             ClientDecor.load(root);
             WebDashboard.configure(root);
@@ -697,6 +721,7 @@ public final class SelfFakes {
         root.addProperty("showPrices", showPrices);
         root.addProperty("autoCollect", autoCollect);
         root.addProperty("enabled", enabled);
+        root.addProperty("rigsOn", rigsOn);
         WebDashboard.writeConfig(root);
         ClientDecor.save(root);
         ClientDispensers.save(root);

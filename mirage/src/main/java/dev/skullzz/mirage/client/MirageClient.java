@@ -214,13 +214,34 @@ public class MirageClient implements ClientModInitializer {
                             setPower(MinecraftClient.getInstance(), true);
                             return feedback(context, "Everything back on.");
                         }))
+                        .then(ClientCommandManager.literal("rigs")
+                                .executes(context -> feedback(context, "Rigs are "
+                                        + (SelfFakes.rigsOn() ? "on" : "off")
+                                        + ". /fake rigs off leaves builds, schematics and"
+                                        + " map art running."))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    SelfFakes.setRigsOn(false);
+                                    ClientDispensers.standDown();
+                                    return feedback(context, "Rigs off. Nothing is watching a"
+                                            + " machine and no game key does anything."
+                                            + " Builds, schematics and map art still work,"
+                                            + " and every rig's settings are remembered.");
+                                }))
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    SelfFakes.setRigsOn(true);
+                                    return feedback(context, "Rigs back on, set up exactly as"
+                                            + " they were.");
+                                })))
                         .then(ClientCommandManager.literal("clear").executes(MirageClient::clearAll))
                         .then(ClientCommandManager.literal("list").executes(MirageClient::list))));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             // Repaint every tick: the server overwrites a slot whenever the real item changes.
             if (client.player != null) SelfFakes.apply(client.player);
-            ClientDispensers.tick(client);
+            // Skipped whole with the rig half off, and the guard it holds over the
+            // machines is let go, so a build may paint straight over a dispenser again.
+            if (SelfFakes.rigsOn()) ClientDispensers.tick(client);
+            else ClientDispensers.standDown();
             ClientDecor.tick(client.world);
             FakeBlocks.tick(client);
             FakeHands.tick(client);
@@ -232,6 +253,14 @@ public class MirageClient implements ClientModInitializer {
             // Before every other switch, and the only one that still works when it is off.
             Boolean askedPower = WebDashboard.pollPower();
             if (askedPower != null) setPower(client, askedPower);
+
+            // Read before the master switch's early return, so the rig switch still
+            // answers from the dashboard while everything is off.
+            Boolean askedRigs = WebDashboard.pollRigs();
+            if (askedRigs != null) {
+                SelfFakes.setRigsOn(askedRigs);
+                if (!askedRigs) ClientDispensers.standDown();
+            }
             while (power.wasPressed()) setPower(client, !SelfFakes.enabled());
 
             if (!SelfFakes.enabled()) {
@@ -239,69 +268,81 @@ public class MirageClient implements ClientModInitializer {
                 return;
             }
 
-            int picked = WebDashboard.pollSelection();
-            if (picked >= 0) applyDashboardSelection(client, picked);
+            // The rig half. Builds, schematics and map art are not rigs and carry on
+            // below whether this runs or not -- the two halves have nothing to do with
+            // each other, and only this one decides what comes out of a machine.
+            if (SelfFakes.rigsOn()) {
+                int picked = WebDashboard.pollSelection();
+                if (picked >= 0) applyDashboardSelection(client, picked);
 
-            String pickedWinner = WebDashboard.pollWinner();
-            if (pickedWinner != null) {
-                RigProfile paper = ClientDispensers.active();
-                paper.winner = pickedWinner.equals("*") ? "" : pickedWinner;
-                paper.roundTick = Long.MIN_VALUE;
-                SelfFakes.save();
+                String pickedWinner = WebDashboard.pollWinner();
+                if (pickedWinner != null) {
+                    RigProfile paper = ClientDispensers.active();
+                    paper.winner = pickedWinner.equals("*") ? "" : pickedWinner;
+                    paper.roundTick = Long.MIN_VALUE;
+                    SelfFakes.save();
+                }
+
+                String pickedRig = WebDashboard.pollRig();
+                if (pickedRig != null && ClientDispensers.use(pickedRig)) {
+                    SelfFakes.save();
+                    nagIfUnset(client);
+                }
+
+                int pickedShot = WebDashboard.pollShot();
+                if (pickedShot > 0) {
+                    RigProfile profile = ClientDispensers.active();
+                    profile.bulletAt = pickedShot;
+                    profile.tidyRoulette();
+                    SelfFakes.save();
+                }
+                int arming = WebDashboard.pollArm();
+                if (arming == 1) {
+                    ClientDispensers.armNext();
+                } else if (arming == 0) {
+                    ClientDispensers.disarm();
+                }
+                if (WebDashboard.pollReset()) {
+                    ClientDispensers.active().resetShots();
+                    SelfFakes.save();
+                }
+
+                rememberOpenDispenser(client);
+
+                while (armNext.wasPressed()) ClientDispensers.armNext();
+                while (fireNow.wasPressed()) fireLookedAtOrAll(client);
+                while (refill.wasPressed()) refillLookedAt(client);
+                while (callFirst.wasPressed()) dealTo(client, 0);
+                while (callSecond.wasPressed()) dealTo(client, 1);
+                while (cycleWinner.wasPressed()) stepWinner(client, 1);
+                while (winFirst.wasPressed()) setWinner(client, 0);
+                while (winSecond.wasPressed()) setWinner(client, 1);
+                if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
+                if (WebDashboard.pollRefill()) {
+                    ClientDispensers.refillWatched();
+                    SelfFakes.save();
+                }
+                while (cycleRig.wasPressed()) {
+                    if (ClientDispensers.cycleProfile(1) == null) continue;
+                    SelfFakes.save();
+                    // The more urgent of the two wins the action bar: a rig with no
+                    // machines cannot be played at all, so what its keys would have meant
+                    // can wait.
+                    if (!nagIfUnset(client)) announceRig(client);
+                }
+                while (nextResult.wasPressed()) rigResult(client, 1);
+                while (previousResult.wasPressed()) rigResult(client, -1);
+            } else {
+                // Drained, not ignored. A key press that is only skipped stays in the
+                // queue and fires the moment the rigs come back on.
+                drainRigKeys();
             }
 
-            String pickedRig = WebDashboard.pollRig();
-            if (pickedRig != null && ClientDispensers.use(pickedRig)) {
-                SelfFakes.save();
-                nagIfUnset(client);
-            }
-
-            int pickedShot = WebDashboard.pollShot();
-            if (pickedShot > 0) {
-                RigProfile profile = ClientDispensers.active();
-                profile.bulletAt = pickedShot;
-                profile.tidyRoulette();
-                SelfFakes.save();
-            }
-            int arming = WebDashboard.pollArm();
-            if (arming == 1) {
-                ClientDispensers.armNext();
-            } else if (arming == 0) {
-                ClientDispensers.disarm();
-            }
-            if (WebDashboard.pollReset()) {
-                ClientDispensers.active().resetShots();
-                SelfFakes.save();
-            }
-
-            rememberOpenDispenser(client);
             // Nothing may be left held once the screen it was picked up in has gone.
             if (client.currentScreen == null) FakeClicks.closed(client.player);
 
-            while (armNext.wasPressed()) ClientDispensers.armNext();
-            while (fireNow.wasPressed()) fireLookedAtOrAll(client);
-            while (refill.wasPressed()) refillLookedAt(client);
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
-            while (callFirst.wasPressed()) dealTo(client, 0);
-            while (callSecond.wasPressed()) dealTo(client, 1);
-            while (cycleWinner.wasPressed()) stepWinner(client, 1);
-            while (winFirst.wasPressed()) setWinner(client, 0);
-            while (winSecond.wasPressed()) setWinner(client, 1);
-            if (WebDashboard.pollFire()) fireLookedAtOrAll(client);
-            if (WebDashboard.pollRefill()) {
-                ClientDispensers.refillWatched();
-                SelfFakes.save();
-            }
-            while (cycleRig.wasPressed()) {
-                if (ClientDispensers.cycleProfile(1) == null) continue;
-                SelfFakes.save();
-                // The more urgent of the two wins the action bar: a rig with no machines
-                // cannot be played at all, so what its keys would have meant can wait.
-                if (!nagIfUnset(client)) announceRig(client);
-            }
-            while (nextResult.wasPressed()) rigResult(client, 1);
-            while (previousResult.wasPressed()) rigResult(client, -1);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
             if (openKeys) {
                 openKeys = false;
@@ -479,6 +520,7 @@ public class MirageClient implements ClientModInitializer {
                 .append("\",\"forward\":\"").append(WebDashboard.escape(shown.forwardLabel()))
                 .append("\",\"back\":\"").append(WebDashboard.escape(shown.backLabel()))
                 .append("\",\"quiet\":").append(SelfFakes.quiet())
+                .append(",\"rigsOn\":").append(SelfFakes.rigsOn())
                 .append(",\"place\":").append(shown.placeOutput)
                 .append(",\"breakSeconds\":").append(shown.breakSeconds);
 
@@ -769,6 +811,16 @@ public class MirageClient implements ClientModInitializer {
         // 1. the master switch, which turns every other answer into a lie if it is off
         boolean on = SelfFakes.enabled();
         out.append("\n1. Master switch   ").append(on ? "ON" : "OFF  <-- press N");
+
+        // 1b. the rig half's own switch. Straight after the master switch and before
+        //     anything about a particular rig, because with this off every line below is
+        //     describing something that is not running -- which is exactly how "nothing is
+        //     dispensing" went unexplained three times before the doctor existed.
+        if (!SelfFakes.rigsOn()) {
+            out.append("\n   Rigs            OFF  <-- /fake rigs on")
+                    .append("\n                   Builds, schematics and map art still work.")
+                    .append("\n                   Nothing below is running until you do.");
+        }
 
         // 2. which game is on, and what its keys do
         out.append("\n2. Rig             '").append(profile.name).append("' (")
@@ -2086,6 +2138,24 @@ public class MirageClient implements ClientModInitializer {
      * <p>Otherwise a handful of presses made in the meantime would all fire at once the
      * moment it came back on.
      */
+    /**
+     * Swallows the rig keys while the rig half is off.
+     *
+     * <p>Every one of these is read with {@code while (key.wasPressed())}, which walks a
+     * queue rather than reading a state. Skipping the read leaves the presses in the
+     * queue, and they all happen at once the moment the rigs come back.
+     */
+    private static void drainRigKeys() {
+        KeyBinding[] rigs = { nextResult, previousResult, armNext, fireNow, refill,
+                cycleWinner, winFirst, winSecond, cycleRig, callFirst, callSecond };
+
+        for (KeyBinding key : rigs) {
+            while (key.wasPressed()) {
+                // Read and thrown away on purpose.
+            }
+        }
+    }
+
     private static boolean drainKeys() {
         KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
                 clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu,
