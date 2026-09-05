@@ -42,6 +42,31 @@ all — hence the pinned distribution in `gradle/wrapper/gradle-wrapper.properti
 
 The jar lands in `build/libs/mirage-1.0.0.jar`. Ignore the `-sources` one.
 
+### Updating to a new copy
+
+**Extract it to a new folder. Do not overwrite the old one.**
+
+Windows will refuse to replace a folder while anything holds a file inside it, and two
+things usually do: the Gradle daemon, and Minecraft itself with the mod jar open. The
+result is a "Folder In Use" box, a half-copied folder, and a build that quietly keeps
+running the jar you already had -- which looks exactly like a change that did not work.
+
+Nothing is lost by starting fresh. Gradle's real cache is in your user folder
+(`C:\Users\<you>\.gradle`), not the project's `.gradle`, so a new folder still builds
+quickly. Your settings are in Minecraft's `config/` folder and are untouched either way.
+
+If you do want the old folder gone:
+
+```
+taskkill /F /IM java.exe
+taskkill /F /IM javaw.exe
+```
+
+That stops the Gradle daemon and Minecraft, which is usually the one actually holding it.
+Then close any Explorer window or editor pointing at the folder and delete it.
+`gradlew --stop` alone is not enough: it only stops a daemon that folder started, and it
+does nothing about the running game.
+
 ### Building for another Minecraft version
 
 ```
