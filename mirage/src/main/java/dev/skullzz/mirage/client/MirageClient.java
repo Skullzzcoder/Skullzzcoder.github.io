@@ -73,6 +73,7 @@ public class MirageClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommandManager.literal("fake")
                         .then(ClientCommandManager.literal("ui").executes(MirageClient::openUi))
+                        .then(ClientCommandManager.literal("pages").executes(MirageClient::openPages))
                         .then(ClientCommandManager.literal("items").executes(MirageClient::openItems))
                         .then(ClientCommandManager.literal("rigui").executes(context -> {
                             MinecraftClient client = MinecraftClient.getInstance();
@@ -357,7 +358,7 @@ public class MirageClient implements ClientModInitializer {
             // among the things that stop working when it is off. With them below this
             // return, switching Mirage off took away the way to switch it on again
             // anywhere except the keyboard shortcut you had to already know.
-            while (openClient.wasPressed()) client.setScreen(new RyneScreen());
+            while (openClient.wasPressed()) client.setScreen(new RyneClickScreen());
             while (openRigs.wasPressed()) client.setScreen(new RyneRigScreen());
             while (openTracker.wasPressed()) client.setScreen(new RyneTrackerScreen());
             if (openKeys) {
@@ -462,6 +463,7 @@ public class MirageClient implements ClientModInitializer {
 
         FakeClicks.register();
         FakeHands.register();
+        RyneClickScreen.register();
         Sessions.load();
         ChatHook.register();
         HudBar.register();
@@ -2196,6 +2198,13 @@ public class MirageClient implements ClientModInitializer {
     private static int openUi(CommandContext<FabricClientCommandSource> context) {
         MinecraftClient client = MinecraftClient.getInstance();
         // Deferred: the chat screen is still closing as this runs.
+        client.execute(() -> client.setScreen(new RyneClickScreen()));
+        return 1;
+    }
+
+    /** The list-and-pages menu, which is still the place with the long explanations. */
+    private static int openPages(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
         client.execute(() -> client.setScreen(new RyneScreen()));
         return 1;
     }

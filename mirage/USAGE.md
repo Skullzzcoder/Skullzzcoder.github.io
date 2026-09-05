@@ -675,6 +675,11 @@ on your screen.
     /fake track rake 5     rakeback percentage
     /fake track alert 5    say something after this many payments out in a row
 
+**The HUD bar** goes across the top of the screen: session net, W/L, and the current run
+of payments out. Green when you are up, red when down, amber while a losing run is
+running. Turn it on in the tracker screen or the click menu. It hides itself while a
+menu is open.
+
 Or the **Tracker** page in the client menu (Right Shift), and on the dashboard.
 
 **Nothing counts until you turn both on.** Reading chat is off by default and a session
@@ -708,7 +713,7 @@ Two keys, both on defaults vanilla leaves alone:
 
 | Key | Opens |
 | --- | --- |
-| **Right Shift** | the client menu — Builds, Schematics, Map art, Fake items, Rigs, Tracker, Keys, Theme |
+| **Right Shift** | the click menu — draggable panels, everything one click away |
 | **G** | the rig menu — every game, its controls, and which rig is running |
 | **J** | the tracker — sessions, totals, streaks, recent payments, settings |
 
@@ -722,6 +727,25 @@ All three menu keys are read **before either switch** — the rig switch and the
 switch. The menus are where everything gets turned back on, so they cannot be among the
 things that stop working when it is off. The rig gate was fixed first; the master switch
 had exactly the same fault, and it is why pressing the keys appeared to do nothing.
+
+### The click menu
+
+Right Shift. Panels you can put where you like.
+
+- **Drag a title bar** to move a panel. It cannot be dragged somewhere you could not
+  drag it back from — the handle always stays on screen.
+- **Click a title bar** to fold the panel away. Told apart from a drag by three pixels of
+  slop, so a wobble while clicking does not lose the panel.
+- Panels slide open and shut, rows light up under the pointer, and the whole thing fades
+  in. The easing is measured in seconds rather than frames, so it looks the same at 30fps
+  and 144.
+- **Where you put them is remembered**, in `config/mirage-layout.json`, by panel name — so
+  adding a panel later moves nothing you have already placed.
+
+Panels: **Client** (rigs, everything, quiet), **Tracker**, **World**, **Rigs**, **Theme**.
+
+`/fake pages` still opens the older list-and-pages menu, which has the longer
+explanations on it.
 
 ### The rig menu
 

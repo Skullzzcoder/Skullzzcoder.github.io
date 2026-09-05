@@ -86,6 +86,11 @@ public final class RyneGui {
     private Panel dragging;
     private int grabX;
     private int grabY;
+    /** Whether the pointer has actually moved since the title was grabbed. */
+    private boolean moved;
+
+    /** Under this many pixels, a press and release on a title is a click, not a drag. */
+    public static final int SLOP = 3;
 
     public List<Panel> panels() {
         return this.panels;
@@ -154,6 +159,7 @@ public final class RyneGui {
         // under the pointer the moment it is grabbed.
         this.grabX = (int) Math.round(mouseX - panel.x);
         this.grabY = (int) Math.round(mouseY - panel.y);
+        this.moved = false;
         raise(panel);
     }
 
@@ -167,13 +173,32 @@ public final class RyneGui {
 
     public void dragTo(double mouseX, double mouseY, int screenWidth, int screenHeight) {
         if (this.dragging == null) return;
-        this.dragging.x = (int) Math.round(mouseX) - this.grabX;
-        this.dragging.y = (int) Math.round(mouseY) - this.grabY;
+
+        int x = (int) Math.round(mouseX) - this.grabX;
+        int y = (int) Math.round(mouseY) - this.grabY;
+        if (Math.abs(x - this.dragging.x) >= SLOP || Math.abs(y - this.dragging.y) >= SLOP) {
+            this.moved = true;
+        }
+
+        this.dragging.x = x;
+        this.dragging.y = y;
         clamp(this.dragging, screenWidth, screenHeight);
     }
 
-    public void endDrag() {
+    /**
+     * Lets go.
+     *
+     * @return the panel that was pressed and released without moving, which is a click on
+     *         its title rather than a drag, or null if it was a drag. Told apart by a few
+     *         pixels of slop, because a hand never holds still and a title that folded
+     *         away every time you nudged it would be unusable.
+     */
+    public Panel endDrag() {
+        Panel was = this.dragging;
+        boolean tapped = was != null && !this.moved;
         this.dragging = null;
+        this.moved = false;
+        return tapped ? was : null;
     }
 
     /**

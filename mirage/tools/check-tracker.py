@@ -111,11 +111,20 @@ check("and resets when the run breaks", "if (run == 0)" in streak)
 
 # The hook is looked up, never named at compile time -- a wrong guess there would be a
 # build that does not compile, which is the mistake this project has made most.
-check("the chat class is resolved at runtime", "Class.forName(className)" in hook)
-check("the callback shape cannot matter", "Proxy.newProxyInstance" in hook)
+# The subscribing itself moved into Events, which is where both of its bugs were fixed;
+# check-events.py runs that against a mock. What matters here is that the chat hook still
+# goes through it rather than growing its own copy.
+events = io.open("src/main/java/dev/skullzz/mirage/client/Events.java",
+                 encoding="utf-8").read()
+check("the chat hook subscribes through Events", "Events.subscribe(" in hook)
+check("and does not roll its own", "Proxy.newProxyInstance" not in hook)
+check("the chat class is named as data, not imported", "EVENT_CLASSES" in hook
+      and "net.fabricmc" not in hook.split("EVENT_CLASSES")[0])
+check("the shared subscriber proxies the callback", "Proxy.newProxyInstance" in events)
 check("the message is found by asking, not by position", 'getMethod("getString")' in hook)
 check("a filter callback is answered harmlessly", "return true;" in hook)
 check("failing to hook is remembered", "reason =" in hook)
+check("every field tried is reported", "tried.append" in hook)
 check("and never throws", "catch (ReflectiveOperationException | RuntimeException" in hook)
 
 # Silence is the enemy: a zero that means "nothing happened" looks exactly like a zero

@@ -56,8 +56,19 @@ public class Harness {
         gui.dragTo(140, 118, 1000, 600);
         check("dragged by the delta, not snapped", a.x == 110 && a.y == 110);
         check("dragging raises it", gui.topmostAt(115, 115) == a);
-        gui.endDrag();
+        check("a real drag is not a tap", gui.endDrag() == null);
         check("drag ends", !gui.isDragging());
+
+        // Pressed and released on a title without moving: that folds the panel, and must
+        // not be confused with a drag, or a nudge while clicking loses the panel.
+        gui.beginDrag(a, a.x + 5, a.y + 5);
+        check("no movement at all is a tap", gui.endDrag() == a);
+        gui.beginDrag(a, a.x + 5, a.y + 5);
+        gui.dragTo(a.x + 6, a.y + 6, 1000, 600);
+        check("a hand-sized wobble is still a tap", gui.endDrag() == a);
+        gui.beginDrag(a, a.x + 5, a.y + 5);
+        gui.dragTo(a.x + 40, a.y + 5, 1000, 600);
+        check("moving well past the slop is a drag", gui.endDrag() == null);
 
         // --- a panel may not be dragged off where it cannot be got back
         gui.beginDrag(a, a.x + 5, a.y + 5);

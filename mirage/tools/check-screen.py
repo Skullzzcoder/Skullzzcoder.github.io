@@ -13,7 +13,8 @@ import io, re, sys, glob, os
 SCREENS = ["src/main/java/dev/skullzz/mirage/client/MirageSchematicsScreen.java",
            "src/main/java/dev/skullzz/mirage/client/RyneScreen.java",
            "src/main/java/dev/skullzz/mirage/client/RyneRigScreen.java",
-           "src/main/java/dev/skullzz/mirage/client/RyneTrackerScreen.java"]
+           "src/main/java/dev/skullzz/mirage/client/RyneTrackerScreen.java",
+           "src/main/java/dev/skullzz/mirage/client/RyneClickScreen.java"]
 
 # Also scanned for unproven calls, but not screens, so the redraw rule does not apply.
 HELPERS = ["src/main/java/dev/skullzz/mirage/client/RyneDraw.java"]
@@ -28,7 +29,12 @@ JDK = {"literal", "join", "max", "min", "size", "get", "isEmpty", "length", "sub
        "lastIndexOf", "replaceAll", "equals", "containsKey", "keySet", "toString", "add",
        "run", "formatted", "trim", "contains", "put", "remove", "valueOf", "format",
        "startsWith", "endsWith", "toLowerCase", "toUpperCase", "split", "hashCode",
-       "abs", "getOrDefault", "of", "stream", "sort", "indexOf", "charAt", "isBlank"}
+       "abs", "getOrDefault", "of", "stream", "sort", "indexOf", "charAt", "isBlank",
+       # java.lang and java.util, which are not evidence about Minecraft either way.
+       "nanoTime", "currentTimeMillis", "exp", "round", "floor", "ceil", "sqrt", "pow",
+       "identityHashCode", "getName", "getDeclaringClass", "getSimpleName", "getClass",
+       "run", "getAsBoolean", "keySet", "values", "entrySet", "getKey", "getValue",
+       "isEmpty", "clear", "removeAll", "toArray", "compareTo", "equalsIgnoreCase"}
 
 fails = []
 def check(name, cond):
