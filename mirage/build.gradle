@@ -411,7 +411,11 @@ tasks.register('inspectApi') {
                             'net.minecraft.registry.Registries'             : ['item'],
                             'net.minecraft.registry.Registry'               : ['get'],
                             'net.minecraft.client.gui.screen.Screen'        : ['init', 'render', 'drawable', 'close', 'pause'],
-                            'net.minecraft.client.gui.DrawContext'          : ['text', 'item'],
+                            // 'fill' is here because RyneScreen uses it and nothing else
+                            // in the mod does -- it is the one call not yet seen to compile.
+                            'net.minecraft.client.gui.DrawContext'          : ['text', 'item',
+                                                                              'fill', 'rect',
+                                                                              'draw'],
                             'net.minecraft.client.gui.widget.ButtonWidget'  : ['build', 'dimension', 'message'],
                             'net.minecraft.client.gui.widget.TextFieldWidget': ['text', 'placeholder', 'max'],
                             'net.minecraft.component.DataComponentTypes'    : ['lore', 'name', 'glint'],

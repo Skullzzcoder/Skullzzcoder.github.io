@@ -9,7 +9,13 @@ and a guess is a build the player has to run to find out about.
 This is a floor, not a ceiling: it cannot say a name is right, only that it is not new."""
 import io, re, sys, glob, os
 
-SCREENS = ["src/main/java/dev/skullzz/mirage/client/MirageSchematicsScreen.java"]
+SCREENS = ["src/main/java/dev/skullzz/mirage/client/MirageSchematicsScreen.java",
+           "src/main/java/dev/skullzz/mirage/client/RyneScreen.java"]
+
+# Calls knowingly used without having been seen to compile, and where each is allowed.
+# An entry here is a decision, not an exemption: it has to be isolated in one method so a
+# rename is one compile error in one place, and inspectApi prints the replacement.
+DELIBERATE = {"fill": "RyneScreen.java"}
 
 # Java and this project's own idioms; not Minecraft, so not evidence either way.
 JDK = {"literal", "join", "max", "min", "size", "get", "isEmpty", "length", "substring",
@@ -45,6 +51,14 @@ for screen in SCREENS:
         if call in declared or call in JDK:
             continue
         checked += 1
+        if call in DELIBERATE:
+            # Allowed only in the file it was decided for, and only once: the whole point
+            # is that a rename is one compile error rather than forty.
+            check("%s() is only used in %s" % (call, DELIBERATE[call]),
+                  os.path.basename(screen) == DELIBERATE[call])
+            check("%s() is called exactly once, so a rename is one fix" % call,
+                  source.count("." + call + "(") == 1)
+            continue
         if call not in elsewhere:
             fails.append("%s calls %s(), which appears nowhere else in the mod -- so "
                          "nothing here has ever seen it compile" % (os.path.basename(screen), call))
@@ -60,6 +74,8 @@ for screen in SCREENS:
           "setScreen(" in source)
 
 print("FAILED:\n  " + "\n  ".join(fails) if fails else
-      "%d Minecraft calls across %d screen(s), every one of them already used elsewhere "
-      "in code that builds" % (checked, len(SCREENS)))
+      "%d Minecraft calls across %d screen(s), every one already used elsewhere in code "
+      "that builds, except %d deliberate: %s"
+      % (checked, len(SCREENS), len(DELIBERATE),
+         ", ".join("%s() in %s" % (k, v) for k, v in sorted(DELIBERATE.items()))))
 sys.exit(1 if fails else 0)

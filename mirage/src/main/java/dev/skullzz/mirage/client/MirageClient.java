@@ -73,6 +73,25 @@ public class MirageClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
                 dispatcher.register(ClientCommandManager.literal("fake")
                         .then(ClientCommandManager.literal("ui").executes(MirageClient::openUi))
+                        .then(ClientCommandManager.literal("items").executes(MirageClient::openItems))
+                        .then(ClientCommandManager.literal("theme")
+                                .executes(context -> feedback(context, "Theme: "
+                                        + RyneTheme.current().name + ". /fake ui to change it."))
+                                .then(ClientCommandManager.argument("name",
+                                                StringArgumentType.word())
+                                        .suggests((context, builder) ->
+                                                CommandSource.suggestMatching(RyneTheme.names(), builder))
+                                        .executes(context -> {
+                                            String name = StringArgumentType.getString(context, "name");
+                                            if (!RyneTheme.choose(name)) {
+                                                return error(context, "No theme called '" + name
+                                                        + "'. There are: "
+                                                        + String.join(", ", RyneTheme.names()));
+                                            }
+                                            SelfFakes.save();
+                                            return feedback(context, "Theme: "
+                                                    + RyneTheme.current().name);
+                                        })))
                         .then(inventoryBranch())
                         .then(enderBranch())
                         .then(wearBranch())
@@ -1981,6 +2000,13 @@ public class MirageClient implements ClientModInitializer {
     private static int openUi(CommandContext<FabricClientCommandSource> context) {
         MinecraftClient client = MinecraftClient.getInstance();
         // Deferred: the chat screen is still closing as this runs.
+        client.execute(() -> client.setScreen(new RyneScreen()));
+        return 1;
+    }
+
+    /** The old one, still reachable: it is where fake items are actually edited. */
+    private static int openItems(CommandContext<FabricClientCommandSource> context) {
+        MinecraftClient client = MinecraftClient.getInstance();
         client.execute(() -> client.setScreen(new FakeItemsScreen()));
         return 1;
     }

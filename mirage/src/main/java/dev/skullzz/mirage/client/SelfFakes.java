@@ -675,6 +675,7 @@ public final class SelfFakes {
             enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
             // Absent means on: a config written before this existed had the rigs running.
             rigsOn = !root.has("rigsOn") || root.get("rigsOn").getAsBoolean();
+            if (root.has("theme")) RyneTheme.choose(root.get("theme").getAsString());
             ClientDispensers.load(root);
             ClientDecor.load(root);
             WebDashboard.configure(root);
@@ -722,6 +723,9 @@ public final class SelfFakes {
         root.addProperty("autoCollect", autoCollect);
         root.addProperty("enabled", enabled);
         root.addProperty("rigsOn", rigsOn);
+        // By name, not by position: adding a theme to the list must not silently change
+        // which one somebody had chosen.
+        root.addProperty("theme", RyneTheme.current().name);
         WebDashboard.writeConfig(root);
         ClientDecor.save(root);
         ClientDispensers.save(root);
