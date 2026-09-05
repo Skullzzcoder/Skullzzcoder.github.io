@@ -708,15 +708,20 @@ Two keys, both on defaults vanilla leaves alone:
 
 | Key | Opens |
 | --- | --- |
-| **Right Shift** | the client menu — Builds, Schematics, Map art, Fake items, Rigs, Keys, Theme |
+| **Right Shift** | the client menu — Builds, Schematics, Map art, Fake items, Rigs, Tracker, Keys, Theme |
 | **G** | the rig menu — every game, its controls, and which rig is running |
+| **J** | the tracker — sessions, totals, streaks, recent payments, settings |
+
+The three keys are named in chat once each time you join a world, so a key you did not
+know about cannot be mistaken for one that does not work. Quiet mode silences it.
 
 Change either in Options → Controls → Miscellaneous, or see them all with the keys
 screen. `/fake ui`, `/fake rigui` and `/fake items` still work if you prefer typing.
 
-Both menu keys sit **outside** the rig switch on purpose: the client menu is where the
-rigs get turned back on, so it cannot be one of the things that stops working when they
-are off.
+All three menu keys are read **before either switch** — the rig switch and the master
+switch. The menus are where everything gets turned back on, so they cannot be among the
+things that stop working when it is off. The rig gate was fixed first; the master switch
+had exactly the same fault, and it is why pressing the keys appeared to do nothing.
 
 ### The rig menu
 

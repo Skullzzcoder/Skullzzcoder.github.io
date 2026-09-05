@@ -53,19 +53,25 @@ for key in ("armNext", "fireNow", "cycleRig", "nextResult", "previousResult",
     check("%s is drained" % key, key in drain)
 
 # ------------------------------------------------------- the menus stay reachable
-# The lockout this guards: the client menu is where the rigs get switched back on, so if
-# its key were inside the rig gate, turning them off would take away the way to undo it.
-for menu in ("openClient", "openRigs"):
+# The lockout this guards: the menus are where everything gets switched back on, so if
+# their keys sat behind either switch, turning one off would take away the way to undo it.
+# The rig gate was fixed first; the master switch had exactly the same fault and was not
+# caught until the menus stopped opening in game.
+for menu in ("openClient", "openRigs", "openTracker"):
+    check("%s is read at all" % menu, menu + ".wasPressed()" in tick)
     check("%s is not gated on the rigs" % menu,
-          menu + ".wasPressed()" in tick
-          and menu + ".wasPressed()" not in tick[tick.index("if (SelfFakes.rigsOn()) {")
-                                                 :tick.index("drainRigKeys();")])
+          menu + ".wasPressed()" not in tick[tick.index("if (SelfFakes.rigsOn()) {")
+                                             :tick.index("drainRigKeys();")])
+    # Before the master switch's return, not merely outside the rig block.
+    check("%s is read before the master switch gives up" % menu,
+          tick.index(menu + ".wasPressed()") < tick.index("if (!SelfFakes.enabled()) {"))
 
-# The master switch drains every key it disables, or a press while everything is off opens
-# the screen the moment it comes back.
+# ...and therefore must NOT be in the master switch's drain, or the press that opens the
+# menu would be swallowed on its way past.
 drainall = body(client, "private static boolean drainKeys() {")
-for menu in ("openClient", "openRigs", "openMenu"):
-    check("%s is drained by the master switch" % menu, menu in drainall)
+for menu in ("openClient", "openRigs", "openTracker"):
+    check("%s is not swallowed by the master switch drain" % menu, menu not in drainall)
+check("openMenu still is, since it is read after the return", "openMenu" in drainall)
 
 # ------------------------------------------------- the other half is untouched
 # These run outside the guarded block, or turning the rigs off would take the builds with

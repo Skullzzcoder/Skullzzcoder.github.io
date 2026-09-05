@@ -33,7 +33,8 @@ check("every key field is registered through the table",
 # and makes a key that quietly disappears as loud as one that quietly appears.
 EXPECTED = {"next_result", "prev_result", "arm_next", "fire_now", "refill", "clear_fakes",
             "cycle_winner", "win_first", "win_second", "power", "cut_block", "call_first",
-            "call_second", "cycle_rig", "open_menu", "open_client", "open_rigs"}
+            "call_second", "cycle_rig", "open_menu", "open_client", "open_rigs",
+            "open_tracker"}
 found = {name for _, name, _ in bound}
 check("the keys are the ones we think (extra: %s, missing: %s)"
       % (sorted(found - EXPECTED), sorted(EXPECTED - found)), found == EXPECTED)
@@ -44,6 +45,24 @@ defaults = {name: key for _, name, key in bound}
 check("the client menu opens on a key vanilla leaves alone",
       defaults.get("open_client") == "GLFW_KEY_RIGHT_SHIFT")
 check("so does the rig menu", defaults.get("open_rigs") == "GLFW_KEY_G")
+check("and the tracker", defaults.get("open_tracker") == "GLFW_KEY_J")
+
+# The keys are named on joining a world, because a key nobody was told about looks exactly
+# like a key that does not work -- which is how this was reported. Scoped to the greeting
+# itself: both "greeted" and "quiet()" appear elsewhere in this file, so asking whether
+# the word is present anywhere passed on a greeting that had lost the guard.
+greeting = re.search(r"if \(!greeted && client\.player != null\) \{(.*?)\n            \}",
+                     mc, re.S)
+check("the keys are named on joining a world", greeting is not None)
+if greeting:
+    body_text = greeting.group(1)
+    check("and only once", "greeted = true;" in body_text)
+    check("and never in quiet mode", "!SelfFakes.quiet()" in body_text)
+    check("and read from the binding rather than written out",
+          "keyName(openClient)" in body_text and "keyName(openRigs)" in body_text
+          and "keyName(openTracker)" in body_text)
+    check("and say which mod is talking", "Ryne Client: " in body_text)
+check("the greeting comes back on the next world", "greeted = false;" in mc)
 
 # The one way this quietly rots: a new key registered straight with Fabric never reaches
 # the table, so it works in game and does not exist as far as this screen is concerned.

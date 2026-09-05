@@ -202,6 +202,11 @@ public class RyneScreen extends Screen {
                         });
             }
             case TRACKER -> {
+                add("Open the tracker", x, y - 26, 200, () -> {
+                    if (this.client != null) {
+                        this.client.setScreen(new RyneTrackerScreen(this));
+                    }
+                });
                 boolean on = Sessions.tracking();
                 add(on ? "Tracking is ON" : "Tracking is OFF", x, y, 150, () -> {
                     Sessions.setTracking(!on);

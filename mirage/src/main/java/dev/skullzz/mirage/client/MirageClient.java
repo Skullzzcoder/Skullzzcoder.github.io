@@ -258,6 +258,12 @@ public class MirageClient implements ClientModInitializer {
                                 })))
                         .then(ClientCommandManager.literal("track")
                                 .executes(MirageClient::trackStatus)
+                                .then(ClientCommandManager.literal("ui").executes(context -> {
+                                    MinecraftClient client = MinecraftClient.getInstance();
+                                    client.execute(() ->
+                                            client.setScreen(new RyneTrackerScreen()));
+                                    return 1;
+                                }))
                                 .then(ClientCommandManager.literal("on").executes(context -> {
                                     Sessions.setTracking(true);
                                     return feedback(context, ChatHook.attached()
@@ -334,6 +340,34 @@ public class MirageClient implements ClientModInitializer {
                 if (!askedRigs) ClientDispensers.standDown();
             }
             while (power.wasPressed()) setPower(client, !SelfFakes.enabled());
+
+            // Once per world: a key nobody was told about looks exactly like a key that
+            // does not work, which is precisely how this went wrong.
+            if (!greeted && client.player != null) {
+                greeted = true;
+                if (!SelfFakes.quiet()) {
+                    say(client, "Ryne Client: " + keyName(openClient) + " menu, "
+                            + keyName(openRigs) + " rigs, "
+                            + keyName(openTracker) + " tracker.");
+                }
+            }
+
+            // Before the master switch, for the same reason the rig gate does not hold
+            // them: the menus are where everything gets turned back on, so they cannot be
+            // among the things that stop working when it is off. With them below this
+            // return, switching Mirage off took away the way to switch it on again
+            // anywhere except the keyboard shortcut you had to already know.
+            while (openClient.wasPressed()) client.setScreen(new RyneScreen());
+            while (openRigs.wasPressed()) client.setScreen(new RyneRigScreen());
+            while (openTracker.wasPressed()) client.setScreen(new RyneTrackerScreen());
+            if (openKeys) {
+                openKeys = false;
+                client.setScreen(new MirageKeysScreen());
+            }
+            if (openSchems) {
+                openSchems = false;
+                client.setScreen(new MirageSchematicsScreen());
+            }
 
             if (!SelfFakes.enabled()) {
                 if (drainKeys()) say(client, "Mirage is off. Press N to bring it back.");
@@ -416,21 +450,10 @@ public class MirageClient implements ClientModInitializer {
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
-            // Outside the rig gate on purpose: the menu is where the rigs get turned back
-            // on, so it cannot be one of the things that stops working when they are off.
-            while (openClient.wasPressed()) client.setScreen(new RyneScreen());
-            while (openRigs.wasPressed()) client.setScreen(new RyneRigScreen());
-            if (openKeys) {
-                openKeys = false;
-                client.setScreen(new MirageKeysScreen());
-            }
-            if (openSchems) {
-                openSchems = false;
-                client.setScreen(new MirageSchematicsScreen());
-            }
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            greeted = false;
             SelfFakes.forgetShadows();
             ClientDispensers.reset();
             ClientDecor.reset();
@@ -501,10 +524,18 @@ public class MirageClient implements ClientModInitializer {
         // G is likewise unused by vanilla.
         openRigs = bind("open_rigs", GLFW.GLFW_KEY_G, category,
                 "Open the rig menu");
+        openTracker = bind("open_tracker", GLFW.GLFW_KEY_J, category,
+                "Open the tracker");
         // Unbound by default: the items editor is reachable from the menu and from a
         // command, and an accidental clash is worse than one more click.
         openMenu = bind("open_menu", GLFW.GLFW_KEY_UNKNOWN, category,
                 "Open the fake items editor");
+    }
+
+    /** What a key is bound to now, in words, or that it is not bound at all. */
+    private static String keyName(KeyBinding binding) {
+        return binding.isUnbound() ? "(unbound)"
+                : binding.getBoundKeyLocalizedText().getString();
     }
 
     /** Registers one key and remembers it, so the keys screen has the whole set. */
@@ -519,6 +550,10 @@ public class MirageClient implements ClientModInitializer {
     /** Set by the command, acted on by the next tick, since a command cannot open a screen. */
     private static KeyBinding openClient;
     private static KeyBinding openRigs;
+    private static KeyBinding openTracker;
+
+    /** Whether the keys have been named since joining this world. */
+    private static boolean greeted;
 
     private static boolean openKeys;
 
@@ -2343,7 +2378,7 @@ public class MirageClient implements ClientModInitializer {
     private static boolean drainKeys() {
         KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
                 clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu,
-                cutBlock, callFirst, callSecond, openClient, openRigs };
+                cutBlock, callFirst, callSecond };
 
         boolean pressed = false;
         for (KeyBinding key : rest) {

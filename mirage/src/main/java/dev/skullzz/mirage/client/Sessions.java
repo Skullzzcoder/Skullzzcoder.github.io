@@ -166,6 +166,25 @@ public final class Sessions {
         }
     }
 
+    /**
+     * Every session added together, the one running included.
+     *
+     * @return in, out, wins, losses
+     */
+    public static long[] allTime() {
+        long[] total = new long[4];
+        List<Tracker.Session> all = new ArrayList<>(past);
+        if (current != null) all.add(current);
+
+        for (Tracker.Session session : all) {
+            total[0] += session.in();
+            total[1] += session.out();
+            total[2] += session.wins();
+            total[3] += session.losses();
+        }
+        return total;
+    }
+
     // ----------------------------------------------------------------- persistence
 
     private static Path file() {
