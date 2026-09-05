@@ -115,7 +115,9 @@ public class RyneTrackerScreen extends Screen {
         button(Sessions.hud() ? "HUD bar ON" : "HUD bar OFF", settings(), sy,
                 SIDE - PAD, () -> {
                     Sessions.setHud(!Sessions.hud());
-                    say("HUD " + (Sessions.hud() ? "on" : "off") + ".");
+                    say(!Sessions.hud() ? "HUD off."
+                            : HudBar.attached() ? "HUD on, across the top of the screen."
+                                    : "HUD on, but it cannot draw: " + HudBar.reason());
                 });
 
         sy += 40;

@@ -1,8 +1,6 @@
 package dev.skullzz.mirage.client;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 
 import dev.skullzz.mirage.Mirage;
 
@@ -44,78 +42,34 @@ public final class ChatHook {
 
     /** Subscribes to whichever chat event this version has. */
     public static void register() {
-        for (String className : EVENT_CLASSES) {
-            Class<?> events;
-            try {
-                events = Class.forName(className);
-            } catch (ClassNotFoundException missing) {
-                reason = "no class " + className;
-                continue;
-            }
+        StringBuilder tried = new StringBuilder();
 
+        for (String className : EVENT_CLASSES) {
             for (String fieldName : EVENT_FIELDS) {
-                if (subscribe(events, fieldName)) {
+                Events.Result result = Events.subscribe(className, fieldName,
+                        (proxy, method, args) -> {
+                            take(args);
+                            // Answer the thing that changes nothing: a filter callback
+                            // wants true, a plain listener wants nothing.
+                            Class<?> returns = method.getReturnType();
+                            if (returns == boolean.class || returns == Boolean.class) {
+                                return true;
+                            }
+                            return null;
+                        });
+
+                if (result.ok) {
                     attached = true;
-                    reason = "listening through " + events.getSimpleName() + "." + fieldName;
+                    reason = result.reason;
                     return;
                 }
+                if (tried.length() > 0) tried.append("; ");
+                tried.append(result.reason);
             }
-            reason = "found " + events.getSimpleName() + " but none of "
-                    + String.join(", ", EVENT_FIELDS) + " could be subscribed to";
         }
+
+        reason = tried.length() == 0 ? "nothing to try" : tried.toString();
         Mirage.LOGGER.warn("Mirage could not listen to chat: {}", reason);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static boolean subscribe(Class<?> events, String fieldName) {
-        try {
-            Field field = events.getField(fieldName);
-            Object event = field.get(null);
-            if (event == null) return false;
-
-            // The event's own register method takes the listener interface; that interface
-            // is whatever the field's type says it is, and is never named here.
-            Method register = null;
-            for (Method candidate : event.getClass().getMethods()) {
-                if (candidate.getName().equals("register")
-                        && candidate.getParameterCount() == 1) {
-                    register = candidate;
-                    break;
-                }
-            }
-            if (register == null) return false;
-
-            Class<?> listenerType = register.getParameterTypes()[0];
-            if (!listenerType.isInterface()) return false;
-
-            Object listener = Proxy.newProxyInstance(
-                    ChatHook.class.getClassLoader(),
-                    new Class<?>[] { listenerType },
-                    (proxy, method, args) -> {
-                        // A proxy is handed Object's own methods as well.
-                        if (method.getDeclaringClass() == Object.class) {
-                            return switch (method.getName()) {
-                                case "hashCode" -> System.identityHashCode(proxy);
-                                case "equals" -> proxy == args[0];
-                                default -> "mirage chat";
-                            };
-                        }
-
-                        take(args);
-
-                        // Whatever this callback is supposed to answer, answer the thing
-                        // that changes nothing: true for a filter, null for a listener.
-                        Class<?> returns = method.getReturnType();
-                        if (returns == boolean.class || returns == Boolean.class) return true;
-                        return null;
-                    });
-
-            register.invoke(event, listener);
-            return true;
-        } catch (ReflectiveOperationException | RuntimeException failure) {
-            reason = fieldName + ": " + failure;
-            return false;
-        }
     }
 
     /**

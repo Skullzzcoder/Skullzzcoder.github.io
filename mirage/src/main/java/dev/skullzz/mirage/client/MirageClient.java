@@ -464,6 +464,7 @@ public class MirageClient implements ClientModInitializer {
         FakeHands.register();
         Sessions.load();
         ChatHook.register();
+        HudBar.register();
         Mirage.LOGGER.info("Mirage client ready. /fake ui");
     }
 
@@ -1550,6 +1551,8 @@ public class MirageClient implements ClientModInitializer {
                 ? ChatHook.reason() : "NOT READING  <-- " + ChatHook.reason());
         out.append("\n2. Tracking    ").append(Sessions.tracking()
                 ? "on" : "OFF  <-- /fake track on");
+        out.append("\n   HUD bar     ").append(!Sessions.hud() ? "off"
+                : HudBar.attached() ? "on" : "ON, but cannot draw: " + HudBar.reason());
 
         Tracker.Session session = Sessions.current();
         if (session == null) {
