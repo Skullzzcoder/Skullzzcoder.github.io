@@ -9,13 +9,18 @@ and a guess is a build the player has to run to find out about.
 This is a floor, not a ceiling: it cannot say a name is right, only that it is not new."""
 import io, re, sys, glob, os
 
+# Screens proper: these must also redraw the way the rest of the mod already does.
 SCREENS = ["src/main/java/dev/skullzz/mirage/client/MirageSchematicsScreen.java",
-           "src/main/java/dev/skullzz/mirage/client/RyneScreen.java"]
+           "src/main/java/dev/skullzz/mirage/client/RyneScreen.java",
+           "src/main/java/dev/skullzz/mirage/client/RyneRigScreen.java"]
+
+# Also scanned for unproven calls, but not screens, so the redraw rule does not apply.
+HELPERS = ["src/main/java/dev/skullzz/mirage/client/RyneDraw.java"]
 
 # Calls knowingly used without having been seen to compile, and where each is allowed.
 # An entry here is a decision, not an exemption: it has to be isolated in one method so a
 # rename is one compile error in one place, and inspectApi prints the replacement.
-DELIBERATE = {"fill": "RyneScreen.java"}
+DELIBERATE = {"fill": "RyneDraw.java"}
 
 # Java and this project's own idioms; not Minecraft, so not evidence either way.
 JDK = {"literal", "join", "max", "min", "size", "get", "isEmpty", "length", "substring",
@@ -33,7 +38,7 @@ for path in glob.glob("src/main/java/**/*.java", recursive=True):
     everything[path.replace("\\", "/")] = io.open(path, encoding="utf-8").read()
 
 checked = 0
-for screen in SCREENS:
+for screen in SCREENS + HELPERS:
     screen = screen.replace("\\", "/")
     if screen not in everything:
         fails.append("%s is gone" % screen)
@@ -70,8 +75,10 @@ for screen in SCREENS:
               ("." + risky + "(") not in source)
 
     # Redrawing goes through setScreen, which every screen here already does on close.
-    check("the screen redraws the way the rest of the mod already does",
-          "setScreen(" in source)
+    # A drawing helper is not a screen and has nothing to redraw.
+    if screen in [s.replace("\\", "/") for s in SCREENS]:
+        check("%s redraws the way the rest of the mod already does"
+              % os.path.basename(screen), "setScreen(" in source)
 
 print("FAILED:\n  " + "\n  ".join(fails) if fails else
       "%d Minecraft calls across %d screen(s), every one already used elsewhere in code "

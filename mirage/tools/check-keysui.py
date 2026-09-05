@@ -29,7 +29,21 @@ fields = re.findall(r"^    private static KeyBinding (\w+);", mc, re.M)
 
 check("every key field is registered through the table",
       sorted(f for f, _, _ in bound) == sorted(fields))
-check("there are the keys we think there are", len(bound) == 15)
+# Named rather than counted. A number tells you something changed; a list tells you what,
+# and makes a key that quietly disappears as loud as one that quietly appears.
+EXPECTED = {"next_result", "prev_result", "arm_next", "fire_now", "refill", "clear_fakes",
+            "cycle_winner", "win_first", "win_second", "power", "cut_block", "call_first",
+            "call_second", "cycle_rig", "open_menu", "open_client", "open_rigs"}
+found = {name for _, name, _ in bound}
+check("the keys are the ones we think (extra: %s, missing: %s)"
+      % (sorted(found - EXPECTED), sorted(EXPECTED - found)), found == EXPECTED)
+
+# A default that vanilla also uses runs both actions and says nothing about it, which is
+# the whole reason the keys screen exists. These two are the defaults added for the menus.
+defaults = {name: key for _, name, key in bound}
+check("the client menu opens on a key vanilla leaves alone",
+      defaults.get("open_client") == "GLFW_KEY_RIGHT_SHIFT")
+check("so does the rig menu", defaults.get("open_rigs") == "GLFW_KEY_G")
 
 # The one way this quietly rots: a new key registered straight with Fabric never reaches
 # the table, so it works in game and does not exist as far as this screen is concerned.

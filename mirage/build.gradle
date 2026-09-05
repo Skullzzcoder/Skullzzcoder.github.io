@@ -98,12 +98,21 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${prop('fabric_version')}"
 }
 
+// How the mod shows up in the mod list. Set in gradle.properties so it can be changed
+// without touching the JSON, and defaulted here so a checkout without them still builds.
+def modName = (project.findProperty('mod_name') ?: 'Ryne Client').toString()
+def modDescription = (project.findProperty('mod_description')
+        ?: 'Client-side visual mod.').toString()
+
 processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_depend", minecraftDepend
+    inputs.property "mod_name", modName
+    inputs.property "mod_description", modDescription
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version, "minecraft_depend": minecraftDepend
+        expand "version": project.version, "minecraft_depend": minecraftDepend,
+                "mod_name": modName, "mod_description": modDescription
     }
 }
 

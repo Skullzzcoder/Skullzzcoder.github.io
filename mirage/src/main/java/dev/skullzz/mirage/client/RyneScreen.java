@@ -225,20 +225,13 @@ public class RyneScreen extends Screen {
 
     // ------------------------------------------------------------------------ paint
 
-    /**
-     * A filled rectangle.
-     *
-     * <p>The one call in this file the mod has not already seen compile, kept in one place
-     * on purpose. If {@code fill} has been renamed in this version, this method is the only
-     * thing that needs changing, and {@code gradlew inspectApi} prints the new name.
-     */
     private static void box(DrawContext context, int x, int y, int width, int height,
                             int colour) {
-        context.fill(x, y, x + width, y + height, colour);
+        RyneDraw.box(context, x, y, width, height, colour);
     }
 
     private void line(DrawContext context, String text, int x, int y, int colour) {
-        context.drawTextWithShadow(this.textRenderer, Text.literal(text), x, y, colour);
+        RyneDraw.text(context, this.textRenderer, text, x, y, colour);
     }
 
     @Override

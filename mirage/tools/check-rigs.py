@@ -52,6 +52,21 @@ for key in ("armNext", "fireNow", "cycleRig", "nextResult", "previousResult",
             "callFirst", "callSecond", "winFirst", "winSecond", "cycleWinner", "refill"):
     check("%s is drained" % key, key in drain)
 
+# ------------------------------------------------------- the menus stay reachable
+# The lockout this guards: the client menu is where the rigs get switched back on, so if
+# its key were inside the rig gate, turning them off would take away the way to undo it.
+for menu in ("openClient", "openRigs"):
+    check("%s is not gated on the rigs" % menu,
+          menu + ".wasPressed()" in tick
+          and menu + ".wasPressed()" not in tick[tick.index("if (SelfFakes.rigsOn()) {")
+                                                 :tick.index("drainRigKeys();")])
+
+# The master switch drains every key it disables, or a press while everything is off opens
+# the screen the moment it comes back.
+drainall = body(client, "private static boolean drainKeys() {")
+for menu in ("openClient", "openRigs", "openMenu"):
+    check("%s is drained by the master switch" % menu, menu in drainall)
+
 # ------------------------------------------------- the other half is untouched
 # These run outside the guarded block, or turning the rigs off would take the builds with
 # them -- which is the whole thing being asked for.

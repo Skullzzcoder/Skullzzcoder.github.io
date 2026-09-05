@@ -663,6 +663,48 @@ and *why did that just appear*.
 > blank name and everything shows everywhere, exactly as it did before. It fails
 > towards showing your build, never towards hiding it.
 
+## The menus
+
+Two keys, both on defaults vanilla leaves alone:
+
+| Key | Opens |
+| --- | --- |
+| **Right Shift** | the client menu — Builds, Schematics, Map art, Fake items, Rigs, Keys, Theme |
+| **G** | the rig menu — every game, its controls, and which rig is running |
+
+Change either in Options → Controls → Miscellaneous, or see them all with the keys
+screen. `/fake ui`, `/fake rigui` and `/fake items` still work if you prefer typing.
+
+Both menu keys sit **outside** the rig switch on purpose: the client menu is where the
+rigs get turned back on, so it cannot be one of the things that stops working when they
+are off.
+
+### The rig menu
+
+Rigs down the left with a box to name and create a new one; the running rig down the
+right, showing **how many machines are watched**, **what it will answer with** (or why it
+has no answer) and **whether the rigs are on at all** — the three things that decide
+whether anything happens, said up front rather than left to be discovered.
+
+The controls change with the game: arm and reset shots only for roulette, winner buttons
+only where there are sides, deal and new hand only for blackjack. Stepping the answer is
+the same pair of actions `F` and `R` do in game.
+
+### Themes
+
+Seven, in the client menu under Theme, or `/fake theme <name>`. Saved by name, so adding
+one later cannot change which you had picked.
+
+## Changing how it shows in the mod list
+
+Two lines in `gradle.properties`:
+
+    mod_name=Ryne Client
+    mod_description=Client-side visual mod. ...
+
+Rebuild and the mod list shows whatever you put there. No JSON and no code to touch. The
+mod id stays `mirage` internally so your existing config files keep working.
+
 ## Turning the rigs off and keeping the rest
 
 The mod has two halves that have nothing to do with each other. Builds, schematics and

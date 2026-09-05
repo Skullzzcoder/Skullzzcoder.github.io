@@ -23,7 +23,10 @@ check("it comes from the build", '"minecraft": "${minecraft_depend}"' in mod)
 # Every placeholder in the file must be given a value, or the build fails at the very end
 # of a long compile with a message about a missing property.
 placeholders = set(re.findall(r"\$\{(\w+)\}", mod))
-expanded = set(re.findall(r'"(\w+)":\s*(?:project\.version|minecraftDepend)', gradle))
+# Read out of the expand call itself rather than from a list of value names, which went
+# stale the moment two more placeholders were added.
+expand = re.search(r"expand ((?:.|\n)*?)\n    \}", gradle)
+expanded = set(re.findall(r'"(\w+)"\s*:', expand.group(1))) if expand else set()
 check("every placeholder is filled in (missing: %s)" % sorted(placeholders - expanded),
       placeholders <= expanded)
 

@@ -74,6 +74,11 @@ public class MirageClient implements ClientModInitializer {
                 dispatcher.register(ClientCommandManager.literal("fake")
                         .then(ClientCommandManager.literal("ui").executes(MirageClient::openUi))
                         .then(ClientCommandManager.literal("items").executes(MirageClient::openItems))
+                        .then(ClientCommandManager.literal("rigui").executes(context -> {
+                            MinecraftClient client = MinecraftClient.getInstance();
+                            client.execute(() -> client.setScreen(new RyneRigScreen()));
+                            return 1;
+                        }))
                         .then(ClientCommandManager.literal("theme")
                                 .executes(context -> feedback(context, "Theme: "
                                         + RyneTheme.current().name + ". /fake ui to change it."))
@@ -363,6 +368,10 @@ public class MirageClient implements ClientModInitializer {
             while (clearFakes.wasPressed()) clearInventoryFakes(client);
             while (cutBlock.wasPressed()) cutLookedAt(client);
             while (openMenu.wasPressed()) client.setScreen(new FakeItemsScreen());
+            // Outside the rig gate on purpose: the menu is where the rigs get turned back
+            // on, so it cannot be one of the things that stops working when they are off.
+            while (openClient.wasPressed()) client.setScreen(new RyneScreen());
+            while (openRigs.wasPressed()) client.setScreen(new RyneRigScreen());
             if (openKeys) {
                 openKeys = false;
                 client.setScreen(new MirageKeysScreen());
@@ -435,10 +444,17 @@ public class MirageClient implements ClientModInitializer {
                 "Blackjack: deal to the second side");
         cycleRig = bind("cycle_rig", GLFW.GLFW_KEY_BACKSLASH, category,
                 "Next rig");
-        // Unbound by default: the menu has a command, and an accidental clash is worse.
-        // It can be given a key in the keys screen like any of the others.
+        // Right Shift is what a client menu is usually on and vanilla binds nothing to it,
+        // so this is the rare default that is both expected and free.
+        openClient = bind("open_client", GLFW.GLFW_KEY_RIGHT_SHIFT, category,
+                "Open Ryne Client");
+        // G is likewise unused by vanilla.
+        openRigs = bind("open_rigs", GLFW.GLFW_KEY_G, category,
+                "Open the rig menu");
+        // Unbound by default: the items editor is reachable from the menu and from a
+        // command, and an accidental clash is worse than one more click.
         openMenu = bind("open_menu", GLFW.GLFW_KEY_UNKNOWN, category,
-                "Open the Mirage menu");
+                "Open the fake items editor");
     }
 
     /** Registers one key and remembers it, so the keys screen has the whole set. */
@@ -451,6 +467,9 @@ public class MirageClient implements ClientModInitializer {
     }
 
     /** Set by the command, acted on by the next tick, since a command cannot open a screen. */
+    private static KeyBinding openClient;
+    private static KeyBinding openRigs;
+
     private static boolean openKeys;
 
     /** Same reason as openKeys: a screen cannot be set from inside a command. */
@@ -2185,7 +2204,7 @@ public class MirageClient implements ClientModInitializer {
     private static boolean drainKeys() {
         KeyBinding[] rest = { nextResult, previousResult, armNext, fireNow, refill,
                 clearFakes, cycleWinner, winFirst, winSecond, cycleRig, openMenu,
-                cutBlock, callFirst, callSecond };
+                cutBlock, callFirst, callSecond, openClient, openRigs };
 
         boolean pressed = false;
         for (KeyBinding key : rest) {
